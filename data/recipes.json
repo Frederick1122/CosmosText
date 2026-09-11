@@ -1,0 +1,28 @@
+{
+  "makeshift_backpack": {
+    "name": "Самодельный рюкзак",
+    "result": { "item": "makeshift_backpack", "count": 1 },
+    "ingredients": [
+      { "item": "cloth_rags", "count": 2 },
+      { "item": "duct_tape", "count": 1 }
+    ],
+    "requires": []
+  },
+  "improvised_bandage": {
+    "name": "Самодельный бинт",
+    "result": { "item": "improvised_bandage", "count": 2 },
+    "ingredients": [
+      { "item": "cloth_rags", "count": 1 }
+    ],
+    "requires": []
+  },
+  "plate_vest": {
+    "name": "Жилет из обшивки",
+    "result": { "item": "plate_vest", "count": 1 },
+    "ingredients": [
+      { "item": "scrap_metal", "count": 2 },
+      { "item": "duct_tape", "count": 1 }
+    ],
+    "requires": [ { "type": "skill_gte", "skill": "engineering", "value": 1 } ]
+  }
+}

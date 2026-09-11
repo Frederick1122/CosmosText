@@ -7,7 +7,17 @@
       "id": "A",
       "label": "Войти и вступить в бой",
       "requires": [],
-      "effects": [ { "type": "start_combat", "enemy": "drone_cargo", "clear_node": "cargo_bay" } ],
+      "effects": [
+        {
+          "type": "start_combat",
+          "enemy": "drone_cargo",
+          "clear_node": "cargo_bay",
+          "on_win": [
+            { "type": "flag_set", "flag": "drone_cargo_down" },
+            { "type": "skill_points_add", "value": 1 }
+          ]
+        }
+      ],
       "next": ""
     },
     {

@@ -479,7 +479,7 @@ func _is_node_visible(node: Dictionary) -> bool:
 
 func _is_node_interactive(node: Dictionary) -> bool:
 	var state: String = str(node.get("state", "locked"))
-	if state == "locked" or state == "cleared":
+	if state == "locked":
 		return false
 	var node_floor_id := _node_floor_id(node)
 	if _current_floor_id != "" and node_floor_id != "" and node_floor_id != _current_floor_id:

@@ -1,0 +1,31 @@
+{
+  "id": "sit_3_2_strain",
+  "text": "Решётка вентиляции падает на пол. Из шахты вытекает бледная масса — Штамм Л-7, о котором на инструктаже говорили только шёпотом. Он тянется к теплу ячейки у тебя в сумке.",
+  "requires": [],
+  "options": [
+    {
+      "id": "A",
+      "label": "Принять бой",
+      "requires": [],
+      "effects": [
+        {
+          "type": "start_combat",
+          "enemy": "strain_l7",
+          "clear_node": "reactor",
+          "on_win": [
+            { "type": "flag_set", "flag": "strain_down" },
+            { "type": "skill_points_add", "value": 1 }
+          ]
+        }
+      ],
+      "next": ""
+    },
+    {
+      "id": "B",
+      "label": "Бежать к лифту",
+      "requires": [],
+      "effects": [ { "type": "lock_map_node", "node": "reactor", "state": "dangerous" } ],
+      "next": "map:wreck_01"
+    }
+  ]
+}

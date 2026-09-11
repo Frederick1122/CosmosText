@@ -3,29 +3,29 @@
   "text": "Темнота. Сирена бьёт по вискам ровно, без пауз. Когда глаза привыкают — потолок капсулы в трещинах, один в сантиметре от лица. Память пуста. Не имя, не лицо, не то, как сюда попал. Только тело, которое болит, и счётчик кислорода на рукаве, мигающий красным.",
   "requires": [],
   "options": [
-    {
-      "id": "A",
-      "label": "Выбить заклинившую крышку плечом",
-      "requires": [],
-      "effects": [ { "type": "hp_delta", "value": -15 } ],
-      "next": "sit_1_2_wreckage"
-    },
-    {
-      "id": "B",
-      "label": "Поискать рычаг аварийного открытия",
-      "requires": [],
-      "effects": [ { "type": "o2_delta", "value": -45 } ],
-      "next": "sit_1_2_wreckage"
-    },
-    {
-      "id": "C",
-      "label": "Прислушаться, прежде чем двигаться",
-      "requires": [],
-      "effects": [
-        { "type": "flag_set", "flag": "heard_something", "value": true },
-        { "type": "o2_delta", "value": -20 }
-      ],
-      "next": "sit_1_2_wreckage"
-    }
+	{
+	  "id": "A",
+	  "label": "Выбить заклинившую крышку плечом",
+	  "requires": [],
+	  "effects": [ { "type": "hp_delta", "value": -15 } ],
+	  "next": ""
+	},
+	{
+	  "id": "B",
+	  "label": "Поискать рычаг аварийного открытия",
+	  "requires": [],
+	  "effects": [ { "type": "o2_delta", "value": -45 } ],
+	  "next": ""
+	},
+	{
+	  "id": "C",
+	  "label": "Прислушаться, прежде чем двигаться",
+	  "requires": [],
+	  "effects": [
+		{ "type": "flag_set", "flag": "heard_something", "value": true },
+		{ "type": "o2_delta", "value": -20 }
+	  ],
+	  "next": ""
+	}
   ]
 }

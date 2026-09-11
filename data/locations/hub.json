@@ -1,0 +1,38 @@
+{
+  "id": "hub",
+  "title": "Капсула",
+  "description": "Спасательная капсула, вмятая в переборку. Сирена наконец замолчала. Отсек держит давление, горит аварийный свет — сюда можно вернуться, чтобы перевести дух.",
+  "events": [
+    {
+      "id": "awakening",
+      "start": "auto",
+      "repeatable": false,
+      "triggers": [],
+      "situation": "sit_1_1_capsule"
+    },
+    {
+      "id": "wreckage",
+      "start": "auto",
+      "repeatable": false,
+      "triggers": [ { "type": "event_done", "event": "awakening" } ],
+      "situation": "sit_1_2_wreckage"
+    },
+    {
+      "id": "inspect_capsule",
+      "start": "manual",
+      "label": "Осмотреть капсулу",
+      "repeatable": true,
+      "triggers": [],
+      "text": "Корпус держит давление. Аварийный маяк мёртв, панель управления разбита. Счётчик кислорода на рукаве по-прежнему мигает."
+    },
+    {
+      "id": "follow_signal",
+      "start": "manual",
+      "label": "Пойти на слабый сигнал скафандра",
+      "repeatable": false,
+      "triggers": [ { "type": "event_done", "event": "wreckage" } ],
+      "text": "Метка на рукаве ведёт вдоль переборки. В соседнем отсеке у стены — второй скафандр. Он не двигается. Место отмечено на карте.",
+      "effects": [ { "type": "open_map_node", "node": "copilot_body" } ]
+    }
+  ]
+}

@@ -20,7 +20,7 @@
   "nodes": {
     "hub": {
       "title": "Капсула / место сборки",
-      "situation_id": "",
+      "location_id": "hub",
       "connections": ["lift_01_to_02", "copilot_body"],
       "sealed": true,
       "state": "available",
@@ -34,7 +34,6 @@
     },
     "lift_01_to_02": {
       "title": "Лифт к грузовой палубе",
-      "situation_id": "",
       "connections": ["hub", "lift_02_to_01"],
       "sealed": true,
       "state": "available",
@@ -50,7 +49,7 @@
     },
     "copilot_body": {
       "title": "Тело второго пилота",
-      "situation_id": "",
+      "location_id": "copilot_body",
       "connections": ["hub"],
       "sealed": true,
       "state": "locked",
@@ -65,7 +64,6 @@
     },
     "lift_02_to_01": {
       "title": "Лифт к палубе выживания",
-      "situation_id": "",
       "connections": ["lift_01_to_02", "cargo_bay"],
       "sealed": true,
       "state": "available",
@@ -81,7 +79,7 @@
     },
     "cargo_bay": {
       "title": "Грузовой отсек",
-      "situation_id": "sit_1_3_drone",
+      "location_id": "cargo_bay",
       "connections": ["lift_02_to_01", "lift_02_to_03", "alien_shuttle"],
       "sealed": true,
       "state": "available",
@@ -95,7 +93,6 @@
     },
     "lift_02_to_03": {
       "title": "Лифт к реакторной шахте",
-      "situation_id": "",
       "connections": ["cargo_bay", "lift_03_to_02"],
       "sealed": true,
       "state": "available",
@@ -111,7 +108,7 @@
     },
     "alien_shuttle": {
       "title": "Чужой шаттл",
-      "situation_id": "",
+      "location_id": "alien_shuttle",
       "connections": ["cargo_bay"],
       "sealed": true,
       "state": "locked",
@@ -126,8 +123,7 @@
     },
     "lift_03_to_02": {
       "title": "Лифт к грузовой палубе",
-      "situation_id": "",
-      "connections": ["lift_02_to_03", "reactor"],
+      "connections": ["lift_02_to_03", "service_corridor"],
       "sealed": false,
       "state": "available",
       "map": {
@@ -140,16 +136,30 @@
         "note": "Шахта скрипит, но кабина отвечает"
       }
     },
+    "service_corridor": {
+      "title": "Служебный коридор",
+      "location_id": "service_corridor",
+      "connections": ["lift_03_to_02", "reactor"],
+      "sealed": false,
+      "state": "available",
+      "map": {
+        "label": "Коридор",
+        "floor": "deck_03",
+        "cell": { "x": 3, "y": 4 },
+        "order": 85,
+        "note": "Нет давления — расходует O2"
+      }
+    },
     "reactor": {
       "title": "Реакторный отсек",
-      "situation_id": "",
-      "connections": ["lift_03_to_02"],
+      "location_id": "reactor",
+      "connections": ["service_corridor"],
       "sealed": false,
       "state": "locked",
       "map": {
         "label": "Реактор",
         "floor": "deck_03",
-        "cell": { "x": 4, "y": 2 },
+        "cell": { "x": 5, "y": 2 },
         "visible_when_locked": true,
         "order": 90,
         "note": "Путь пока завален"

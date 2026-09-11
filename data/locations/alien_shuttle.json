@@ -1,0 +1,24 @@
+{
+  "id": "alien_shuttle",
+  "title": "Чужой шаттл",
+  "description": "Небольшой шаттл, пристыкованный к грузовому шлюзу. Маркировка на обшивке незнакомая, внутри темно и тихо. Сигнал, который ловит скафандр, идёт отсюда. У входа — оружейный шкаф с кодовым замком.",
+  "events": [
+    {
+      "id": "search_cockpit",
+      "start": "manual",
+      "label": "Обыскать кабину",
+      "repeatable": false,
+      "triggers": [],
+      "text": "Под креслом пилота — пара магнитных ботинок. Кто-то ушёл отсюда в спешке.",
+      "effects": [ { "type": "item_add", "item": "mag_boots" } ]
+    },
+    {
+      "id": "open_locker",
+      "start": "manual",
+      "label": "Открыть оружейный шкаф",
+      "repeatable": false,
+      "triggers": [],
+      "situation": "sit_2_2_locker"
+    }
+  ]
+}

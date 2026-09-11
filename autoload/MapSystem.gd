@@ -12,7 +12,7 @@ var sector_title: String = ""
 var hub_node_id: String = ""
 var current_floor_id: String = ""
 var map_config: Dictionary = {}
-var nodes: Dictionary = {}  # node_id -> { title, situation_id, connections, sealed, state }
+var nodes: Dictionary = {}  # node_id -> { title, location_id, connections, sealed, state, map }
 
 
 func load_sector(id: String) -> bool:
@@ -95,9 +95,6 @@ func select_node(node_id: String) -> void:
 	if state == "locked":
 		push_warning("MapSystem: узел '%s' закрыт" % node_id)
 		return
-	if state == "cleared":
-		push_warning("MapSystem: узел '%s' уже пройден" % node_id)
-		return
 	var node_floor_id := _node_floor_id(data)
 	if current_floor_id != "" and node_floor_id != "" and node_floor_id != current_floor_id:
 		push_warning("MapSystem: узел '%s' находится на другой палубе" % node_id)
@@ -105,11 +102,13 @@ func select_node(node_id: String) -> void:
 	if _is_elevator_node(data):
 		_move_by_elevator(data)
 		return
-	if node_id == hub_node_id:
-		GameState.return_to_hub()
+	var location_id := str(data.get("location_id", ""))
+	if location_id == "":
+		push_warning("MapSystem: у узла '%s' нет location_id" % node_id)
 		return
+	# В пройденные (cleared) и опасные модули можно возвращаться.
 	ResourceSystem.set_o2_ticking(not bool(data.get("sealed", true)))
-	GameState.enter_situation(data.get("situation_id", ""))
+	GameState.enter_location(location_id, node_id)
 
 
 func unlock_node(node_id: String) -> void:

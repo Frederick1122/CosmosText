@@ -1,0 +1,24 @@
+{
+  "id": "sit_3_1_reactor_cell",
+  "text": "Энергоячейка сидит в гнезде плотно, фиксаторы покрыты изморозью. Где-то в вентиляции над стойкой что-то скребётся — ровно, будто прислушивается.",
+  "requires": [],
+  "options": [
+    {
+      "id": "A",
+      "label": "Выдернуть ячейку",
+      "requires": [],
+      "effects": [
+        { "type": "item_add", "item": "power_cell" },
+        { "type": "flag_set", "flag": "reactor_cell_taken" }
+      ],
+      "next": ""
+    },
+    {
+      "id": "B",
+      "label": "Не трогать — сначала подготовиться",
+      "requires": [],
+      "effects": [],
+      "next": ""
+    }
+  ]
+}

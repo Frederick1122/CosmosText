@@ -1,0 +1,62 @@
+{
+  "id": "copilot_body",
+  "title": "Тело второго пилота",
+  "description": "Второй пилот лежит у стены, лицом к переборке. Скафандр пробит на плече, на визоре иней. На поясе — подсумки, за спиной — кислородный баллон с сорванным вентилем.",
+  "descriptions": [
+    {
+      "requires": [
+        { "type": "event_done", "event": "take_helmet" },
+        { "type": "event_done", "event": "search_pockets" },
+        { "type": "flag", "flag": "copilot_canister_taken" }
+      ],
+      "text": "Тело второго пилота. Всё, что могло пригодиться, ты уже забрал. Осталось только имя на бирке."
+    }
+  ],
+  "events": [
+    {
+      "id": "first_look",
+      "start": "auto",
+      "repeatable": false,
+      "triggers": [],
+      "text": "Метка скафандра гаснет, как только ты подходишь. Сигнал держался до последнего — будто ждал."
+    },
+    {
+      "id": "take_helmet",
+      "start": "manual",
+      "label": "Снять шлем",
+      "repeatable": false,
+      "triggers": [],
+      "text": "Защёлки поддаются не сразу. Визор в трещинах, но шлем держит давление.",
+      "effects": [ { "type": "item_add", "item": "cracked_helmet" } ]
+    },
+    {
+      "id": "search_pockets",
+      "start": "manual",
+      "label": "Обыскать подсумки",
+      "repeatable": false,
+      "triggers": [],
+      "text": "В подсумках — ключ-карта экипажа и пара пищевых брикетов.",
+      "effects": [
+        { "type": "item_add", "item": "pilot_keycard" },
+        { "type": "item_add", "item": "ration_bar", "count": 2 }
+      ]
+    },
+    {
+      "id": "read_tag",
+      "start": "manual",
+      "label": "Прочитать бирку на скафандре",
+      "repeatable": false,
+      "triggers": [],
+      "text": "На бирке — имя и приписка маркером. Запись добавлена в журнал.",
+      "effects": [ { "type": "unlock_lore", "id": "log_02" } ]
+    },
+    {
+      "id": "take_canister",
+      "start": "manual",
+      "label": "Снять кислородный баллон",
+      "repeatable": true,
+      "triggers": [ { "type": "flag", "flag": "copilot_canister_taken", "value": false } ],
+      "situation": "sit_2_1_canister"
+    }
+  ]
+}

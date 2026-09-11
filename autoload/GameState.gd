@@ -5,7 +5,10 @@ extends Node
 
 signal screen_changed(screen: int)
 
-enum Screen { MAIN_MENU, SECTOR_MAP, SITUATION, COMBAT, DEATH }
+enum Screen { MAIN_MENU, SECTOR_MAP, SITUATION, COMBAT, DEATH, LOCATION }
+
+## Предохранитель от цепочек автособытий, зацикленных контентом.
+const MAX_AUTO_EVENTS_PER_STEP := 32
 
 var current_screen: int = Screen.MAIN_MENU
 var last_death_cause: String = ""
@@ -28,6 +31,9 @@ func start_new_game(sector_id: String = "", opening_situation_id: String = "") -
 		return
 	if opening_situation_id != "":
 		enter_situation(opening_situation_id)
+	elif MapSystem.hub_node_id != "":
+		# Вступление — автособытия локации хаба.
+		MapSystem.select_node(MapSystem.hub_node_id)
 	else:
 		_set_screen(Screen.SECTOR_MAP)
 
@@ -49,9 +55,37 @@ func enter_situation(situation_id: String) -> void:
 		_set_screen(Screen.SITUATION)
 
 
-func return_to_hub() -> void:
-	EventBus.returned_to_hub.emit()
+func enter_location(location_id: String, node_id: String = "") -> void:
+	if not LocationSystem.enter(location_id, node_id):
+		return
+	_resume_location()
+
+
+func leave_location() -> void:
+	LocationSystem.leave()
 	_set_screen(Screen.SECTOR_MAP)
+
+
+## Ручной запуск события из меню модуля.
+func start_location_event(event_id: String) -> void:
+	if not LocationSystem.is_event_available(event_id):
+		push_warning("GameState: событие '%s' сейчас недоступно" % event_id)
+		return
+	LocationSystem.clear_notices()
+	if _run_event(LocationSystem.find_event(event_id)):
+		return
+	_resume_location()
+
+
+## Перепроверить автособытия и показать локацию заново (например после
+## использования предмета из инвентаря).
+func refresh_location() -> void:
+	_resume_location()
+
+
+## Ситуация без доступных опций — игрок нажал «Продолжить».
+func finish_situation() -> void:
+	_on_situation_ended(SituationEngine.current_id, "")
 
 
 func choose_restart() -> void:
@@ -64,12 +98,55 @@ func choose_rollback() -> void:
 	_set_screen(Screen.SECTOR_MAP)
 
 
+## Запускает подходящие автособытия текущей локации; если ни одно не увело
+## игрока с экрана локации — показывает её.
+func _resume_location() -> void:
+	if not LocationSystem.is_active():
+		_set_screen(Screen.SECTOR_MAP)
+		return
+	for i in range(MAX_AUTO_EVENTS_PER_STEP):
+		var ev: Dictionary = LocationSystem.next_auto_event()
+		if ev.is_empty():
+			break
+		if _run_event(ev):
+			return
+	_show_location()
+
+
+## Возвращает true, если событие увело игрока с экрана локации
+## (ситуация, бой или смерть).
+func _run_event(ev: Dictionary) -> bool:
+	LocationSystem.mark_started(ev)
+	EffectResolver.apply_effects(ev.get("effects", []))
+	LocationSystem.add_notice(str(ev.get("text", "")))
+	if ResourceSystem.is_dead() or CombatSystem.state == CombatSystem.State.PLAYER_TURN:
+		return true
+	var situation_id := str(ev.get("situation", ""))
+	if situation_id != "":
+		enter_situation(situation_id)
+		return current_screen == Screen.SITUATION
+	return false
+
+
+func _show_location() -> void:
+	if LocationSystem.current_node_id != "" and LocationSystem.current_node_id == MapSystem.hub_node_id:
+		EventBus.returned_to_hub.emit()  # хаб — точка чекпойнта
+	_set_screen(Screen.LOCATION)
+
+
 func _on_situation_ended(_id: String, next: String) -> void:
 	if current_screen == Screen.DEATH:
 		return
+	if CombatSystem.state == CombatSystem.State.PLAYER_TURN:
+		return  # эффект start_combat уже переключил экран на бой
 	if next == "":
-		return  # экран переключит сама себя вызванная effect-цепочка (например start_combat)
+		if LocationSystem.is_active():
+			_resume_location()
+		else:
+			_set_screen(Screen.SECTOR_MAP)
+		return
 	if next.begins_with("map:"):
+		LocationSystem.leave()
 		var sector_id := next.substr(4)
 		var loaded := true
 		if MapSystem.current_sector_id != sector_id:
@@ -88,12 +165,22 @@ func _on_combat_started(_enemy_id: String) -> void:
 func _on_combat_ended(result: String) -> void:
 	if result == "died":
 		return  # экран смерти выставит _on_player_died через EventBus
+	if result == "won":
+		EffectResolver.apply_effects(CombatSystem.on_win_effects)
+	elif result == "fled":
+		EffectResolver.apply_effects(CombatSystem.on_flee_effects)
+	if ResourceSystem.is_dead():
+		return
 	if CombatSystem.clear_node_id != "":
 		if result == "won":
 			MapSystem.mark_cleared(CombatSystem.clear_node_id)
 		elif result == "fled":
 			MapSystem.set_node_state(CombatSystem.clear_node_id, "dangerous")
-	_set_screen(Screen.SECTOR_MAP)
+	if result == "won" and LocationSystem.is_active():
+		_resume_location()  # победа — игрок остаётся в модуле
+	else:
+		LocationSystem.leave()  # побег — выход на карту
+		_set_screen(Screen.SECTOR_MAP)
 
 
 func _on_player_died(cause: String) -> void:

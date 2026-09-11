@@ -22,13 +22,15 @@ func get_start_sector_id() -> String:
 
 
 func get_opening_situation_id() -> String:
-	return str(_config.get("opening_situation_id", "sit_1_1_capsule"))
+	return str(_config.get("opening_situation_id", ""))
 
 
 func start_new_run() -> void:
 	ResourceSystem.reset_for_new_run(_config)
 	InventorySystem.reset_for_new_run(_config)
+	CharacterSystem.reset_for_new_run(_config)  # после ресурсов и сумки: применяет бонусы
 	SituationEngine.reset_for_new_run()
+	LocationSystem.reset_for_new_run()
 	CombatSystem.reset_for_new_run()
 	EconomyManager.reset_for_new_run()
 	_delete_file(RUN_PATH)
@@ -39,7 +41,9 @@ func save_run() -> void:
 	var data := {
 		"resources": ResourceSystem.to_save_data(),
 		"inventory": InventorySystem.to_save_data(),
+		"character": CharacterSystem.to_save_data(),
 		"situation": SituationEngine.to_save_data(),
+		"locations": LocationSystem.to_save_data(),
 		"map": MapSystem.to_save_data(),
 		"economy_run": EconomyManager.to_run_save_data(),
 	}
@@ -63,7 +67,9 @@ func load_run(fallback_sector_id: String = "wreck_01") -> bool:
 		return false
 	ResourceSystem.load_save_data(resource_data)
 	InventorySystem.load_save_data(data.get("inventory", []))
+	CharacterSystem.load_save_data(data.get("character", {}))  # после ресурсов и сумки
 	SituationEngine.load_save_data(situation_data)
+	LocationSystem.load_save_data(data.get("locations", {}))
 	EconomyManager.load_run_save_data(data.get("economy_run", {}))
 	return true
 

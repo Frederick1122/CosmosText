@@ -1,0 +1,35 @@
+{
+  "id": "sit_2_1_canister",
+  "text": "Баллон ещё шипит: вентиль сорван, кислород уходит тонкой струйкой. Если перекрыть его сейчас — внутри останется запас на полторы минуты.",
+  "requires": [],
+  "options": [
+    {
+      "id": "A",
+      "label": "Поддеть вентиль обломком трубы",
+      "requires": [ { "type": "has_item", "item": "pipe_scrap" } ],
+      "effects": [
+        { "type": "item_add", "item": "o2_canister" },
+        { "type": "flag_set", "flag": "copilot_canister_taken" }
+      ],
+      "next": ""
+    },
+    {
+      "id": "B",
+      "label": "Зажать вентиль рукой и свернуть",
+      "requires": [],
+      "effects": [
+        { "type": "hp_delta", "value": -10 },
+        { "type": "item_add", "item": "o2_canister" },
+        { "type": "flag_set", "flag": "copilot_canister_taken" }
+      ],
+      "next": ""
+    },
+    {
+      "id": "C",
+      "label": "Оставить баллон — вернуться позже",
+      "requires": [],
+      "effects": [],
+      "next": ""
+    }
+  ]
+}

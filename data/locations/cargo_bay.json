@@ -1,0 +1,50 @@
+{
+  "id": "cargo_bay",
+  "title": "Грузовой отсек",
+  "description": "Перекошенная дверь, штабели контейнеров, сорванных с креплений. В дальней стене — сервисный дрон, вдавленный в металл. Его красный индикатор следит за входом.",
+  "descriptions": [
+    {
+      "requires": [ { "type": "flag", "flag": "drone_cargo_down" } ],
+      "text": "Штабели контейнеров, сорванных с креплений. Дрон лежит у стены, индикатор погас. В глубине отсека — заклинивший шлюз, за ним угадывается чужой корабль."
+    }
+  ],
+  "events": [
+    {
+      "id": "drone_encounter",
+      "start": "auto",
+      "repeatable": true,
+      "triggers": [ { "type": "flag", "flag": "drone_cargo_down", "value": false } ],
+      "situation": "sit_1_3_drone"
+    },
+    {
+      "id": "search_containers",
+      "start": "manual",
+      "label": "Обыскать контейнеры",
+      "repeatable": false,
+      "triggers": [ { "type": "flag", "flag": "drone_cargo_down" } ],
+      "text": "В развороченных контейнерах — аптечка в целой упаковке, обрезок трубы, пара мотков изоленты, ветошь и кусок обшивки.",
+      "effects": [
+        { "type": "item_add", "item": "medkit" },
+        { "type": "item_add", "item": "pipe_scrap" },
+        { "type": "item_add", "item": "duct_tape", "count": 2 },
+        { "type": "item_add", "item": "cloth_rags", "count": 3 },
+        { "type": "item_add", "item": "scrap_metal" }
+      ]
+    },
+    {
+      "id": "force_shuttle_airlock",
+      "start": "manual",
+      "label": "Вскрыть шлюз к шаттлу обломком трубы",
+      "repeatable": false,
+      "triggers": [
+        { "type": "flag", "flag": "drone_cargo_down" },
+        { "type": "has_item", "item": "pipe_scrap" }
+      ],
+      "text": "Труба гнётся, но замок сдаётся первым. Шлюз со скрежетом отходит — путь к шаттлу открыт.",
+      "effects": [
+        { "type": "o2_delta", "value": -15 },
+        { "type": "open_map_node", "node": "alien_shuttle" }
+      ]
+    }
+  ]
+}

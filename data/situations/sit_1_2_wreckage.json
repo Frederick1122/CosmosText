@@ -3,30 +3,31 @@
   "text": "Крышка падает наружу. За ней — не открытый космос, а искорёженный коридор: гравитация держится через раз, обломки дрейфуют в такт. В трёх метрах — второй ремень безопасности. Пуст. Кровь на подлокотнике, уже свернувшаяся.\n\nНа полу — планшет напарника, экран треснул, но горит.",
   "requires": [],
   "options": [
-    {
-      "id": "A",
-      "label": "Взять планшет, прочитать сразу",
-      "requires": [],
-      "effects": [
-        { "type": "item_add", "item": "broken_datapad" },
-        { "type": "unlock_lore", "id": "log_01" },
-        { "type": "o2_delta", "value": -30 }
-      ],
-      "next": "map:wreck_01"
-    },
-    {
-      "id": "B",
-      "label": "Взять планшет, не читать — потом",
-      "requires": [],
-      "effects": [ { "type": "item_add", "item": "broken_datapad" } ],
-      "next": "map:wreck_01"
-    },
-    {
-      "id": "C",
-      "label": "Игнорировать, искать выход из отсека",
-      "requires": [],
-      "effects": [],
-      "next": "map:wreck_01"
-    }
+	{
+	  "id": "A",
+	  "label": "Взять планшет, прочитать сразу",
+	  "requires": [],
+	  "effects": [
+		{ "type": "item_add", "item": "broken_datapad" },
+		{ "type": "unlock_lore", "id": "log_01" },
+		{ "type": "flag_set", "flag": "datapad_read" },
+		{ "type": "o2_delta", "value": -30 }
+	  ],
+	  "next": ""
+	},
+	{
+	  "id": "B",
+	  "label": "Взять планшет, не читать — потом",
+	  "requires": [],
+	  "effects": [ { "type": "item_add", "item": "broken_datapad" } ],
+	  "next": ""
+	},
+	{
+	  "id": "C",
+	  "label": "Игнорировать, искать выход из отсека",
+	  "requires": [],
+	  "effects": [],
+	  "next": ""
+	}
   ]
 }

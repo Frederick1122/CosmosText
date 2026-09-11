@@ -1,8 +1,10 @@
 {
   "start_sector_id": "wreck_01",
-  "opening_situation_id": "sit_1_1_capsule",
+  "opening_situation_id": "",
   "inventory_slots": 6,
   "start_hp": 100,
   "start_o2_seconds": 252,
-  "start_ammo": 0
+  "start_ammo": 0,
+  "start_equipment": { "body": "flight_suit" },
+  "start_skill_points": 1
 }

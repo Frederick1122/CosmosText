@@ -1,0 +1,30 @@
+{
+  "melee": {
+    "name": "Ближний бой",
+    "description": "Удары трубой, кулаками — чем придётся.",
+    "max_level": 3,
+    "cost": 1,
+    "per_level": { "melee_damage": 3 }
+  },
+  "firearms": {
+    "name": "Стрельба",
+    "description": "Обращение с огнестрельным оружием.",
+    "max_level": 3,
+    "cost": 1,
+    "per_level": { "ranged_damage": 3, "hit_chance": 0.03 }
+  },
+  "engineering": {
+    "name": "Инженерия",
+    "description": "Ремонт и сборка снаряжения. Открывает сложные рецепты крафта.",
+    "max_level": 3,
+    "cost": 1,
+    "per_level": {}
+  },
+  "survival": {
+    "name": "Выживание",
+    "description": "Выносливость и умение терпеть боль.",
+    "max_level": 3,
+    "cost": 1,
+    "per_level": { "max_hp": 10 }
+  }
+}

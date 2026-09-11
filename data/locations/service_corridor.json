@@ -1,0 +1,44 @@
+{
+  "id": "service_corridor",
+  "title": "Служебный коридор",
+  "description": "Узкий коридор вдоль реакторной шахты. Давления нет: скафандр пищит, кислород уходит быстрее. В стене — аварийный шкаф с электронным замком, дальше проход к реактору перегорожен рухнувшими балками.",
+  "descriptions": [
+    {
+      "requires": [ { "type": "event_done", "event": "clear_rubble" } ],
+      "text": "Узкий коридор вдоль реакторной шахты. Давления нет. Балки оттащены в сторону — проход к реактору свободен."
+    }
+  ],
+  "events": [
+    {
+      "id": "vacuum_warning",
+      "start": "auto",
+      "repeatable": false,
+      "triggers": [],
+      "text": "Сигнал разгерметизации. Пока ты здесь, кислород тратится каждую секунду."
+    },
+    {
+      "id": "open_emergency_locker",
+      "start": "manual",
+      "label": "Перемкнуть замок аварийного шкафа",
+      "repeatable": false,
+      "triggers": [ { "type": "skill_gte", "skill": "engineering", "value": 1 } ],
+      "text": "Пара проводков накоротко — и замок сдаётся. Внутри два кислородных баллона и моток изоленты.",
+      "effects": [
+        { "type": "item_add", "item": "o2_canister", "count": 2 },
+        { "type": "item_add", "item": "duct_tape" }
+      ]
+    },
+    {
+      "id": "clear_rubble",
+      "start": "manual",
+      "label": "Разобрать завал обломком трубы",
+      "repeatable": false,
+      "triggers": [ { "type": "has_item", "item": "pipe_scrap" } ],
+      "text": "Труба работает рычагом. Балки с грохотом сползают — путь к реактору открыт, но ты выдохся.",
+      "effects": [
+        { "type": "o2_delta", "value": -20 },
+        { "type": "open_map_node", "node": "reactor" }
+      ]
+    }
+  ]
+}

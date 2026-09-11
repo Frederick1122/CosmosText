@@ -1,11 +1,21 @@
 extends Node
 ## Текстовый бой — см. tech-spec-v1.md раздел 5.
+## Характеристики персонажа (CharacterSystem) влияют на урон, точность,
+## шанс побега и броню — формулы в docs/ARCHITECTURE.md.
 
 signal combat_started(enemy_id: String)
 signal turn_resolved(entry: Dictionary)
 signal combat_ended(result: String)  # "won" | "fled" | "died"
 
 enum State { IDLE, PLAYER_TURN, RESOLVING, ENDED }
+
+const RANGED_HIT_CHANCE := 0.75
+const RANGED_DAMAGE := 15
+const MELEE_HIT_CHANCE := 0.5
+const MELEE_DAMAGE := 8
+const MELEE_MISS_PENALTY := 10
+const MAX_HIT_CHANCE := 0.95
+const MIN_FLEE_RISK := 0.05
 
 var state: int = State.IDLE
 var enemy_id: String = ""
@@ -16,6 +26,9 @@ var log: Array = []
 ## effect'а start_combat, чтобы GameState знал, какой узел пометить
 ## "пройдено"/"опасно" по итогу. См. GDD раздел 5.5, ситуация "требует оружие".
 var clear_node_id: String = ""
+## Эффекты из start_combat.on_win / on_flee — применяет GameState по итогу боя.
+var on_win_effects: Array = []
+var on_flee_effects: Array = []
 
 var _enemy_db: Dictionary = {}
 var _used_specials: Dictionary = {}
@@ -31,11 +44,13 @@ func reset_for_new_run() -> void:
 	enemy_hp = 0
 	enemy_data = {}
 	clear_node_id = ""
+	on_win_effects = []
+	on_flee_effects = []
 	log.clear()
 	_used_specials.clear()
 
 
-func start_combat(id: String, clear_node: String = "") -> void:
+func start_combat(id: String, clear_node: String = "", on_win: Array = [], on_flee: Array = []) -> void:
 	if not _enemy_db.has(id):
 		push_error("CombatSystem: неизвестный враг '%s'" % id)
 		return
@@ -43,6 +58,8 @@ func start_combat(id: String, clear_node: String = "") -> void:
 	enemy_data = _enemy_db[id]
 	enemy_hp = int(enemy_data.get("hp", 10))
 	clear_node_id = clear_node
+	on_win_effects = on_win.duplicate(true)
+	on_flee_effects = on_flee.duplicate(true)
 	_used_specials.clear()
 	log.clear()
 	state = State.PLAYER_TURN
@@ -101,8 +118,14 @@ func _available_specials() -> Array:
 
 func _resolve_player_attack() -> void:
 	var ranged: bool = ResourceSystem.ammo > 0
-	var hit_chance: float = 0.75 if ranged else 0.5
-	var dmg: int = 15 if ranged else 8
+	var hit_chance: float = (RANGED_HIT_CHANCE if ranged else MELEE_HIT_CHANCE) + CharacterSystem.get_stat("hit_chance")
+	hit_chance = minf(hit_chance, MAX_HIT_CHANCE)
+	var dmg: int
+	if ranged:
+		dmg = RANGED_DAMAGE + int(CharacterSystem.get_stat("ranged_damage"))
+	else:
+		dmg = MELEE_DAMAGE + int(CharacterSystem.get_stat("melee_damage"))
+	dmg = maxi(1, dmg)
 	if randf() <= hit_chance:
 		enemy_hp = max(0, enemy_hp - dmg)
 		if ranged:
@@ -111,7 +134,7 @@ func _resolve_player_attack() -> void:
 	else:
 		_log("Промах.")
 		if not ranged:
-			ResourceSystem.apply_hp_delta(-10)  # неудачный ближний бой без патронов — риск GDD 5.2
+			ResourceSystem.apply_hp_delta(-MELEE_MISS_PENALTY)  # неудачный ближний бой без патронов — риск GDD 5.2
 	if enemy_hp <= 0:
 		_end_combat("won")
 		return
@@ -119,7 +142,8 @@ func _resolve_player_attack() -> void:
 
 
 func _resolve_flee() -> void:
-	var risk: float = float(enemy_data.get("flee_risk", 0.5))
+	var risk: float = float(enemy_data.get("flee_risk", 0.5)) - CharacterSystem.get_stat("flee_chance")
+	risk = maxf(risk, MIN_FLEE_RISK)
 	if randf() > risk:
 		_log("Удалось отступить.")
 		_end_combat("fled")
@@ -156,9 +180,14 @@ func _resolve_special(payload) -> void:
 func _enemy_turn(multiplier: float) -> void:
 	var atk: Dictionary = enemy_data.get("attack", {})
 	if randf() <= float(atk.get("hit_chance", 0.5)):
-		var dmg: int = int(randi_range(int(atk.get("min", 1)), int(atk.get("max", 5))) * multiplier)
+		var raw: int = int(randi_range(int(atk.get("min", 1)), int(atk.get("max", 5))) * multiplier)
+		var armor := int(CharacterSystem.get_stat("armor"))
+		var dmg: int = maxi(1, raw - armor)
 		ResourceSystem.apply_hp_delta(-dmg)
-		_log("Враг атакует. Урон: %d" % dmg)
+		if armor > 0 and raw > dmg:
+			_log("Враг атакует. Урон: %d (броня поглотила %d)" % [dmg, raw - dmg])
+		else:
+			_log("Враг атакует. Урон: %d" % dmg)
 	else:
 		_log("Враг промахивается.")
 	if ResourceSystem.hp <= 0:
@@ -171,7 +200,7 @@ func _end_combat(result: String) -> void:
 	state = State.ENDED
 	if result == "won":
 		for item_id in enemy_data.get("loot", []):
-			InventorySystem.add_item(item_id)
+			EffectResolver.apply_effect({"type": "item_add", "item": item_id})  # лишнее — на пол модуля
 	combat_ended.emit(result)
 
 

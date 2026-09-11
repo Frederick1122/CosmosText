@@ -1,0 +1,62 @@
+{
+  "id": "reactor",
+  "title": "Реакторный отсек",
+  "description": "Гермодверь реакторного отсека заблокирована. Рядом горит считыватель карт — ждёт допуска экипажа.",
+  "descriptions": [
+    {
+      "requires": [ { "type": "flag", "flag": "strain_down" } ],
+      "text": "Реакторный отсек. Бледная масса Штамма больше не шевелится. В центральной стойке темнеет пустое гнездо энергоячейки."
+    },
+    {
+      "requires": [ { "type": "flag", "flag": "reactor_unlocked" } ],
+      "text": "Реакторный отсек. Реактор заглушен, стойки управления мигают аварийным светом. В центральной стойке — энергоячейка, ещё тёплая."
+    }
+  ],
+  "events": [
+    {
+      "id": "use_keycard",
+      "start": "manual",
+      "label": "Приложить ключ-карту пилота",
+      "repeatable": false,
+      "triggers": [
+        { "type": "has_item", "item": "pilot_keycard" },
+        { "type": "flag", "flag": "reactor_unlocked", "value": false }
+      ],
+      "text": "Считыватель щёлкает, карта застревает в прорези и больше не выходит. Гермодверь ползёт в сторону.",
+      "effects": [
+        { "type": "item_remove", "item": "pilot_keycard" },
+        { "type": "flag_set", "flag": "reactor_unlocked" }
+      ]
+    },
+    {
+      "id": "read_reactor_log",
+      "start": "manual",
+      "label": "Прочитать журнал реактора",
+      "repeatable": false,
+      "triggers": [ { "type": "flag", "flag": "reactor_unlocked" } ],
+      "text": "На панели — последняя запись перед остановкой. Запись добавлена в журнал.",
+      "effects": [ { "type": "unlock_lore", "id": "log_03" } ]
+    },
+    {
+      "id": "extract_cell",
+      "start": "manual",
+      "label": "Извлечь энергоячейку",
+      "repeatable": true,
+      "triggers": [
+        { "type": "flag", "flag": "reactor_unlocked" },
+        { "type": "flag", "flag": "reactor_cell_taken", "value": false }
+      ],
+      "situation": "sit_3_1_reactor_cell"
+    },
+    {
+      "id": "strain_encounter",
+      "start": "auto",
+      "repeatable": true,
+      "triggers": [
+        { "type": "flag", "flag": "reactor_cell_taken" },
+        { "type": "flag", "flag": "strain_down", "value": false }
+      ],
+      "situation": "sit_3_2_strain"
+    }
+  ]
+}

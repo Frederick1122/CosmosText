@@ -1,5 +1,7 @@
 extends Node
 ## HP / O2 / патроны — см. tech-spec-v1.md раздел 4.
+## max_hp = base_max_hp (из config) + бонус от снаряжения и навыков
+## (выставляет CharacterSystem через set_max_hp_bonus).
 
 signal hp_changed(value: int)
 signal o2_changed(value: float)
@@ -8,6 +10,8 @@ signal resource_depleted(kind: String)  # kind: "hp" | "o2"
 
 var hp: int = 100
 var max_hp: int = 100
+var base_max_hp: int = 100
+var max_hp_bonus: int = 0
 var o2_seconds: float = 0.0
 var ammo: int = 0
 
@@ -24,7 +28,9 @@ func _process(delta: float) -> void:
 
 
 func reset_for_new_run(config: Dictionary) -> void:
-	max_hp = int(config.get("start_hp", 100))
+	base_max_hp = int(config.get("start_hp", 100))
+	max_hp_bonus = 0
+	max_hp = base_max_hp
 	hp = max_hp
 	o2_seconds = float(config.get("start_o2_seconds", 252.0))
 	ammo = int(config.get("start_ammo", 0))
@@ -33,6 +39,14 @@ func reset_for_new_run(config: Dictionary) -> void:
 	hp_changed.emit(hp)
 	o2_changed.emit(o2_seconds)
 	ammo_changed.emit(ammo)
+
+
+func set_max_hp_bonus(bonus: int) -> void:
+	max_hp_bonus = bonus
+	max_hp = maxi(1, base_max_hp + bonus)
+	if hp > max_hp:
+		hp = max_hp
+	hp_changed.emit(hp)
 
 
 func apply_hp_delta(v: int) -> void:
@@ -70,6 +84,7 @@ func to_save_data() -> Dictionary:
 	return {
 		"hp": hp,
 		"max_hp": max_hp,
+		"base_max_hp": base_max_hp,
 		"o2_seconds": o2_seconds,
 		"ammo": ammo,
 	}
@@ -77,6 +92,8 @@ func to_save_data() -> Dictionary:
 
 func load_save_data(data: Dictionary) -> void:
 	max_hp = int(data.get("max_hp", max_hp))
+	base_max_hp = int(data.get("base_max_hp", max_hp))
+	max_hp_bonus = max_hp - base_max_hp
 	hp = clampi(int(data.get("hp", hp)), 0, max_hp)
 	o2_seconds = max(0.0, float(data.get("o2_seconds", o2_seconds)))
 	ammo = max(0, int(data.get("ammo", ammo)))
