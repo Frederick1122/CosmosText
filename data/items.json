@@ -1,0 +1,31 @@
+{
+  "broken_datapad": {
+    "name": "Сломанный планшет",
+    "category": "quest",
+    "slot_cost": 1,
+    "stackable": false,
+    "description": "Экран треснул, но горит."
+  },
+  "medkit": {
+    "name": "Аптечка",
+    "category": "consumable",
+    "slot_cost": 1,
+    "stackable": true,
+    "description": "Одноразовая аптечка экстренной помощи.",
+    "use_effect": { "type": "hp_delta", "value": 30 }
+  },
+  "pipe_scrap": {
+    "name": "Обломок трубы",
+    "category": "weapon",
+    "slot_cost": 1,
+    "stackable": false,
+    "description": "Согнутый кусок трубы. Сойдёт за оружие ближнего боя."
+  },
+  "scrap_metal": {
+    "name": "Металлолом",
+    "category": "component",
+    "slot_cost": 1,
+    "stackable": true,
+    "description": "Может пригодиться при сборке корабля."
+  }
+}

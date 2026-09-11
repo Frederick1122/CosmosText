@@ -1,0 +1,25 @@
+{
+  "drone_cargo": {
+    "name": "Сервисный дрон",
+    "hp": 40,
+    "attack": { "min": 5, "max": 15, "hit_chance": 0.6 },
+    "flee_risk": 0.4,
+    "loot": ["scrap_metal"],
+    "special_actions": [
+      {
+        "id": "distract_datapad",
+        "label": "Использовать планшет как отвлекающий манёвр",
+        "requires": [ { "type": "has_item", "item": "broken_datapad" } ],
+        "effect": { "type": "skip_enemy_turn_and_guarantee_hit", "value": 15 }
+      }
+    ]
+  },
+  "strain_l7": {
+    "name": "Штамм Л-7",
+    "hp": 60,
+    "attack": { "min": 10, "max": 20, "hit_chance": 0.5 },
+    "flee_risk": 0.6,
+    "loot": [],
+    "special_actions": []
+  }
+}

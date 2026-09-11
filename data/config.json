@@ -1,0 +1,8 @@
+{
+  "start_sector_id": "wreck_01",
+  "opening_situation_id": "sit_1_1_capsule",
+  "inventory_slots": 6,
+  "start_hp": 100,
+  "start_o2_seconds": 252,
+  "start_ammo": 0
+}
