@@ -117,11 +117,12 @@ func _connect_signals() -> void:
 	ResourceSystem.ammo_changed.connect(_on_resource_changed)
 	InventorySystem.item_added.connect(_on_inventory_changed)
 	InventorySystem.item_removed.connect(_on_inventory_changed)
-	CharacterSystem.changed.connect(_update_hud)
+	CharacterSystem.changed.connect(_on_character_changed)
+	NotificationSystem.changed.connect(_on_notification_changed)
 	MapSystem.node_state_changed.connect(_on_map_node_state_changed)
 	MapSystem.floor_changed.connect(_on_map_floor_changed)
+	MapSystem.fog_changed.connect(_on_map_fog_changed)
 	CombatSystem.turn_resolved.connect(_on_combat_turn_resolved)
-
 
 func _fill_parent(control: Control) -> void:
 	control.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -233,6 +234,21 @@ func _on_resource_changed(_value) -> void:
 
 func _on_inventory_changed(_item_id: String) -> void:
 	_update_hud()
+	_update_nav_buttons()
+
+
+func _on_character_changed() -> void:
+	_update_hud()
+	_update_nav_buttons()
+
+
+func _on_notification_changed() -> void:
+	_update_nav_buttons()
+
+
+func _on_map_fog_changed() -> void:
+	if (GameState.current_screen == GameState.Screen.SECTOR_MAP or map_open) and not journal_open and not character_open:
+		_render_current_screen()
 
 
 func _on_map_node_state_changed(_node_id: String, _state: String) -> void:
@@ -251,6 +267,10 @@ func _on_combat_turn_resolved(_entry: Dictionary) -> void:
 
 
 func _on_screen_changed(_screen: int) -> void:
+	if character_open:
+		NotificationSystem.mark_character_seen()
+	if journal_open:
+		NotificationSystem.mark_journal_seen()
 	map_open = false
 	journal_open = false
 	character_open = false
@@ -269,8 +289,15 @@ func _update_hud() -> void:
 # --- HUD-вкладки ----------------------------------------------------------------
 
 func _toggle_journal() -> void:
-	journal_open = not journal_open
+	if journal_button.disabled:
+		return
 	if journal_open:
+		NotificationSystem.mark_journal_seen()
+		journal_open = false
+	else:
+		if character_open:
+			NotificationSystem.mark_character_seen()
+		journal_open = true
 		map_open = false
 		character_open = false
 	_scroll_to_top()
@@ -280,6 +307,10 @@ func _toggle_journal() -> void:
 func _toggle_map() -> void:
 	if map_button.disabled:
 		return
+	if journal_open:
+		NotificationSystem.mark_journal_seen()
+	if character_open:
+		NotificationSystem.mark_character_seen()
 	journal_open = false
 	character_open = false
 	if GameState.current_screen == GameState.Screen.SECTOR_MAP:
@@ -301,6 +332,8 @@ func _toggle_character() -> void:
 	if character_open:
 		_close_character()
 		return
+	if journal_open:
+		NotificationSystem.mark_journal_seen()
 	character_open = true
 	map_open = false
 	journal_open = false
@@ -310,6 +343,7 @@ func _toggle_character() -> void:
 
 ## Предметы могли измениться — в модуле перепроверяем его автособытия.
 func _close_character() -> void:
+	NotificationSystem.mark_character_seen()
 	character_open = false
 	_scroll_to_top()
 	if GameState.current_screen == GameState.Screen.LOCATION:
@@ -363,14 +397,22 @@ func _update_nav_buttons() -> void:
 		or GameState.current_screen == GameState.Screen.COMBAT
 		or GameState.current_screen == GameState.Screen.DEATH
 	)
-	map_button.disabled = blocked
-	character_button.disabled = blocked
+	map_button.disabled = blocked or not GameState.has_left_capsule
+	character_button.disabled = blocked or not GameState.has_left_capsule
+	journal_button.disabled = blocked or ArchiveSystem.get_unlocked().is_empty()
+	_set_nav_label(map_button, "Карта", false)
+	_set_nav_label(character_button, "Персонаж", NotificationSystem.has_character_alert())
+	_set_nav_label(journal_button, "Журнал", NotificationSystem.has_new_lore())
 	var map_active := not journal_open and not character_open and (
 		map_open or GameState.current_screen == GameState.Screen.SECTOR_MAP
 	)
 	_style_nav_button(map_button, map_active)
 	_style_nav_button(character_button, character_open)
 	_style_nav_button(journal_button, journal_open)
+
+
+func _set_nav_label(btn: Button, base: String, alert: bool) -> void:
+	btn.text = base + ("  •" if alert else "")
 
 
 func _clear_body() -> void:
@@ -453,7 +495,8 @@ func _render_map(read_only: bool = false) -> void:
 		nodes,
 		MapSystem.hub_node_id,
 		MapSystem.get_current_floor_id(),
-		read_only
+		read_only,
+		MapSystem.get_explored_floor_ids()
 	)
 
 	if read_only:

@@ -33,9 +33,9 @@ func start_new_run() -> void:
 	LocationSystem.reset_for_new_run()
 	CombatSystem.reset_for_new_run()
 	EconomyManager.reset_for_new_run()
+	NotificationSystem.reset_for_new_run()
 	_delete_file(RUN_PATH)
 	_delete_file(CHECKPOINT_PATH)
-
 
 func save_run() -> void:
 	var data := {
@@ -45,6 +45,8 @@ func save_run() -> void:
 		"situation": SituationEngine.to_save_data(),
 		"locations": LocationSystem.to_save_data(),
 		"map": MapSystem.to_save_data(),
+		"game_state": GameState.to_save_data(),
+		"notifications": NotificationSystem.to_save_data(),
 		"economy_run": EconomyManager.to_run_save_data(),
 	}
 	_write_json(RUN_PATH, data)
@@ -70,6 +72,8 @@ func load_run(fallback_sector_id: String = "wreck_01") -> bool:
 	CharacterSystem.load_save_data(data.get("character", {}))  # после ресурсов и сумки
 	SituationEngine.load_save_data(situation_data)
 	LocationSystem.load_save_data(data.get("locations", {}))
+	GameState.load_save_data(data.get("game_state", {}))
+	NotificationSystem.load_save_data(data.get("notifications", {}))
 	EconomyManager.load_run_save_data(data.get("economy_run", {}))
 	return true
 

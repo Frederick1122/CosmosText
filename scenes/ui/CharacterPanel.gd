@@ -50,7 +50,12 @@ func _rebuild() -> void:
 	tabs.name = "Tabs"
 	tabs.add_theme_constant_override("separation", 8)
 	for entry in TABS:
-		var btn := UiKit.button(entry[1], "tab_active" if entry[0] == tab else "quiet", 58)
+		var label := str(entry[1])
+		if entry[0] == "items" and NotificationSystem.has_new_items():
+			label += "  •"
+		elif entry[0] == "skills" and NotificationSystem.has_new_skill_points():
+			label += "  •"
+		var btn := UiKit.button(label, "tab_active" if entry[0] == tab else "quiet", 58)
 		btn.name = "Tab_%s" % entry[0]
 		btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		btn.add_theme_font_size_override("font_size", 20)
@@ -90,8 +95,15 @@ func _build_items() -> void:
 		var data := InventorySystem.get_item_data(item_id)
 		var count := int(entry.get("count", 1))
 		var card := UiKit.card(self)
-		card.add_child(UiKit.text(_item_name(item_id) + (" x%d" % count if count > 1 else ""), 26, UiKit.TITLE_COLOR))
-
+		var title_row := HBoxContainer.new()
+		title_row.add_theme_constant_override("separation", 10)
+		var title := UiKit.text(_item_name(item_id) + (" x%d" % count if count > 1 else ""), 26, UiKit.TITLE_COLOR)
+		title_row.add_child(title)
+		if NotificationSystem.is_item_new(item_id):
+			title_row.add_child(UiKit.text("НОВОЕ", 18, UiKit.ACCENT_COLOR))
+		card.add_child(title_row)
+		var card_panel := card.get_parent() as PanelContainer
+		card_panel.gui_input.connect(_on_item_card_input.bind(item_id))
 		var meta := PackedStringArray()
 		var category := str(data.get("category", ""))
 		meta.append(str(CATEGORY_TITLES.get(category, category)))
@@ -122,22 +134,30 @@ func _build_items() -> void:
 			actions.add_child(_action_button("Оставить здесь" if LocationSystem.is_active() else "Выбросить", _drop.bind(item_id), "danger"))
 
 
+func _on_item_card_input(event: InputEvent, item_id: String) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		if NotificationSystem.is_item_new(item_id):
+			NotificationSystem.mark_item_seen(item_id)
+			_rebuild()
+
+
 func _use_item(item_id: String) -> void:
+	NotificationSystem.mark_item_seen(item_id)
 	var item_name := _item_name(item_id)
 	_act("Использовано: %s." % item_name if InventorySystem.use_item(item_id) else "Нельзя использовать.")
 
-
 func _equip(item_id: String) -> void:
+	NotificationSystem.mark_item_seen(item_id)
 	var error := CharacterSystem.equip(item_id)
 	_act(error if error != "" else "Надето: %s." % _item_name(item_id))
 
-
 func _interact(item_id: String, interaction_id: String) -> void:
+	NotificationSystem.mark_item_seen(item_id)
 	var text := InventorySystem.interact(item_id, interaction_id)
 	_act(text if text != "" else "Готово.")
 
-
 func _drop(item_id: String) -> void:
+	NotificationSystem.mark_item_seen(item_id)
 	var item_name := _item_name(item_id)
 	var where := "Оставлено здесь: %s." if LocationSystem.is_active() else "Выброшено: %s."
 	_act(where % item_name if InventorySystem.drop_item(item_id) else "Этот предмет нельзя выбросить.")
@@ -311,6 +331,8 @@ func _describe_requirement(req: Dictionary) -> String:
 
 func _select_tab(new_tab: String) -> void:
 	tab = new_tab
+	if tab == "skills":
+		NotificationSystem.mark_skill_points_seen()
 	message = ""
 	tab_changed.emit(tab)
 	_rebuild()

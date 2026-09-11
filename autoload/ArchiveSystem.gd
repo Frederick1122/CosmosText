@@ -2,6 +2,8 @@ extends Node
 ## Лор-архив — переживает permadeath (meta-слой). См. tech-spec-v1.md раздел 8
 ## и gdd-v1.md раздел 5.6 ("что переживает смерть").
 
+signal fragment_unlocked(id: String)
+
 var _unlocked: Dictionary = {}  # id -> true
 var _lore_db: Dictionary = {}
 
@@ -11,10 +13,10 @@ func _ready() -> void:
 
 
 func unlock_fragment(id: String) -> void:
-	if id == "":
+	if id == "" or _unlocked.has(id):
 		return
 	_unlocked[id] = true
-
+	fragment_unlocked.emit(id)
 
 func is_unlocked(id: String) -> bool:
 	return _unlocked.has(id)

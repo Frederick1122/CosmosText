@@ -20,6 +20,8 @@ func apply_effect(effect: Dictionary) -> void:
 			SituationEngine.set_flag(effect.get("flag", ""), effect.get("value", true))
 		"unlock_lore":
 			ArchiveSystem.unlock_fragment(effect.get("id", ""))
+		"reveal_map":
+			MapSystem.reveal_map()
 		"open_map_node":
 			MapSystem.unlock_node(effect.get("node", ""))
 		"lock_map_node":

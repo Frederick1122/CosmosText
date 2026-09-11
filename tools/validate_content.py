@@ -442,7 +442,7 @@ def main():
                 value = eff.get("value", 1)
                 if not isinstance(value, int) or isinstance(value, bool):
                     errors.append(f"{ctx}: skill_points_add.value должен быть целым")
-            elif t in ("hp_delta", "o2_delta", "ammo_delta", "flag_set"):
+            elif t in ("hp_delta", "o2_delta", "ammo_delta", "flag_set", "reveal_map"):
                 pass
             elif t is None:
                 errors.append(f"{ctx}: effect-запись без 'type'")

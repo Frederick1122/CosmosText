@@ -24,6 +24,7 @@ InventorySystem="*res://autoload/InventorySystem.gd"
 CharacterSystem="*res://autoload/CharacterSystem.gd"
 CraftingSystem="*res://autoload/CraftingSystem.gd"
 ArchiveSystem="*res://autoload/ArchiveSystem.gd"
+NotificationSystem="*res://autoload/NotificationSystem.gd"
 MapSystem="*res://autoload/MapSystem.gd"
 SituationEngine="*res://autoload/SituationEngine.gd"
 LocationSystem="*res://autoload/LocationSystem.gd"
@@ -41,7 +42,7 @@ window/handheld/orientation="portrait"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/mcp_bridge/plugin.cfg")
+enabled=PackedStringArray("res://addons/mcp_bridge/plugin.cfg", "res://addons/content_studio/plugin.cfg")
 
 [rendering]
 

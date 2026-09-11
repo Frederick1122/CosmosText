@@ -12,7 +12,7 @@ const MAX_AUTO_EVENTS_PER_STEP := 32
 
 var current_screen: int = Screen.MAIN_MENU
 var last_death_cause: String = ""
-
+var has_left_capsule: bool = false
 
 func _ready() -> void:
 	EventBus.player_died.connect(_on_player_died)
@@ -22,6 +22,7 @@ func _ready() -> void:
 
 
 func start_new_game(sector_id: String = "", opening_situation_id: String = "") -> void:
+	has_left_capsule = false
 	if sector_id == "":
 		sector_id = SaveManager.get_start_sector_id()
 	if opening_situation_id == "":
@@ -36,7 +37,6 @@ func start_new_game(sector_id: String = "", opening_situation_id: String = "") -
 		MapSystem.select_node(MapSystem.hub_node_id)
 	else:
 		_set_screen(Screen.SECTOR_MAP)
-
 
 func continue_game(sector_id: String = "") -> void:
 	if sector_id == "":
@@ -62,9 +62,11 @@ func enter_location(location_id: String, node_id: String = "") -> void:
 
 
 func leave_location() -> void:
+	var was_in_location := LocationSystem.is_active()
 	LocationSystem.leave()
+	if was_in_location:
+		has_left_capsule = true
 	_set_screen(Screen.SECTOR_MAP)
-
 
 ## Ручной запуск события из меню модуля.
 func start_location_event(event_id: String) -> void:
@@ -146,7 +148,9 @@ func _on_situation_ended(_id: String, next: String) -> void:
 			_set_screen(Screen.SECTOR_MAP)
 		return
 	if next.begins_with("map:"):
-		LocationSystem.leave()
+		if LocationSystem.is_active():
+			LocationSystem.leave()
+			has_left_capsule = true
 		var sector_id := next.substr(4)
 		var loaded := true
 		if MapSystem.current_sector_id != sector_id:
@@ -180,13 +184,23 @@ func _on_combat_ended(result: String) -> void:
 		_resume_location()  # победа — игрок остаётся в модуле
 	else:
 		LocationSystem.leave()  # побег — выход на карту
+		has_left_capsule = true
 		_set_screen(Screen.SECTOR_MAP)
+
+
 
 
 func _on_player_died(cause: String) -> void:
 	last_death_cause = cause
 	_set_screen(Screen.DEATH)
 
+
+func to_save_data() -> Dictionary:
+	return {"has_left_capsule": has_left_capsule}
+
+
+func load_save_data(data: Dictionary) -> void:
+	has_left_capsule = bool(data.get("has_left_capsule", false))
 
 func _set_screen(screen: int) -> void:
 	current_screen = screen

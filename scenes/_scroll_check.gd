@@ -12,6 +12,8 @@ func _ready() -> void:
 	GameState.start_new_game()
 	SituationEngine.select_option("C")
 	SituationEngine.select_option("B")
+	InventorySystem.interact("broken_datapad", "read")
+	GameState.leave_location()
 	InventorySystem.base_slots = 20
 	for id in ["pipe_scrap", "medkit", "duct_tape", "cloth_rags", "scrap_metal", "makeshift_backpack", "mag_boots", "plate_vest"]:
 		InventorySystem.add_item(id)

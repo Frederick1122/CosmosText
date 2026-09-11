@@ -3,9 +3,8 @@ extends Node
 ## и итоговые характеристики — сумма бонусов надетых предметов и навыков.
 ## Слоты сумки и макс. HP применяются сразу (InventorySystem / ResourceSystem),
 ## боевые характеристики читает CombatSystem. Справочник — docs/CONTENT.md.
-
 signal changed()
-
+signal skill_points_added(value: int)
 const SLOTS := ["head", "body", "arms", "legs", "back"]
 const SLOT_TITLES := {
 	"head": "Шлем",
@@ -194,8 +193,9 @@ func learn(skill_id: String) -> bool:
 
 func add_skill_points(value: int) -> void:
 	skill_points = maxi(0, skill_points + value)
+	if value > 0:
+		skill_points_added.emit(value)
 	changed.emit()
-
 
 # --- Сохранение ---------------------------------------------------------------
 

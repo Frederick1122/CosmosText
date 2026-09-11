@@ -1,169 +1,245 @@
 {
-  "id": "wreck_01",
-  "title": "Обломок «Персефона»",
-  "hub_node": "hub",
-  "map": {
-    "viewport_height": 720,
-    "grid": true,
-    "grid_columns": 7,
-    "grid_rows": 5,
-    "cell_size": { "x": 118, "y": 112 },
-    "module_size": { "x": 74, "y": 74 },
-    "floor_buttons_side": "right",
-    "default_floor": "deck_01",
-    "floors": [
-      { "id": "deck_01", "label": "01", "title": "Палуба выживания" },
-      { "id": "deck_02", "label": "02", "title": "Грузовая палуба" },
-      { "id": "deck_03", "label": "03", "title": "Реакторная шахта" }
-    ]
-  },
-  "nodes": {
-    "hub": {
-      "title": "Капсула / место сборки",
-      "location_id": "hub",
-      "connections": ["lift_01_to_02", "copilot_body"],
-      "sealed": true,
-      "state": "available",
-      "map": {
-        "label": "Капсула",
-        "floor": "deck_01",
-        "cell": { "x": 2, "y": 3 },
-        "order": 10,
-        "note": "Точка сбора и чекпойнт"
-      }
-    },
-    "lift_01_to_02": {
-      "title": "Лифт к грузовой палубе",
-      "connections": ["hub", "lift_02_to_01"],
-      "sealed": true,
-      "state": "available",
-      "map": {
-        "label": "Лифт",
-        "kind": "elevator",
-        "floor": "deck_01",
-        "target_floor": "deck_02",
-        "cell": { "x": 5, "y": 3 },
-        "order": 20,
-        "note": "Рабочая шахта вниз, к грузовому уровню"
-      }
-    },
-    "copilot_body": {
-      "title": "Тело второго пилота",
-      "location_id": "copilot_body",
-      "connections": ["hub"],
-      "sealed": true,
-      "state": "locked",
-      "map": {
-        "label": "Пилот",
-        "floor": "deck_01",
-        "cell": { "x": 3, "y": 4 },
-        "visible_when_locked": true,
-        "order": 30,
-        "note": "Метка скафандра едва отвечает"
-      }
-    },
-    "lift_02_to_01": {
-      "title": "Лифт к палубе выживания",
-      "connections": ["lift_01_to_02", "cargo_bay"],
-      "sealed": true,
-      "state": "available",
-      "map": {
-        "label": "Лифт ↑",
-        "kind": "elevator",
-        "floor": "deck_02",
-        "target_floor": "deck_01",
-        "cell": { "x": 2, "y": 3 },
-        "order": 40,
-        "note": "Вернуться к капсуле"
-      }
-    },
-    "cargo_bay": {
-      "title": "Грузовой отсек",
-      "location_id": "cargo_bay",
-      "connections": ["lift_02_to_01", "lift_02_to_03", "alien_shuttle"],
-      "sealed": true,
-      "state": "available",
-      "map": {
-        "label": "Грузовой",
-        "floor": "deck_02",
-        "cell": { "x": 4, "y": 3 },
-        "order": 50,
-        "note": "Сервисный дрон блокирует проход"
-      }
-    },
-    "lift_02_to_03": {
-      "title": "Лифт к реакторной шахте",
-      "connections": ["cargo_bay", "lift_03_to_02"],
-      "sealed": true,
-      "state": "available",
-      "map": {
-        "label": "Лифт ↓",
-        "kind": "elevator",
-        "floor": "deck_02",
-        "target_floor": "deck_03",
-        "cell": { "x": 6, "y": 2 },
-        "order": 60,
-        "note": "Спуск к поврежденной реакторной секции"
-      }
-    },
-    "alien_shuttle": {
-      "title": "Чужой шаттл",
-      "location_id": "alien_shuttle",
-      "connections": ["cargo_bay"],
-      "sealed": true,
-      "state": "locked",
-      "map": {
-        "label": "Шаттл",
-        "floor": "deck_02",
-        "cell": { "x": 6, "y": 4 },
-        "visible_when_locked": true,
-        "order": 70,
-        "note": "Сигнал нестабилен"
-      }
-    },
-    "lift_03_to_02": {
-      "title": "Лифт к грузовой палубе",
-      "connections": ["lift_02_to_03", "service_corridor"],
-      "sealed": false,
-      "state": "available",
-      "map": {
-        "label": "Лифт ↑",
-        "kind": "elevator",
-        "floor": "deck_03",
-        "target_floor": "deck_02",
-        "cell": { "x": 2, "y": 3 },
-        "order": 80,
-        "note": "Шахта скрипит, но кабина отвечает"
-      }
-    },
-    "service_corridor": {
-      "title": "Служебный коридор",
-      "location_id": "service_corridor",
-      "connections": ["lift_03_to_02", "reactor"],
-      "sealed": false,
-      "state": "available",
-      "map": {
-        "label": "Коридор",
-        "floor": "deck_03",
-        "cell": { "x": 3, "y": 4 },
-        "order": 85,
-        "note": "Нет давления — расходует O2"
-      }
-    },
-    "reactor": {
-      "title": "Реакторный отсек",
-      "location_id": "reactor",
-      "connections": ["service_corridor"],
-      "sealed": false,
-      "state": "locked",
-      "map": {
-        "label": "Реактор",
-        "floor": "deck_03",
-        "cell": { "x": 5, "y": 2 },
-        "visible_when_locked": true,
-        "order": 90,
-        "note": "Путь пока завален"
-      }
-    }
-  }
+	"hub_node": "hub",
+	"id": "wreck_01",
+	"map": {
+		"cell_size": {
+			"x": 118.0,
+			"y": 112.0
+		},
+		"default_floor": "deck_01",
+		"floor_buttons_side": "right",
+		"floors": [
+			{
+				"id": "deck_01",
+				"label": "01",
+				"title": "Палуба выживания"
+			},
+			{
+				"id": "deck_02",
+				"label": "02",
+				"title": "Грузовая палуба"
+			},
+			{
+				"id": "deck_03",
+				"label": "03",
+				"title": "Реакторная шахта"
+			}
+		],
+		"grid": true,
+		"grid_columns": 7,
+		"grid_rows": 5,
+		"module_size": {
+			"x": 74.0,
+			"y": 74.0
+		},
+		"viewport_height": 720.0
+	},
+	"nodes": {
+		"alien_shuttle": {
+			"connections": [
+				"cargo_bay"
+			],
+			"location_id": "alien_shuttle",
+			"map": {
+				"cell": {
+					"x": 6.0,
+					"y": 4.0
+				},
+				"floor": "deck_02",
+				"label": "Шаттл",
+				"note": "Сигнал нестабилен",
+				"order": 70.0,
+				"visible_when_locked": true
+			},
+			"sealed": true,
+			"state": "locked",
+			"title": "Чужой шаттл"
+		},
+		"cargo_bay": {
+			"connections": [
+				"lift_02_to_01",
+				"lift_02_to_03",
+				"alien_shuttle"
+			],
+			"location_id": "cargo_bay",
+			"map": {
+				"cell": {
+					"x": 4.0,
+					"y": 3.0
+				},
+				"floor": "deck_02",
+				"label": "Грузовой",
+				"note": "Сервисный дрон блокирует проход",
+				"order": 50.0
+			},
+			"sealed": true,
+			"state": "available",
+			"title": "Грузовой отсек"
+		},
+		"copilot_body": {
+			"connections": [
+				"hub"
+			],
+			"location_id": "copilot_body",
+			"map": {
+				"cell": {
+					"x": 3.0,
+					"y": 4.0
+				},
+				"floor": "deck_01",
+				"label": "Пилот",
+				"note": "Метка скафандра едва отвечает",
+				"order": 30.0,
+				"visible_when_locked": true
+			},
+			"sealed": true,
+			"state": "locked",
+			"title": "Тело второго пилота"
+		},
+		"hub": {
+			"connections": [
+				"lift_01_to_02",
+				"copilot_body"
+			],
+			"location_id": "hub",
+			"map": {
+				"cell": {
+					"x": 2.0,
+					"y": 3.0
+				},
+				"floor": "deck_01",
+				"label": "Капсула",
+				"note": "Точка сбора и чекпойнт",
+				"order": 10.0
+			},
+			"sealed": true,
+			"state": "available",
+			"title": "Капсула / место сборки"
+		},
+		"lift_01_to_02": {
+			"connections": [
+				"hub",
+				"lift_02_to_01"
+			],
+			"map": {
+				"cell": {
+					"x": 5.0,
+					"y": 3.0
+				},
+				"floor": "deck_01",
+				"kind": "elevator",
+				"label": "Лифт",
+				"note": "Рабочая шахта вниз, к грузовому уровню",
+				"order": 20.0,
+				"target_floor": "deck_02"
+			},
+			"sealed": true,
+			"state": "available",
+			"title": "Лифт к грузовой палубе"
+		},
+		"lift_02_to_01": {
+			"connections": [
+				"lift_01_to_02",
+				"cargo_bay"
+			],
+			"map": {
+				"cell": {
+					"x": 2.0,
+					"y": 3.0
+				},
+				"floor": "deck_02",
+				"kind": "elevator",
+				"label": "Лифт ↑",
+				"note": "Вернуться к капсуле",
+				"order": 40.0,
+				"target_floor": "deck_01"
+			},
+			"sealed": true,
+			"state": "available",
+			"title": "Лифт к палубе выживания"
+		},
+		"lift_02_to_03": {
+			"connections": [
+				"cargo_bay",
+				"lift_03_to_02"
+			],
+			"map": {
+				"cell": {
+					"x": 6.0,
+					"y": 2.0
+				},
+				"floor": "deck_02",
+				"kind": "elevator",
+				"label": "Лифт ↓",
+				"note": "Спуск к поврежденной реакторной секции",
+				"order": 60.0,
+				"target_floor": "deck_03"
+			},
+			"sealed": true,
+			"state": "available",
+			"title": "Лифт к реакторной шахте"
+		},
+		"lift_03_to_02": {
+			"connections": [
+				"lift_02_to_03",
+				"service_corridor"
+			],
+			"map": {
+				"cell": {
+					"x": 2.0,
+					"y": 3.0
+				},
+				"floor": "deck_03",
+				"kind": "elevator",
+				"label": "Лифт ↑",
+				"note": "Шахта скрипит, но кабина отвечает",
+				"order": 80.0,
+				"target_floor": "deck_02"
+			},
+			"sealed": false,
+			"state": "available",
+			"title": "Лифт к грузовой палубе"
+		},
+		"reactor": {
+			"connections": [
+				"service_corridor"
+			],
+			"location_id": "reactor",
+			"map": {
+				"cell": {
+					"x": 5.0,
+					"y": 2.0
+				},
+				"floor": "deck_03",
+				"label": "Реактор",
+				"note": "Путь пока завален",
+				"order": 90.0,
+				"visible_when_locked": true
+			},
+			"sealed": false,
+			"state": "locked",
+			"title": "Реакторный отсек"
+		},
+		"service_corridor": {
+			"connections": [
+				"lift_03_to_02",
+				"reactor"
+			],
+			"location_id": "service_corridor",
+			"map": {
+				"cell": {
+					"x": 3.0,
+					"y": 4.0
+				},
+				"floor": "deck_03",
+				"label": "Коридор",
+				"note": "Нет давления — расходует O2",
+				"order": 85.0
+			},
+			"sealed": false,
+			"state": "available",
+			"title": "Служебный коридор"
+		}
+	},
+	"title": "Обломок «Персефона»"
 }

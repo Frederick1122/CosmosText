@@ -23,6 +23,7 @@ var _node_order: Dictionary = {}
 var _node_controls: Dictionary = {}
 var _floor_buttons: Dictionary = {}
 var _floors: Array = []
+var _discovered_floor_ids: Array = []
 var _hub_node_id: String = ""
 var _current_floor_id: String = ""
 var _active_floor_id: String = ""
@@ -48,7 +49,8 @@ func setup(
 	nodes: Array,
 	hub_node_id: String,
 	current_floor_id: String,
-	read_only: bool = false
+	read_only: bool = false,
+	discovered_floors: Array = []
 ) -> void:
 	_sector_id = sector_id
 	_sector_title = sector_title
@@ -57,6 +59,7 @@ func setup(
 	_hub_node_id = hub_node_id
 	_current_floor_id = current_floor_id
 	_read_only = read_only
+	_discovered_floor_ids = discovered_floors.duplicate()
 	_read_layout_config()
 	_floors = _read_floors()
 	_active_floor_id = _valid_floor_or_default(_current_floor_id)
@@ -431,6 +434,8 @@ func _read_floors() -> Array:
 		var floor_id := str(floor.get("id", ""))
 		if floor_id == "":
 			continue
+		if not _discovered_floor_ids.is_empty() and not _discovered_floor_ids.has(floor_id):
+			continue
 		result.append(floor.duplicate(true))
 	return result
 
@@ -471,11 +476,7 @@ func _is_node_visible_on_active_floor(node: Dictionary) -> bool:
 
 
 func _is_node_visible(node: Dictionary) -> bool:
-	var state: String = str(node.get("state", "locked"))
-	if state != "locked":
-		return true
-	return bool(_node_map(node).get("visible_when_locked", false))
-
+	return bool(node.get("fog_visible", true))
 
 func _is_node_interactive(node: Dictionary) -> bool:
 	var state: String = str(node.get("state", "locked"))
@@ -491,8 +492,14 @@ func _is_elevator_node(node: Dictionary) -> bool:
 	return str(_node_map(node).get("kind", "")) == "elevator"
 
 
+func _is_unknown_room(node: Dictionary) -> bool:
+	return not bool(node.get("explored", true)) and str(node.get("id", "")) != _hub_node_id and not _is_elevator_node(node)
+
+
 func _node_label(node: Dictionary) -> String:
 	var cfg := _node_map(node)
+	if _is_unknown_room(node):
+		return "Неизвестно"
 	var label: String = str(cfg.get("label", node.get("title", node.get("id", ""))))
 	if str(node.get("state", "locked")) == "locked" and not bool(cfg.get("reveal_title_when_locked", true)):
 		label = "Неизвестно"
@@ -505,6 +512,8 @@ func _node_icon_text(node: Dictionary) -> String:
 		return "H"
 	if _is_elevator_node(node):
 		return "⇅"
+	if _is_unknown_room(node):
+		return "?"
 	match state:
 		"dangerous":
 			return "!"
@@ -540,6 +549,8 @@ func _floor_title(floor_id: String) -> String:
 
 
 func _node_tooltip(node: Dictionary) -> String:
+	if _is_unknown_room(node):
+		return "Неизвестный отсек\nПалуба: " + _floor_title(_node_floor_id(node))
 	var cfg := _node_map(node)
 	var state: String = str(node.get("state", "locked"))
 	var lines := [
@@ -597,6 +608,8 @@ func _node_halo_color(node: Dictionary) -> Color:
 	var state: String = str(node.get("state", "locked"))
 	if not _is_node_interactive(node) and state != "locked":
 		return Color(0.36, 0.41, 0.50, 0.11)
+	if _is_unknown_room(node):
+		return Color(0.43, 0.47, 0.55, 0.12)
 	if str(node.get("id", "")) == _hub_node_id:
 		return Color(0.28, 0.65, 0.48, 0.17)
 	if _is_elevator_node(node):
@@ -615,7 +628,9 @@ func _node_halo_color(node: Dictionary) -> Color:
 func _apply_node_label_style(label: Label, node: Dictionary) -> void:
 	var state: String = str(node.get("state", "locked"))
 	var color := Color("#d7deee")
-	if state == "locked":
+	if _is_unknown_room(node):
+		color = Color("#9aa4b6")
+	elif state == "locked":
 		color = Color("#858e9f")
 	elif state == "dangerous":
 		color = Color("#f0b0b9")
@@ -662,7 +677,12 @@ func _apply_node_style(btn: Button, node: Dictionary) -> void:
 	var pressed := Color("#102c3d")
 	var border := Color("#5d91a8")
 
-	if str(node.get("id", "")) == _hub_node_id:
+	if _is_unknown_room(node):
+		normal = Color("#252c38")
+		hover = Color("#354052")
+		pressed = Color("#1c222c")
+		border = Color("#69758a")
+	elif str(node.get("id", "")) == _hub_node_id:
 		normal = Color("#174c3c")
 		hover = Color("#1e6a53")
 		pressed = Color("#103429")

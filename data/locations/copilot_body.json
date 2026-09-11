@@ -34,11 +34,12 @@
       "start": "manual",
       "label": "Обыскать подсумки",
       "repeatable": false,
-      "triggers": [],
-      "text": "В подсумках — ключ-карта экипажа и пара пищевых брикетов.",
+      "text": "В подсумках — ключ-карта экипажа, схема палуб и пара пищевых брикетов.",
       "effects": [
         { "type": "item_add", "item": "pilot_keycard" },
-        { "type": "item_add", "item": "ration_bar", "count": 2 }
+        { "type": "item_add", "item": "ship_map" },
+        { "type": "item_add", "item": "ration_bar", "count": 2 },
+        { "type": "reveal_map" }
       ]
     },
     {

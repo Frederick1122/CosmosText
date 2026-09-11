@@ -1,151 +1,197 @@
 {
-  "broken_datapad": {
-    "name": "Сломанный планшет",
-    "category": "quest",
-    "slot_cost": 1,
-    "stackable": false,
-    "description": "Экран треснул, но горит.",
-    "interactions": [
-      {
-        "id": "read",
-        "label": "Прочитать записи",
-        "requires": [ { "type": "flag", "flag": "datapad_read", "value": false } ],
-        "text": "Сквозь трещины читается обрывок лога. Запись добавлена в журнал.",
-        "effects": [
-          { "type": "unlock_lore", "id": "log_01" },
-          { "type": "flag_set", "flag": "datapad_read" }
-        ]
-      }
-    ]
-  },
-  "pilot_keycard": {
-    "name": "Ключ-карта пилота",
-    "category": "quest",
-    "slot_cost": 1,
-    "stackable": false,
-    "description": "Карта с допуском экипажа. На пластике — имя «Л. Верес»."
-  },
-  "power_cell": {
-    "name": "Энергоячейка",
-    "category": "quest",
-    "slot_cost": 1,
-    "stackable": false,
-    "description": "Ячейка из стойки реактора. Ещё тёплая. Без неё корабль не поднять."
-  },
-  "medkit": {
-    "name": "Аптечка",
-    "category": "consumable",
-    "slot_cost": 1,
-    "stackable": true,
-    "description": "Одноразовая аптечка экстренной помощи.",
-    "use_effect": { "type": "hp_delta", "value": 30 }
-  },
-  "improvised_bandage": {
-    "name": "Самодельный бинт",
-    "category": "consumable",
-    "slot_cost": 1,
-    "stackable": true,
-    "description": "Полосы ветоши, стянутые изолентой. Лучше, чем ничего.",
-    "use_effect": { "type": "hp_delta", "value": 15 }
-  },
-  "ration_bar": {
-    "name": "Пищевой брикет",
-    "category": "consumable",
-    "slot_cost": 1,
-    "stackable": true,
-    "description": "Спрессованный паёк. На вкус как картон, но придаёт сил.",
-    "use_effect": { "type": "hp_delta", "value": 10 }
-  },
-  "o2_canister": {
-    "name": "Баллон кислорода",
-    "category": "consumable",
-    "slot_cost": 1,
-    "stackable": true,
-    "description": "Малый баллон для скафандра. Запас на полторы минуты.",
-    "use_effect": { "type": "o2_delta", "value": 90 }
-  },
-  "pipe_scrap": {
-    "name": "Обломок трубы",
-    "category": "weapon",
-    "slot_cost": 1,
-    "stackable": false,
-    "equip_slot": "arms",
-    "stats": { "melee_damage": 6 },
-    "description": "Согнутый кусок трубы. Сойдёт за оружие ближнего боя и за рычаг."
-  },
-  "service_pistol": {
-    "name": "Табельный пистолет",
-    "category": "weapon",
-    "slot_cost": 1,
-    "stackable": false,
-    "equip_slot": "arms",
-    "stats": { "ranged_damage": 5, "hit_chance": 0.05 },
-    "description": "Компактный пистолет экипажа. Хорош, пока есть патроны; в рукопашной бесполезен."
-  },
-  "cracked_helmet": {
-    "name": "Шлем с трещиной",
-    "category": "armor",
-    "slot_cost": 1,
-    "stackable": false,
-    "equip_slot": "head",
-    "stats": { "armor": 1 },
-    "description": "Шлем второго пилота. Визор в трещинах, но держит."
-  },
-  "flight_suit": {
-    "name": "Лётный комбинезон",
-    "category": "armor",
-    "slot_cost": 2,
-    "stackable": false,
-    "equip_slot": "body",
-    "stats": { "armor": 1 },
-    "description": "Стандартный комбинезон пилота. Плотная ткань, но от удара почти не спасает."
-  },
-  "plate_vest": {
-    "name": "Жилет из обшивки",
-    "category": "armor",
-    "slot_cost": 2,
-    "stackable": false,
-    "equip_slot": "body",
-    "stats": { "armor": 3 },
-    "description": "Пластины обшивки, примотанные к жилету. Тяжело, зато держит удар."
-  },
-  "makeshift_backpack": {
-    "name": "Самодельный рюкзак",
-    "category": "gear",
-    "slot_cost": 1,
-    "stackable": false,
-    "equip_slot": "back",
-    "stats": { "inventory_slots": 3 },
-    "description": "Мешок из ветоши на лямках из изоленты."
-  },
-  "mag_boots": {
-    "name": "Магнитные ботинки",
-    "category": "gear",
-    "slot_cost": 1,
-    "stackable": false,
-    "equip_slot": "legs",
-    "stats": { "flee_chance": 0.15 },
-    "description": "Держат на палубе, когда гравитация сбоит. Отступать в них проще."
-  },
-  "scrap_metal": {
-    "name": "Металлолом",
-    "category": "component",
-    "slot_cost": 1,
-    "stackable": true,
-    "description": "Может пригодиться при сборке корабля."
-  },
-  "duct_tape": {
-    "name": "Изолента",
-    "category": "component",
-    "slot_cost": 1,
-    "stackable": true,
-    "description": "Моток серой изоленты. Держит всё."
-  },
-  "cloth_rags": {
-    "name": "Ветошь",
-    "category": "component",
-    "slot_cost": 1,
-    "stackable": true,
-    "description": "Обрывки ткани из разорванных чехлов."
-  }
+	"broken_datapad": {
+		"category": "quest",
+		"description": "Экран треснул, но горит.",
+		"interactions": [
+			{
+				"effects": [
+					{
+						"id": "log_01",
+						"type": "unlock_lore"
+					},
+					{
+						"flag": "datapad_read",
+						"type": "flag_set"
+					}
+				],
+				"id": "read",
+				"label": "Прочитать записи",
+				"requires": [
+					{
+						"flag": "datapad_read",
+						"type": "flag",
+						"value": false
+					}
+				],
+				"text": "Сквозь трещины читается обрывок лога. Запись добавлена в журнал."
+			}
+		],
+		"name": "Сломанный планшет",
+		"slot_cost": 1.0,
+		"stackable": false
+	},
+	"cloth_rags": {
+		"category": "component",
+		"description": "Обрывки ткани из разорванных чехлов.",
+		"name": "Ветошь",
+		"slot_cost": 1.0,
+		"stackable": true
+	},
+	"cracked_helmet": {
+		"category": "armor",
+		"description": "Шлем второго пилота. Визор в трещинах, но держит.",
+		"equip_slot": "head",
+		"name": "Шлем с трещиной",
+		"slot_cost": 1.0,
+		"stackable": false,
+		"stats": {
+			"armor": 1.0
+		}
+	},
+	"duct_tape": {
+		"category": "component",
+		"description": "Моток серой изоленты. Держит всё.",
+		"name": "Изолента",
+		"slot_cost": 1.0,
+		"stackable": true
+	},
+	"flight_suit": {
+		"category": "armor",
+		"description": "Стандартный комбинезон пилота. Плотная ткань, но от удара почти не спасает.",
+		"equip_slot": "body",
+		"name": "Лётный комбинезон",
+		"slot_cost": 2.0,
+		"stackable": false,
+		"stats": {
+			"armor": 1.0
+		}
+	},
+	"improvised_bandage": {
+		"category": "consumable",
+		"description": "Полосы ветоши, стянутые изолентой. Лучше, чем ничего.",
+		"name": "Самодельный бинт",
+		"slot_cost": 1.0,
+		"stackable": true,
+		"use_effect": {
+			"type": "hp_delta",
+			"value": 15.0
+		}
+	},
+	"mag_boots": {
+		"category": "gear",
+		"description": "Держат на палубе, когда гравитация сбоит. Отступать в них проще.",
+		"equip_slot": "legs",
+		"name": "Магнитные ботинки",
+		"slot_cost": 1.0,
+		"stackable": false,
+		"stats": {
+			"flee_chance": 0.15
+		}
+	},
+	"makeshift_backpack": {
+		"category": "gear",
+		"description": "Мешок из ветоши на лямках из изоленты.",
+		"equip_slot": "back",
+		"name": "Самодельный рюкзак",
+		"slot_cost": 1.0,
+		"stackable": false,
+		"stats": {
+			"inventory_slots": 3.0
+		}
+	},
+	"medkit": {
+		"category": "consumable",
+		"description": "Одноразовая аптечка экстренной помощи.",
+		"name": "Аптечка",
+		"slot_cost": 1.0,
+		"stackable": true,
+		"use_effect": {
+			"type": "hp_delta",
+			"value": 30.0
+		}
+	},
+	"o2_canister": {
+		"category": "consumable",
+		"description": "Малый баллон для скафандра. Запас на полторы минуты.",
+		"name": "Баллон кислорода",
+		"slot_cost": 1.0,
+		"stackable": true,
+		"use_effect": {
+			"type": "o2_delta",
+			"value": 90.0
+		}
+	},
+	"pilot_keycard": {
+		"category": "quest",
+		"description": "Карта с допуском экипажа. На пластике — имя «Л. Верес».",
+		"name": "Ключ-карта пилота",
+		"slot_cost": 1.0,
+		"stackable": false
+	},
+	"pipe_scrap": {
+		"category": "weapon",
+		"description": "Согнутый кусок трубы. Сойдёт за оружие ближнего боя и за рычаг.",
+		"equip_slot": "arms",
+		"name": "Обломок трубы",
+		"slot_cost": 1.0,
+		"stackable": false,
+		"stats": {
+			"melee_damage": 6.0
+		}
+	},
+	"plate_vest": {
+		"category": "armor",
+		"description": "Пластины обшивки, примотанные к жилету. Тяжело, зато держит удар.",
+		"equip_slot": "body",
+		"name": "Жилет из обшивки",
+		"slot_cost": 2.0,
+		"stackable": false,
+		"stats": {
+			"armor": 3.0
+		}
+	},
+	"power_cell": {
+		"category": "quest",
+		"description": "Ячейка из стойки реактора. Ещё тёплая. Без неё корабль не поднять.",
+		"name": "Энергоячейка",
+		"slot_cost": 1.0,
+		"stackable": false
+	},
+	"ration_bar": {
+		"category": "consumable",
+		"description": "Спрессованный паёк. На вкус как картон, но придаёт сил.",
+		"name": "Пищевой брикет",
+		"slot_cost": 1.0,
+		"stackable": true,
+		"use_effect": {
+			"type": "hp_delta",
+			"value": 10.0
+		}
+	},
+	"scrap_metal": {
+		"category": "component",
+		"description": "Может пригодиться при сборке корабля.",
+		"name": "Металлолом",
+		"slot_cost": 1.0,
+		"stackable": true
+	},
+	"service_pistol": {
+		"category": "weapon",
+		"description": "Компактный пистолет экипажа. Хорош, пока есть патроны; в рукопашной бесполезен.",
+		"equip_slot": "arms",
+		"name": "Табельный пистолет",
+		"slot_cost": 1.0,
+		"stackable": false,
+		"stats": {
+			"hit_chance": 0.05,
+			"ranged_damage": 5.0
+		}
+	},
+	"ship_map": {
+		"category": "quest",
+		"description": "Схема палуб и технических проходов. После изучения убирает туман с карты.",
+		"name": "Схема обломка",
+		"slot_cost": 1.0,
+		"stackable": false
+	}
 }

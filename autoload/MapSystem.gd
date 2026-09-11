@@ -6,6 +6,7 @@ extends Node
 signal node_state_changed(node_id: String, state: String)
 signal sector_loaded(sector_id: String)
 signal floor_changed(floor_id: String)
+signal fog_changed()
 
 var current_sector_id: String = ""
 var sector_title: String = ""
@@ -13,7 +14,8 @@ var hub_node_id: String = ""
 var current_floor_id: String = ""
 var map_config: Dictionary = {}
 var nodes: Dictionary = {}  # node_id -> { title, location_id, connections, sealed, state, map }
-
+var map_revealed: bool = false
+var _explored_nodes: Dictionary = {}  # node_id -> true
 
 func load_sector(id: String) -> bool:
 	var path := "res://data/sectors/%s.json" % id
@@ -33,6 +35,8 @@ func load_sector(id: String) -> bool:
 	current_floor_id = _default_floor_id()
 	var parsed_nodes = parsed.get("nodes", {})
 	nodes = parsed_nodes if parsed_nodes is Dictionary else {}
+	map_revealed = false
+	_explored_nodes.clear()
 	sector_loaded.emit(current_sector_id)
 	return true
 
@@ -40,15 +44,14 @@ func load_sector(id: String) -> bool:
 func get_visible_nodes() -> Array:
 	var result: Array = []
 	for node_id in nodes.keys():
-		if not (nodes[node_id] is Dictionary):
+		if not (nodes[node_id] is Dictionary) or not is_node_fog_visible(str(node_id)):
 			continue
-		var data: Dictionary = nodes[node_id]
-		if data.get("state", "locked") != "locked":
-			var entry: Dictionary = data.duplicate()
-			entry["id"] = node_id
-			result.append(entry)
+		var entry: Dictionary = nodes[node_id].duplicate(true)
+		entry["id"] = node_id
+		entry["explored"] = is_node_explored(str(node_id))
+		entry["fog_visible"] = true
+		result.append(entry)
 	return result
-
 
 func get_sector_title() -> String:
 	return sector_title if sector_title != "" else current_sector_id
@@ -68,10 +71,13 @@ func get_map_nodes(include_locked: bool = true) -> Array:
 		if not (nodes[node_id] is Dictionary):
 			continue
 		var data: Dictionary = nodes[node_id]
-		if include_locked or data.get("state", "locked") != "locked":
-			var entry: Dictionary = data.duplicate(true)
-			entry["id"] = node_id
-			result.append(entry)
+		if not include_locked and data.get("state", "locked") == "locked":
+			continue
+		var entry: Dictionary = data.duplicate(true)
+		entry["id"] = node_id
+		entry["explored"] = is_node_explored(str(node_id))
+		entry["fog_visible"] = is_node_fog_visible(str(node_id))
+		result.append(entry)
 	result.sort_custom(func(a, b): return _node_map_order(a) < _node_map_order(b))
 	return result
 
@@ -99,6 +105,7 @@ func select_node(node_id: String) -> void:
 	if current_floor_id != "" and node_floor_id != "" and node_floor_id != current_floor_id:
 		push_warning("MapSystem: узел '%s' находится на другой палубе" % node_id)
 		return
+	mark_explored(node_id)
 	if _is_elevator_node(data):
 		_move_by_elevator(data)
 		return
@@ -109,7 +116,6 @@ func select_node(node_id: String) -> void:
 	# В пройденные (cleared) и опасные модули можно возвращаться.
 	ResourceSystem.set_o2_ticking(not bool(data.get("sealed", true)))
 	GameState.enter_location(location_id, node_id)
-
 
 func unlock_node(node_id: String) -> void:
 	set_node_state(node_id, "available")
@@ -136,6 +142,7 @@ func set_current_floor(floor_id: String) -> void:
 	if current_floor_id == floor_id:
 		return
 	current_floor_id = floor_id
+	_explore_floor_elevators(floor_id)
 	floor_changed.emit(current_floor_id)
 
 
@@ -151,6 +158,8 @@ func to_save_data() -> Dictionary:
 		"sector_id": current_sector_id,
 		"current_floor_id": current_floor_id,
 		"nodes": node_states,
+		"explored_nodes": _explored_nodes.keys(),
+		"map_revealed": map_revealed,
 	}
 
 
@@ -171,7 +180,109 @@ func load_save_data(data: Dictionary, fallback_sector_id: String = "wreck_01") -
 				var saved_node: Dictionary = saved_nodes[node_id]
 				if saved_node.has("state"):
 					nodes[node_id]["state"] = saved_node["state"]
+
+	map_revealed = bool(data.get("map_revealed", false))
+	_explored_nodes.clear()
+	var saved_explored = data.get("explored_nodes", null)
+	if saved_explored is Array:
+		for node_id in saved_explored:
+			if nodes.has(str(node_id)):
+				_explored_nodes[str(node_id)] = true
+	elif saved_explored is Dictionary:
+		for node_id in saved_explored.keys():
+			if bool(saved_explored[node_id]) and nodes.has(str(node_id)):
+				_explored_nodes[str(node_id)] = true
+	else:
+		# Старые сохранения не знали о тумане: восстановим посещённые узлы
+		# по состоянию и всегда оставим стартовую капсулу видимой.
+		for node_id in nodes.keys():
+			if str(node_id) == hub_node_id or str(nodes[node_id].get("state", "locked")) != "locked":
+				_explored_nodes[str(node_id)] = true
+	if hub_node_id != "" and nodes.has(hub_node_id):
+		_explored_nodes[hub_node_id] = true
 	return true
+
+
+func is_node_explored(node_id: String) -> bool:
+	return _explored_nodes.has(node_id)
+
+
+func mark_explored(node_id: String) -> void:
+	if node_id == "" or not nodes.has(node_id) or _explored_nodes.has(node_id):
+		return
+	_explored_nodes[node_id] = true
+	fog_changed.emit()
+
+
+func reveal_map() -> void:
+	if map_revealed:
+		return
+	map_revealed = true
+	fog_changed.emit()
+
+
+func get_explored_floor_ids() -> Array:
+	var result: Array = []
+	if map_revealed:
+		return _all_floor_ids()
+	for node_id in _explored_nodes.keys():
+		if not nodes.has(node_id) or not (nodes[node_id] is Dictionary):
+			continue
+		var floor_id := _node_floor_id(nodes[node_id])
+		if floor_id != "" and not result.has(floor_id):
+			result.append(floor_id)
+	if current_floor_id != "" and not result.has(current_floor_id):
+		result.append(current_floor_id)
+	return result
+
+
+func is_node_fog_visible(node_id: String) -> bool:
+	if not nodes.has(node_id) or not (nodes[node_id] is Dictionary):
+		return false
+	if map_revealed or is_node_explored(node_id):
+		return true
+	var node: Dictionary = nodes[node_id]
+	if not get_explored_floor_ids().has(_node_floor_id(node)):
+		return false
+	for explored_id in _explored_nodes.keys():
+		if _nodes_are_adjacent(str(explored_id), node_id):
+			return true
+	return false
+
+
+func _nodes_are_adjacent(first_id: String, second_id: String) -> bool:
+	if not nodes.has(first_id) or not nodes.has(second_id):
+		return false
+	var first_connections = nodes[first_id].get("connections", [])
+	if first_connections is Array and first_connections.has(second_id):
+		return true
+	var second_connections = nodes[second_id].get("connections", [])
+	return second_connections is Array and second_connections.has(first_id)
+
+
+func _explore_floor_elevators(floor_id: String) -> void:
+	var changed := false
+	for node_id in nodes.keys():
+		if not (nodes[node_id] is Dictionary):
+			continue
+		var node: Dictionary = nodes[node_id]
+		if _node_floor_id(node) == floor_id and _is_elevator_node(node) and not is_node_explored(str(node_id)):
+			_explored_nodes[str(node_id)] = true
+			changed = true
+	if changed:
+		fog_changed.emit()
+
+
+func _all_floor_ids() -> Array:
+	var result: Array = []
+	var floors = map_config.get("floors", [])
+	if floors is Array:
+		for floor in floors:
+			if floor is Dictionary:
+				var floor_id := str(floor.get("id", ""))
+				if floor_id != "":
+					result.append(floor_id)
+	return result
 
 
 func _move_by_elevator(node: Dictionary) -> void:

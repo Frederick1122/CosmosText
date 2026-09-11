@@ -28,6 +28,9 @@ func _ready() -> void:
 	SituationEngine.select_option("B")
 	_expect(GameState.current_screen == Screen.LOCATION and LocationSystem.current_id == "hub",
 		"после вступления игрок на экране локации hub")
+	_expect(not GameState.has_left_capsule, "карта и персонаж заблокированы внутри капсулы")
+	_expect(MapSystem.is_node_explored("hub") and MapSystem.is_node_fog_visible("lift_01_to_02")
+		and not MapSystem.is_node_fog_visible("cargo_bay"), "туман скрывает дальние отсеки")
 	_expect(InventorySystem.has_item("broken_datapad"), "планшет в инвентаре")
 	_expect(FileAccess.file_exists(SaveManager.CHECKPOINT_PATH), "в хабе записан чекпойнт")
 
@@ -45,6 +48,8 @@ func _ready() -> void:
 
 	# --- Палуба 02: грузовой отсек ---
 	GameState.leave_location()
+	_expect(GameState.has_left_capsule and MapSystem.get_explored_floor_ids().has("deck_01"),
+		"после выхода из капсулы открыты карта и персонаж")
 	MapSystem.select_node("lift_01_to_02")
 	_expect(MapSystem.current_floor_id == "deck_02", "лифт перевёз на палубу 02")
 
@@ -141,6 +146,7 @@ func _ready() -> void:
 	GameState.start_location_event("search_pockets")
 	_expect(InventorySystem.has_item("pilot_keycard") and InventorySystem.count_item("ration_bar") == 4,
 		"подсумки: ключ-карта и брикеты в стак")
+	_expect(MapSystem.map_revealed and InventorySystem.has_item("ship_map"), "найдена схема — туман карты снят")
 	GameState.start_location_event("read_tag")
 	_expect(ArchiveSystem.is_unlocked("log_02"), "бирка: запись журнала")
 	GameState.start_location_event("take_canister")
@@ -196,6 +202,10 @@ func _ready() -> void:
 		and ResourceSystem.max_hp == 110 and CharacterSystem.get_skill_level("engineering") == 1,
 		"снаряжение, навыки и бонусы переживают сохранение")
 	_expect(int(LocationSystem.get_stash("cargo_bay").get("cloth_rags", 0)) == 1, "вещи на полу переживают сохранение")
+	_expect(MapSystem.map_revealed and MapSystem.is_node_explored("reactor")
+		and GameState.has_left_capsule, "туман и прогресс выхода переживают сохранение")
+	_expect(NotificationSystem.has_character_alert() and NotificationSystem.has_new_lore(),
+		"уведомления персонажа и журнала переживают сохранение")
 
 	if _failures.is_empty():
 		print("SMOKE OK")
