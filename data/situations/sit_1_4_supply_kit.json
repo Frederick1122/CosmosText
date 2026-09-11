@@ -1,0 +1,36 @@
+{
+  "id": "sit_1_4_supply_kit",
+  "text": "Под перекошенным креслом — лючок аварийного набора. Крышка погнута от удара, придётся повозиться.",
+  "requires": [],
+  "options": [
+    {
+      "id": "A",
+      "label": "Поддеть крышку голыми руками",
+      "requires": [],
+      "effects": [
+        { "type": "hp_delta", "value": -10 },
+        { "type": "item_add", "item": "ration_bar" },
+        { "type": "item_add", "item": "improvised_bandage" }
+      ],
+      "next": ""
+    },
+    {
+      "id": "B",
+      "label": "Действовать тихо — на звук, который ты слышал",
+      "requires": [ { "type": "flag", "flag": "heard_something", "value": true } ],
+      "effects": [
+        { "type": "o2_delta", "value": -15 },
+        { "type": "item_add", "item": "ration_bar", "count": 2 },
+        { "type": "item_add", "item": "improvised_bandage" }
+      ],
+      "next": ""
+    },
+    {
+      "id": "C",
+      "label": "Оставить — сейчас не до этого",
+      "requires": [],
+      "effects": [],
+      "next": ""
+    }
+  ]
+}

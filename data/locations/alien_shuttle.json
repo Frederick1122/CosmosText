@@ -19,6 +19,14 @@
       "repeatable": false,
       "triggers": [],
       "situation": "sit_2_2_locker"
+    },
+    {
+      "id": "search_supply_crate",
+      "start": "manual",
+      "label": "Осмотреть герметичный контейнер",
+      "repeatable": false,
+      "triggers": [],
+      "situation": "sit_2_3_supply_crate"
     }
   ]
 }

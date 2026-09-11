@@ -57,6 +57,17 @@
         { "type": "flag", "flag": "strain_down", "value": false }
       ],
       "situation": "sit_3_2_strain"
+    },
+    {
+      "id": "search_ammo_cache",
+      "start": "manual",
+      "label": "Вскрыть нишу с боекомплектом",
+      "repeatable": false,
+      "triggers": [
+        { "type": "flag", "flag": "reactor_unlocked" },
+        { "type": "flag", "flag": "ammo_cache_taken", "value": false }
+      ],
+      "situation": "sit_3_3_ammo_cache"
     }
   ]
 }

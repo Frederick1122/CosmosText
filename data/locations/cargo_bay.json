@@ -45,6 +45,14 @@
         { "type": "o2_delta", "value": -15 },
         { "type": "open_map_node", "node": "alien_shuttle" }
       ]
+    },
+    {
+      "id": "search_forklift",
+      "start": "manual",
+      "label": "Вытащить ящик из-под погрузчика",
+      "repeatable": false,
+      "triggers": [ { "type": "flag", "flag": "drone_cargo_down" } ],
+      "situation": "sit_1_5_forklift"
     }
   ]
 }

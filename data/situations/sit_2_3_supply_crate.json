@@ -1,0 +1,36 @@
+{
+  "id": "sit_2_3_supply_crate",
+  "text": "У переборки — герметичный контейнер с чужой маркировкой. Шов запаян, но с одного края уже идёт трещина. Судя по дрожи корпуса, внутри что-то под давлением.",
+  "requires": [],
+  "options": [
+    {
+      "id": "A",
+      "label": "Вскрыть сразу, не разбираясь",
+      "requires": [],
+      "effects": [
+        { "type": "hp_delta", "value": -15 },
+        { "type": "item_add", "item": "ration_bar", "count": 2 },
+        { "type": "item_add", "item": "o2_canister" }
+      ],
+      "next": ""
+    },
+    {
+      "id": "B",
+      "label": "Стравить давление через трещину, потом открыть",
+      "requires": [],
+      "effects": [
+        { "type": "o2_delta", "value": -40 },
+        { "type": "item_add", "item": "ration_bar", "count": 2 },
+        { "type": "item_add", "item": "o2_canister" }
+      ],
+      "next": ""
+    },
+    {
+      "id": "C",
+      "label": "Не трогать — мало ли что там",
+      "requires": [],
+      "effects": [],
+      "next": ""
+    }
+  ]
+}

@@ -21,11 +21,12 @@
       "start": "manual",
       "label": "Перемкнуть замок аварийного шкафа",
       "repeatable": false,
-      "triggers": [ { "type": "skill_gte", "skill": "engineering", "value": 1 } ],
+      "triggers": [ { "type": "skill_gte", "skill": "engineering", "value": 1 }, { "type": "flag", "flag": "emergency_locker_looted", "value": false } ],
       "text": "Пара проводков накоротко — и замок сдаётся. Внутри два кислородных баллона и моток изоленты.",
       "effects": [
         { "type": "item_add", "item": "o2_canister", "count": 2 },
-        { "type": "item_add", "item": "duct_tape" }
+        { "type": "item_add", "item": "duct_tape" },
+        { "type": "flag_set", "flag": "emergency_locker_looted" }
       ]
     },
     {
@@ -39,6 +40,14 @@
         { "type": "o2_delta", "value": -20 },
         { "type": "open_map_node", "node": "reactor" }
       ]
+    },
+    {
+      "id": "force_emergency_locker",
+      "start": "manual",
+      "label": "Взломать аварийный шкаф силой",
+      "repeatable": false,
+      "triggers": [ { "type": "flag", "flag": "emergency_locker_looted", "value": false } ],
+      "situation": "sit_3_0_locker_force"
     }
   ]
 }

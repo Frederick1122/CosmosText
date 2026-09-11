@@ -33,6 +33,14 @@
       "triggers": [ { "type": "event_done", "event": "wreckage" } ],
       "text": "Метка на рукаве ведёт вдоль переборки. В соседнем отсеке у стены — второй скафандр. Он не двигается. Место отмечено на карте.",
       "effects": [ { "type": "open_map_node", "node": "copilot_body" } ]
+    },
+    {
+      "id": "search_supply_kit",
+      "start": "manual",
+      "label": "Вскрыть лючок аварийного набора",
+      "repeatable": false,
+      "triggers": [ { "type": "event_done", "event": "wreckage" } ],
+      "situation": "sit_1_4_supply_kit"
     }
   ]
 }

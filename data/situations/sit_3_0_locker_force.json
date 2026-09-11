@@ -1,0 +1,36 @@
+{
+  "id": "sit_3_0_locker_force",
+  "text": "Панель электронного замка сгорела и не реагирует. Аккуратно шкаф уже не открыть — только силой.",
+  "requires": [],
+  "options": [
+    {
+      "id": "A",
+      "label": "Сорвать крышку монтировкой",
+      "requires": [ { "type": "has_item", "item": "pipe_scrap" } ],
+      "effects": [
+        { "type": "hp_delta", "value": -5 },
+        { "type": "item_add", "item": "o2_canister" },
+        { "type": "flag_set", "flag": "emergency_locker_looted" }
+      ],
+      "next": ""
+    },
+    {
+      "id": "B",
+      "label": "Высадить плечом",
+      "requires": [],
+      "effects": [
+        { "type": "hp_delta", "value": -20 },
+        { "type": "item_add", "item": "o2_canister" },
+        { "type": "flag_set", "flag": "emergency_locker_looted" }
+      ],
+      "next": ""
+    },
+    {
+      "id": "C",
+      "label": "Оставить — вдруг найдётся инструмент получше",
+      "requires": [],
+      "effects": [],
+      "next": ""
+    }
+  ]
+}

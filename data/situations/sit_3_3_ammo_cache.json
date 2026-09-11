@@ -1,0 +1,35 @@
+{
+  "id": "sit_3_3_ammo_cache",
+  "text": "За панелью управления — ниша с боекомплектом. Крышка приварена и глухо гудит: тронешь не там — сигнализация поднимет весь отсек.",
+  "requires": [],
+  "options": [
+    {
+      "id": "A",
+      "label": "Взломать быстро, не разбираясь в проводке",
+      "requires": [],
+      "effects": [
+        { "type": "hp_delta", "value": -10 },
+        { "type": "ammo_delta", "value": 8 },
+        { "type": "flag_set", "flag": "ammo_cache_taken" }
+      ],
+      "next": ""
+    },
+    {
+      "id": "B",
+      "label": "Отключить сигнализацию (инженерия 2)",
+      "requires": [ { "type": "skill_gte", "skill": "engineering", "value": 2 } ],
+      "effects": [
+        { "type": "ammo_delta", "value": 8 },
+        { "type": "flag_set", "flag": "ammo_cache_taken" }
+      ],
+      "next": ""
+    },
+    {
+      "id": "C",
+      "label": "Не рисковать",
+      "requires": [],
+      "effects": [],
+      "next": ""
+    }
+  ]
+}
