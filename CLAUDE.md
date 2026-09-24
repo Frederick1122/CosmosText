@@ -5,7 +5,7 @@ Godot 4.7 (GDScript) проект: текстовая survival-RPG для тел
 ## Команды
 
 - Проверка контента (после любой правки `data/`): `python tools/validate_content.py`. Если ломается вывод в консоли Windows, добавить `PYTHONIOENCODING=utf-8`.
-- Смоук-тест логики (после правок в `autoload/` или контенте среза): `<Godot 4.7 console exe> --headless --path . res://scenes/Main.tscn` → ожидается `SMOKE OK`. Godot не в PATH — спросить пользователя путь к exe. Тест перезаписывает `run.json`/`checkpoint.json` в `user://`: сохранить их до прогона и вернуть после.
+- Смоук-тест логики (после правок в `autoload/` или контенте среза): `<Godot 4.7 console exe> --headless --path . res://scenes/Main.tscn` → ожидается `SMOKE OK`. Godot не в PATH — спросить пользователя путь к exe. В облачной сессии Claude Code (web) Godot ставит `.claude/hooks/session-start.sh`: `godot --headless --path . res://scenes/Main.tscn`. Тест перезаписывает `run.json`/`checkpoint.json` в `user://`: сохранить их до прогона и вернуть после.
 - UI проверяется через MCP-сервер `godot` (`run_project` → `screenshot` → `click`, см. docs/MCP.md) или руками по чек-листу в docs/DEVELOPMENT.md.
 
 ## Архитектура — правила

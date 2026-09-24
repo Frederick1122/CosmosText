@@ -43,6 +43,8 @@ PYTHONIOENCODING=utf-8 python tools/validate_content.py
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://scenes/Main.tscn
 ```
 
+В облачных сессиях Claude Code (web) хук `.claude/hooks/session-start.sh` скачивает Linux-сборку Godot 4.7.2 в `~/.local/godot` и кладёт `godot` в PATH; там команда — `godot --headless --path . res://scenes/Main.tscn`.
+
 В конце выводится `SMOKE OK` (код выхода 0) или `SMOKE FAIL` со списком упавших проверок (код 1).
 
 Тест **перезаписывает `run.json` и `checkpoint.json`** в `user://`; сохраните их, если нужны. Строка `MCP Bridge Game: Failed to listen on port 9501` при прогоне нормальна, если параллельно запущена игра.
