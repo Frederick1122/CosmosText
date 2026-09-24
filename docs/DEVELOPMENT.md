@@ -8,6 +8,10 @@
 | Python | 3.10+ | `tools/validate_content.py` (только стандартная библиотека) |
 | uv | любая свежая | Только для MCP-сервера (см. [MCP.md](MCP.md)) |
 
+### Облачные сессии Claude Code
+
+В Claude Code on the web окружение готовит SessionStart-хук `.claude/hooks/session-start.sh` (регистрируется в `.claude/settings.json`, локально ничего не делает). Он скачивает headless Godot 4.7.2 для Linux, кладёт его в `PATH` как `godot` (полный путь — в `$GODOT`), выставляет `PYTHONIOENCODING=utf-8` и один раз импортирует ресурсы. Смоук-тест там запускается так: `godot --headless --path . res://scenes/Main.tscn`.
+
 ## Запуск
 
 1. Godot → Import → выбрать `project.godot`.
