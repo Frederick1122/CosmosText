@@ -1,7 +1,7 @@
 {
   "id": "sit_1_5_forklift",
-  "text": "Погрузчик лежит на боку, придавив ящик с инструментами. Чтобы его достать, нужно либо тянуть руками, либо подсунуть что-то как рычаг.",
-  "requires": [],
+  "image": "cargo_drone",
+  "text": "Погрузчик лежит на боку, придавив ящик с инструментами такелажников. Чтобы его достать, нужно либо тянуть руками, либо подсунуть что-то как рычаг.",
   "options": [
     {
       "id": "A",
@@ -10,7 +10,8 @@
       "effects": [
         { "type": "hp_delta", "value": -10 },
         { "type": "item_add", "item": "scrap_metal", "count": 2 },
-        { "type": "item_add", "item": "duct_tape" }
+        { "type": "item_add", "item": "duct_tape" },
+        { "type": "item_add", "item": "hex_key" }
       ],
       "next": ""
     },
@@ -22,7 +23,8 @@
         { "type": "o2_delta", "value": -10 },
         { "type": "item_add", "item": "scrap_metal", "count": 2 },
         { "type": "item_add", "item": "duct_tape" },
-        { "type": "item_add", "item": "cloth_rags" }
+        { "type": "item_add", "item": "cloth_rags" },
+        { "type": "item_add", "item": "hex_key" }
       ],
       "next": ""
     },

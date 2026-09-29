@@ -1,31 +1,31 @@
 {
   "id": "sit_1_3_drone",
+  "image": "cargo_drone",
   "text": "Дверь грузового отсека перекошена, но открывается. Внутри — сервисный дрон, вдавленный в стену при ударе. Один манипулятор искрит. Красный индикатор на корпусе загорается и держит взгляд — он всё ещё активен, и он всё ещё видит цель.",
-  "requires": [],
   "options": [
-    {
-      "id": "A",
-      "label": "Войти и вступить в бой",
-      "requires": [],
-      "effects": [
-        {
-          "type": "start_combat",
-          "enemy": "drone_cargo",
-          "clear_node": "cargo_bay",
-          "on_win": [
-            { "type": "flag_set", "flag": "drone_cargo_down" },
-            { "type": "skill_points_add", "value": 1 }
-          ]
-        }
-      ],
-      "next": ""
-    },
-    {
-      "id": "B",
-      "label": "Отступить и закрыть переборку",
-      "requires": [],
-      "effects": [ { "type": "lock_map_node", "node": "cargo_bay", "state": "dangerous" } ],
-      "next": "map:wreck_01"
-    }
+	{
+	  "id": "A",
+	  "label": "Войти и вступить в бой",
+	  "requires": [],
+	  "effects": [
+		{
+		  "type": "start_combat",
+		  "enemy": "drone_cargo",
+		  "clear_node": "cargo_bay",
+		  "on_win": [
+			{ "type": "flag_set", "flag": "drone_cargo_down" },
+			{ "type": "skill_points_add", "value": 1 }
+		  ]
+		}
+	  ],
+	  "next": ""
+	},
+	{
+	  "id": "B",
+	  "label": "Отступить и закрыть переборку",
+	  "requires": [],
+	  "effects": [ { "type": "lock_map_node", "node": "cargo_bay", "state": "dangerous" } ],
+	  "next": "map:wreck_01"
+	}
   ]
 }

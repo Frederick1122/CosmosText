@@ -23,6 +23,7 @@ const CATEGORY_TITLES := {
 	"armor": "броня",
 	"gear": "снаряжение",
 	"component": "материал",
+	"key": "ключ",
 }
 
 var tab: String = "items"
@@ -90,6 +91,7 @@ func _build_items() -> void:
 	if entries.is_empty():
 		add_child(UiKit.text("Сумка пуста."))
 		return
+	add_child(_bag_grid(entries))
 	for entry in entries:
 		var item_id := str(entry.get("id", ""))
 		var data := InventorySystem.get_item_data(item_id)
@@ -97,6 +99,9 @@ func _build_items() -> void:
 		var card := UiKit.card(self)
 		var title_row := HBoxContainer.new()
 		title_row.add_theme_constant_override("separation", 10)
+		var icon := UiKit.item_icon(item_id, 64)
+		if icon != null:
+			title_row.add_child(icon)
 		var title := UiKit.text(_item_name(item_id) + (" x%d" % count if count > 1 else ""), 26, UiKit.TITLE_COLOR)
 		title_row.add_child(title)
 		if NotificationSystem.is_item_new(item_id):
@@ -132,6 +137,47 @@ func _build_items() -> void:
 			actions.add_child(_action_button(str(inter.get("label", "")), _interact.bind(item_id, str(inter.get("id", "")))))
 		if InventorySystem.can_drop(item_id):
 			actions.add_child(_action_button("Оставить здесь" if LocationSystem.is_active() else "Выбросить", _drop.bind(item_id), "danger"))
+
+
+
+## Сетка сумки: ячейки с иконками, как в Neo Scavenger. Пустые ячейки
+## показывают, сколько места ещё осталось.
+func _bag_grid(entries: Array) -> Control:
+	var grid := GridContainer.new()
+	grid.name = "BagGrid"
+	grid.columns = 5
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
+	for entry in entries:
+		var item_id := str(entry.get("id", ""))
+		grid.add_child(_bag_cell(item_id, int(entry.get("count", 1))))
+	for i in range(maxi(0, InventorySystem.free_slots())):
+		grid.add_child(_bag_cell("", 0))
+	return grid
+
+
+func _bag_cell(item_id: String, count: int) -> Control:
+	var cell := PanelContainer.new()
+	cell.custom_minimum_size = Vector2(104, 104)
+	var filled := item_id != ""
+	cell.add_theme_stylebox_override("panel", UiKit.box(
+		Color("#1b2230") if filled else Color("#131821"),
+		Color("#3b4c61") if filled else Color("#232c3a"), 1, 6))
+	if not filled:
+		return cell
+	cell.tooltip_text = "%s%s" % [_item_name(item_id), (" ×%d" % count) if count > 1 else ""]
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation", 0)
+	cell.add_child(stack)
+	var icon := UiKit.item_icon(item_id, 76)
+	if icon != null:
+		stack.add_child(icon)
+	else:
+		stack.add_child(UiKit.text(_item_name(item_id).substr(0, 3), 20, UiKit.MUTED_COLOR))
+	var count_label := UiKit.text("×%d" % count if count > 1 else " ", 17, UiKit.MUTED_COLOR)
+	count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	stack.add_child(count_label)
+	return cell
 
 
 func _on_item_card_input(event: InputEvent, item_id: String) -> void:

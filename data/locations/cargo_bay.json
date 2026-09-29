@@ -1,6 +1,7 @@
 {
   "id": "cargo_bay",
   "title": "Грузовой отсек",
+  "image": "cargo_drone",
   "description": "Перекошенная дверь, штабели контейнеров, сорванных с креплений. В дальней стене — сервисный дрон, вдавленный в металл. Его красный индикатор следит за входом.",
   "descriptions": [
     {
@@ -53,6 +54,20 @@
       "repeatable": false,
       "triggers": [ { "type": "flag", "flag": "drone_cargo_down" } ],
       "situation": "sit_1_5_forklift"
+    },
+    {
+      "id": "open_rigger_locker",
+      "start": "manual",
+      "label": "Вскрыть рундук такелажника",
+      "repeatable": false,
+      "triggers": [ { "type": "flag", "flag": "drone_cargo_down" } ],
+      "lock": { "key": "rigger_locker", "consume": true, "text": "Магнитный ключ срабатывает и выгорает." },
+      "text": "В рундуке — табельные патроны, стимулятор и моток изоленты.",
+      "effects": [
+        { "type": "ammo_delta", "value": 6 },
+        { "type": "item_add", "item": "stim_shot" },
+        { "type": "item_add", "item": "duct_tape" }
+      ]
     }
   ]
 }

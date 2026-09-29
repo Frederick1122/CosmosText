@@ -3,12 +3,15 @@ extends Control
 const UiKit = preload("res://scenes/ui/UiKit.gd")
 const SECTOR_MAP_VIEW_SCRIPT := preload("res://scenes/ui/SectorMapView.gd")
 const CHARACTER_PANEL_SCRIPT := preload("res://scenes/ui/CharacterPanel.gd")
+const COMBAT_VIEW_SCRIPT := preload("res://scenes/ui/CombatView.gd")
 
 const CONTENT_MARGIN := 36
 const BODY_GAP := 16
 const BUTTON_HEIGHT := 68
 ## Сдвиг пальца/мыши (px), после которого нажатие считается прокруткой.
 const DRAG_THRESHOLD := 14.0
+## Ниже этого запаса кислорода счётчик в HUD становится тревожным.
+const LOW_O2 := 60
 
 var body: VBoxContainer
 var hud: VBoxContainer
@@ -25,12 +28,19 @@ var map_open: bool = false
 var journal_open: bool = false
 var character_open: bool = false
 var character_tab: String = "items"
+var journal_tab: String = "log"
 
 var _drag_armed: bool = false
 var _drag_scrolling: bool = false
 var _drag_origin: Vector2 = Vector2.ZERO
 var _drag_scroll_origin: int = 0
 var _injecting: bool = false
+## Сообщение карты (запертый узел без ключа) — живёт до следующего действия.
+var _map_message: String = ""
+## Ждём ответа рекламного провайдера по откату (защита от повторного нажатия).
+var _ad_result_pending: bool = false
+## Текст под причиной смерти (например, реклама не досмотрена).
+var _death_message: String = ""
 
 
 func _ready() -> void:
@@ -120,6 +130,7 @@ func _connect_signals() -> void:
 	CharacterSystem.changed.connect(_on_character_changed)
 	NotificationSystem.changed.connect(_on_notification_changed)
 	MapSystem.node_state_changed.connect(_on_map_node_state_changed)
+	MapSystem.node_blocked.connect(_on_map_node_blocked)
 	MapSystem.floor_changed.connect(_on_map_floor_changed)
 	MapSystem.fog_changed.connect(_on_map_fog_changed)
 	CombatSystem.turn_resolved.connect(_on_combat_turn_resolved)
@@ -256,6 +267,13 @@ func _on_map_node_state_changed(_node_id: String, _state: String) -> void:
 		_render_current_screen()
 
 
+## Узел заперт и ключа нет — показываем причину прямо над картой.
+func _on_map_node_blocked(_node_id: String, message: String) -> void:
+	_map_message = message
+	if (GameState.current_screen == GameState.Screen.SECTOR_MAP or map_open) and not journal_open and not character_open:
+		_render_current_screen()
+
+
 func _on_map_floor_changed(_floor_id: String) -> void:
 	if (GameState.current_screen == GameState.Screen.SECTOR_MAP or map_open) and not journal_open and not character_open:
 		_render_current_screen()
@@ -266,7 +284,7 @@ func _on_combat_turn_resolved(_entry: Dictionary) -> void:
 		_render_combat()
 
 
-func _on_screen_changed(_screen: int) -> void:
+func _on_screen_changed(screen: int) -> void:
 	if character_open:
 		NotificationSystem.mark_character_seen()
 	if journal_open:
@@ -274,14 +292,18 @@ func _on_screen_changed(_screen: int) -> void:
 	map_open = false
 	journal_open = false
 	character_open = false
+	if screen != GameState.Screen.DEATH:
+		_death_message = ""
+	_map_message = ""
 	_scroll_to_top()
 	_render_current_screen()
 
 
 func _update_hud() -> void:
 	hp_label.text = "HP: %d/%d" % [ResourceSystem.hp, ResourceSystem.max_hp]
-	var o2i := int(ResourceSystem.o2_seconds)
-	o2_label.text = "O2: %02d:%02d" % [o2i / 60, o2i % 60]
+	var o2i := int(ResourceSystem.o2)
+	o2_label.text = "O2: %d" % o2i
+	o2_label.add_theme_color_override("font_color", UiKit.BAD_COLOR if o2i <= LOW_O2 else Color("#eef3ff"))
 	ammo_label.text = "Патроны: %d" % ResourceSystem.ammo
 	bag_label.text = "Сумка: %d/%d" % [InventorySystem.used_slots(), InventorySystem.max_slots]
 
@@ -379,6 +401,8 @@ func _render_current_screen() -> void:
 			_render_combat()
 		GameState.Screen.DEATH:
 			_render_death()
+		GameState.Screen.VICTORY:
+			_render_victory()
 		_:
 			_add_text("Неизвестный экран: %d" % GameState.current_screen)
 
@@ -395,11 +419,12 @@ func _update_nav_buttons() -> void:
 		MapSystem.current_sector_id == ""
 		or GameState.current_screen == GameState.Screen.MAIN_MENU
 		or GameState.current_screen == GameState.Screen.COMBAT
+		or GameState.current_screen == GameState.Screen.VICTORY
 		or GameState.current_screen == GameState.Screen.DEATH
 	)
 	map_button.disabled = blocked or not GameState.has_left_capsule
 	character_button.disabled = blocked or not GameState.has_left_capsule
-	journal_button.disabled = blocked or ArchiveSystem.get_unlocked().is_empty()
+	journal_button.disabled = blocked
 	_set_nav_label(map_button, "Карта", false)
 	_set_nav_label(character_button, "Персонаж", NotificationSystem.has_character_alert())
 	_set_nav_label(journal_button, "Журнал", NotificationSystem.has_new_lore())
@@ -437,6 +462,19 @@ func _add_text(text: String) -> Label:
 	lbl.add_theme_color_override("font_color", Color("#d7deee"))
 	body.add_child(lbl)
 	return lbl
+
+
+## Пиксельная иллюстрация сцены; если картинки нет — просто пропускаем.
+func _add_scene_image(image_name: String) -> void:
+	var art := UiKit.scene_art(image_name, _body_width())
+	if art != null:
+		body.add_child(art)
+
+
+## Ширина тела экрана: вьюпорт минус поля и полоса прокрутки.
+func _body_width() -> float:
+	var viewport_width := float(ProjectSettings.get_setting("display/window/size/viewport_width", 1080))
+	return maxf(64.0, viewport_width - CONTENT_MARGIN * 2.0 - 14.0)
 
 
 func _add_button(text: String, callback: Callable, kind: String = "default") -> Button:
@@ -478,6 +516,9 @@ func _continue_game() -> void:
 
 func _render_map(read_only: bool = false) -> void:
 	_add_title("Карта: " + MapSystem.get_sector_title())
+	if _map_message != "":
+		var msg := _add_text(_map_message)
+		msg.add_theme_color_override("font_color", UiKit.EXIT_COLOR)
 	var nodes := MapSystem.get_map_nodes(true)
 	if nodes.is_empty():
 		_add_text("Видимых узлов нет.")
@@ -505,21 +546,26 @@ func _render_map(read_only: bool = false) -> void:
 
 func _on_map_node_selected(node_id: String) -> void:
 	map_open = false
+	_map_message = ""
 	MapSystem.select_node(node_id)
 
 
 func _render_situation() -> void:
+	_add_scene_image(SituationEngine.get_current_image())
 	var text := SituationEngine.get_current_text()
 	_add_text(text if text != "" else "Ситуация не загружена.")
 
 	var options := SituationEngine.get_available_options()
 	if options.is_empty():
-		_add_button("Продолжить", func(): GameState.finish_situation(), "quiet")
+		# Некуда выбирать — единственная кнопка закрывает ситуацию.
+		_add_button("Продолжить", func(): GameState.finish_situation(), "exit")
 		return
 
 	for opt in options:
 		var opt_id: String = opt.get("id", "")
-		_add_button(str(opt.get("label", opt_id)), _make_option_callback(opt_id))
+		# Завершающие варианты (выход на карту, конец события, финал) выделены цветом.
+		var kind := "exit" if SituationEngine.is_closing_option(opt) else "default"
+		_add_button(str(opt.get("label", opt_id)), _make_option_callback(opt_id), kind)
 
 
 func _make_option_callback(opt_id: String) -> Callable:
@@ -528,6 +574,11 @@ func _make_option_callback(opt_id: String) -> Callable:
 
 func _render_location() -> void:
 	_add_title(LocationSystem.get_title())
+	# Иллюстрация сработавшего события важнее общей картинки модуля.
+	var location_image := LocationSystem.event_image
+	if location_image == "":
+		location_image = LocationSystem.get_image()
+	_add_scene_image(location_image)
 	var description := LocationSystem.get_description()
 	if description != "":
 		_add_text(description)
@@ -540,11 +591,24 @@ func _render_location() -> void:
 		_add_section("Действия")
 		for ev in events:
 			var event_id := str(ev.get("id", ""))
-			_add_button(str(ev.get("label", event_id)), _make_location_event_callback(event_id))
+			var label := str(ev.get("label", event_id))
+			if LocationSystem.is_event_locked(ev):
+				# Запертый ящик виден, но не нажимается: в подписи — нужный ключ.
+				var locked_btn := UiKit.button(
+					"%s — %s" % [label, EffectResolver.lock_hint(LocationSystem.get_event_lock(ev))],
+					"quiet", BUTTON_HEIGHT + 28)
+				locked_btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				locked_btn.disabled = true
+				body.add_child(locked_btn)
+			else:
+				_add_button(label, _make_location_event_callback(event_id))
+
+	if LocationSystem.is_base():
+		_render_base_section()
 
 	var stash := LocationSystem.get_stash()
 	if not stash.is_empty():
-		_add_section("Здесь лежит")
+		_add_section("Склад" if LocationSystem.is_base() else "Здесь лежит")
 		for item_id in stash.keys():
 			_add_button("Взять: %s%s" % [_item_name(item_id), _count_suffix(int(stash[item_id]))], _make_stash_take_callback(item_id), "quiet")
 
@@ -558,7 +622,44 @@ func _render_location() -> void:
 		for item_id in usable:
 			_add_button("Использовать: " + _item_name(item_id), _make_location_item_callback(item_id), "quiet")
 
-	_add_button("Выйти на карту", _leave_location, "quiet")
+	_add_button("Выйти на карту", _leave_location, "exit")
+
+
+## Модуль-база: ручное сохранение, верстак и разгрузка сумки на склад.
+func _render_base_section() -> void:
+	_add_section("База")
+	_add_button("Сохранить забег", _base_save, "quiet")
+	_add_button("Верстак: открыть крафт", _base_open_craft, "quiet")
+	var droppable: Array = []
+	for entry in InventorySystem.get_slots():
+		var item_id: String = entry.get("id", "")
+		if InventorySystem.can_drop(item_id):
+			droppable.append(item_id)
+	if droppable.is_empty():
+		return
+	_add_section("Разложить по складу")
+	for item_id in droppable:
+		_add_button("Положить: " + _item_name(item_id), _make_base_store_callback(item_id), "quiet")
+
+
+func _base_save() -> void:
+	LocationSystem.clear_notices()
+	SaveManager.write_checkpoint()
+	LocationSystem.add_notice("Забег сохранён: точка возврата — этот модуль.")
+	_render_current_screen()
+
+
+func _base_open_craft() -> void:
+	character_tab = "craft"
+	_toggle_character()
+
+
+func _make_base_store_callback(item_id: String) -> Callable:
+	return func():
+		LocationSystem.clear_notices()
+		if InventorySystem.drop_item(item_id):
+			LocationSystem.add_notice("На складе: %s." % _item_name(item_id))
+		_render_current_screen()
 
 
 func _make_location_event_callback(event_id: String) -> Callable:
@@ -607,62 +708,15 @@ func _on_character_tab_changed(new_tab: String) -> void:
 func _render_combat() -> void:
 	_clear_body()
 	var st := CombatSystem.get_state()
-	_add_title("%s - HP врага: %d/%d" % [str(st.get("enemy_name", "")), int(st.get("enemy_hp", 0)), int(st.get("enemy_max_hp", 1))])
-	_add_text("Ваше HP: %d/%d" % [ResourceSystem.hp, ResourceSystem.max_hp])
-
-	var log_lines: Array = st.get("log", [])
-	if not log_lines.is_empty():
-		var log_text := ""
-		var first_log_index = max(0, log_lines.size() - 5)
-		for i in range(first_log_index, log_lines.size()):
-			log_text += "- %s\n" % str(log_lines[i])
-		_add_text(log_text)
-
-	if CombatSystem.state != CombatSystem.State.PLAYER_TURN:
-		_add_text("...")
-		return
-
-	var attack_hint := " (дальний бой)"
-	if ResourceSystem.ammo <= 0:
-		var weapon := CharacterSystem.get_equipped_name("arms")
-		attack_hint = " (ближний бой: %s)" % weapon if weapon != "" else " (ближний бой, голыми руками)"
-	_add_button("Атаковать" + attack_hint, _combat_attack)
-	_add_button("Защититься", _combat_defend, "quiet")
-	_add_button("Бежать", _combat_flee, "danger")
-
-	for special in st.get("available_specials", []):
-		var sid: String = special.get("id", "")
-		_add_button(str(special.get("label", sid)), _make_special_callback(sid))
-
-	for entry in InventorySystem.get_slots():
-		var item_id: String = entry.get("id", "")
-		var data := InventorySystem.get_item_data(item_id)
-		if data.get("category", "") == "consumable":
-			_add_button("Использовать: " + str(data.get("name", item_id)), _make_item_callback(item_id), "quiet")
+	_add_title("Схватка: %s" % str(st.get("enemy_name", "")))
+	var view: VBoxContainer = COMBAT_VIEW_SCRIPT.new()
+	view.move_selected.connect(_combat_action)
+	body.add_child(view)
+	view.setup(st)
 
 
-func _make_special_callback(sid: String) -> Callable:
-	return func(): _combat_action("special", sid)
-
-
-func _make_item_callback(item_id: String) -> Callable:
-	return func(): _combat_action("use_item", item_id)
-
-
-func _combat_attack() -> void:
-	_combat_action("attack")
-
-
-func _combat_defend() -> void:
-	_combat_action("defend")
-
-
-func _combat_flee() -> void:
-	_combat_action("flee")
-
-
-func _combat_action(action: String, payload = null) -> void:
-	CombatSystem.player_action(action, payload)
+func _combat_action(move_id: String, payload = null) -> void:
+	CombatSystem.player_action(move_id, payload)
 	if GameState.current_screen == GameState.Screen.COMBAT:
 		_render_combat()
 
@@ -672,6 +726,8 @@ func _render_death() -> void:
 	var cause_text := "закончился кислород" if cause == "o2" else "здоровье упало до нуля"
 	_add_title("Вы погибли")
 	_add_text("Причина: %s." % cause_text)
+	if _death_message != "":
+		_add_text(_death_message)
 	_add_button("Начать заново", _death_restart)
 
 	if EconomyManager.can_use_rollback_today() and SaveManager.has_checkpoint():
@@ -679,29 +735,128 @@ func _render_death() -> void:
 		_add_button("Вернуться к чекпойнту" + hint, _death_rollback, "quiet")
 
 
+## Победа: текст финала, итоги забега и хроники, выход в меню или новый забег.
+func _render_victory() -> void:
+	var ending_id := GameState.last_ending_id
+	_add_title("Забег завершён")
+	_add_section(ChronicleSystem.get_ending_title(ending_id))
+	_add_text(ChronicleSystem.get_ending_text(ending_id))
+
+	var card := UiKit.card(body)
+	card.add_child(UiKit.text("Итог", 26, UiKit.TITLE_COLOR))
+	card.add_child(UiKit.text("HP на финише: %d/%d" % [ResourceSystem.hp, ResourceSystem.max_hp], 22))
+	card.add_child(UiKit.text("Записей в журнале: %d" % ArchiveSystem.get_unlocked().size(), 22))
+	card.add_child(UiKit.text("Финалов открыто: %d из %d" % [ChronicleSystem.endings_seen_count(), ChronicleSystem.endings_total()], 22))
+	card.add_child(UiKit.text("Забегов: %d (побед: %d, смертей: %d)" % [
+		ChronicleSystem.runs_finished, ChronicleSystem.victories, ChronicleSystem.deaths], 22))
+
+	_add_button("Новый забег", _victory_restart)
+	_add_button("В главное меню", _victory_menu, "quiet")
+
+
+func _victory_restart() -> void:
+	GameState.choose_restart()
+
+
+func _victory_menu() -> void:
+	GameState.go_to_main_menu()
+
+
 func _death_restart() -> void:
 	GameState.choose_restart()
 
 
+## Откат за рекламу выполняется только если реклама действительно досмотрена.
 func _death_rollback() -> void:
 	if EconomyManager.has_full_access:
 		EconomyManager.use_rollback()
 		GameState.choose_rollback()
-	else:
-		EconomyManager.watch_rollback_ad()
+		return
+	if _ad_result_pending:
+		return
+	_ad_result_pending = true
+	EconomyManager.ad_completed.connect(_on_rollback_ad_completed, CONNECT_ONE_SHOT)
+	EconomyManager.watch_rollback_ad()
+
+
+func _on_rollback_ad_completed(success: bool) -> void:
+	_ad_result_pending = false
+	if success:
 		GameState.choose_rollback()
+	else:
+		_death_message = "Реклама не досмотрена — откат недоступен."
+		_render_current_screen()
 
 
-## Журнал — открытые лор-фрагменты (ArchiveSystem), каждая запись в рамке.
+## Журнал — две вкладки: «Хроника» (что уже произошло в забеге, JournalSystem)
+## и «Архив» (найденные лор-фрагменты, ArchiveSystem).
+const JOURNAL_TABS := [["log", "Хроника"], ["lore", "Архив"]]
+const JOURNAL_COLORS := {
+	"move": UiKit.ACCENT_COLOR,
+	"combat": UiKit.BAD_COLOR,
+	"death": UiKit.BAD_COLOR,
+	"victory": UiKit.EXIT_COLOR,
+	"lore": UiKit.TITLE_COLOR,
+	"choice": UiKit.TITLE_COLOR,
+	"loot": UiKit.MUTED_COLOR,
+}
+
+
 func _render_journal() -> void:
 	_add_title("Журнал")
+	var tabs := HBoxContainer.new()
+	tabs.name = "JournalTabs"
+	tabs.add_theme_constant_override("separation", 8)
+	for entry in JOURNAL_TABS:
+		var tab_id := str(entry[0])
+		var label := str(entry[1])
+		if tab_id == "lore" and NotificationSystem.has_new_lore():
+			label += "  •"
+		var btn := UiKit.button(label, "tab_active" if tab_id == journal_tab else "quiet", 58)
+		btn.name = "JournalTab_%s" % tab_id
+		btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		btn.add_theme_font_size_override("font_size", 20)
+		btn.pressed.connect(_select_journal_tab.bind(tab_id))
+		tabs.add_child(btn)
+	body.add_child(tabs)
+
+	if journal_tab == "lore":
+		_render_journal_archive()
+	else:
+		_render_journal_log()
+	_add_button("Закрыть", _toggle_journal, "quiet")
+
+
+func _select_journal_tab(tab_id: String) -> void:
+	journal_tab = tab_id
+	_scroll_to_top()
+	_render_current_screen()
+
+
+## Хроника забега: свежие записи сверху, у каждой — остаток кислорода.
+func _render_journal_log() -> void:
+	var entries := JournalSystem.get_entries()
+	if entries.is_empty():
+		_add_text("Пока ничего не произошло.")
+		return
+	_add_section("Записей: %d" % entries.size())
+	for i in range(entries.size() - 1, -1, -1):
+		var entry: Dictionary = entries[i]
+		var count := int(entry.get("count", 1))
+		var line := "O2 %d · %s%s" % [int(entry.get("o2", 0)), str(entry.get("text", "")), _count_suffix(count)]
+		var lbl := _add_text(line)
+		lbl.add_theme_font_size_override("font_size", 22)
+		lbl.add_theme_color_override("font_color", JOURNAL_COLORS.get(str(entry.get("kind", "")), UiKit.TEXT_COLOR))
+
+
+## Архив: открытые лор-фрагменты, каждая запись в рамке.
+func _render_journal_archive() -> void:
 	var ids := ArchiveSystem.get_unlocked()
 	if ids.is_empty():
 		_add_text("Записей пока нет. Их можно найти в планшетах, терминалах и бирках.")
-	else:
-		_add_section("Записей: %d" % ids.size())
+		return
+	_add_section("Записей: %d" % ids.size())
 	for id in ids:
 		var card := UiKit.card(body)
 		card.add_child(UiKit.text(ArchiveSystem.get_title(str(id)), 26, UiKit.TITLE_COLOR))
 		card.add_child(UiKit.text(ArchiveSystem.get_text(str(id)), 22))
-	_add_button("Закрыть", _toggle_journal, "quiet")

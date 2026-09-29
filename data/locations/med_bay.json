@@ -1,0 +1,44 @@
+{
+  "id": "med_bay",
+  "title": "Медицинский блок",
+  "description": "Смотровая на два места. Карантинная лампа гаснет, когда дверь открывается. Шкаф с препаратами цел, кушетка — нет: кто-то вставал с неё рывком.",
+  "events": [
+    {
+      "id": "quarantine_note",
+      "start": "auto",
+      "repeatable": false,
+      "triggers": [],
+      "text": "На кушетке — следы фиксирующих ремней, срезанных изнутри. Датчик воздуха показывает норму, но пахнет палёной изоляцией."
+    },
+    {
+      "id": "search_cabinet",
+      "start": "manual",
+      "label": "Вскрыть шкаф с препаратами",
+      "repeatable": false,
+      "triggers": [],
+      "text": "Половина ампул разбита, но два стимулятора и аптечка целы.",
+      "effects": [
+        { "type": "item_add", "item": "stim_shot", "count": 2 },
+        { "type": "item_add", "item": "medkit" }
+      ]
+    },
+    {
+      "id": "read_med_log",
+      "start": "manual",
+      "label": "Прочитать карту пациента",
+      "repeatable": false,
+      "triggers": [],
+      "text": "Карта заполнена до середины и брошена. Запись добавлена в журнал.",
+      "effects": [ { "type": "unlock_lore", "id": "log_05" } ]
+    },
+    {
+      "id": "tap_medical_o2",
+      "start": "manual",
+      "label": "Слить кислород из медицинской линии",
+      "repeatable": false,
+      "triggers": [ { "type": "skill_gte", "skill": "engineering", "value": 1 } ],
+      "text": "Редуктор поддаётся: медицинская линия отдаёт остаток в баллон скафандра.",
+      "effects": [ { "type": "o2_delta", "value": 120 } ]
+    }
+  ]
+}

@@ -2,29 +2,53 @@ extends Node
 ## HP / O2 / патроны — см. tech-spec-v1.md раздел 4.
 ## max_hp = base_max_hp (из config) + бонус от снаряжения и навыков
 ## (выставляет CharacterSystem через set_max_hp_bonus).
+##
+## Кислород — не таймер, а расходник: запас в баллоне тратится на действия
+## игрока. Цены лежат в data/config.json → o2_costs:
+##   move        — переход в модуль с карты;
+##   elevator    — поездка на лифте;
+##   action      — запуск ручного события в модуле;
+##   choice      — выбор варианта в ситуации;
+##   combat_turn — ход в бою.
+## В разгерметизированном модуле (узел карты с "sealed": false) любое действие
+## стоит дороже — множитель config.o2_unsealed_multiplier. Использование
+## предметов, подбор вещей с пола и крафт кислорода не стоят: это
+## противовес расходу, а не действие на выживание.
 
 signal hp_changed(value: int)
 signal o2_changed(value: float)
+signal o2_spent(kind: String, amount: float)
 signal ammo_changed(value: int)
 signal resource_depleted(kind: String)  # kind: "hp" | "o2"
+
+const CONFIG_PATH := "res://data/config.json"
+## Цены действий по умолчанию — используются, если в config.json нет o2_costs.
+const DEFAULT_O2_COSTS := {
+	"move": 6.0,
+	"elevator": 4.0,
+	"action": 4.0,
+	"choice": 3.0,
+	"combat_turn": 4.0,
+}
+const DEFAULT_UNSEALED_MULTIPLIER := 2.0
 
 var hp: int = 100
 var max_hp: int = 100
 var base_max_hp: int = 100
 var max_hp_bonus: int = 0
-var o2_seconds: float = 0.0
+var o2: float = 0.0
 var ammo: int = 0
 
-var o2_ticking: bool = false
+## Цены действий и множитель разгерметизации — контент, а не состояние забега:
+## читаются один раз при старте и в сейв не попадают.
+var o2_costs: Dictionary = DEFAULT_O2_COSTS.duplicate()
+var o2_unsealed_multiplier: float = DEFAULT_UNSEALED_MULTIPLIER
+
 var _died_this_run: bool = false
 
 
-func _process(delta: float) -> void:
-	if o2_ticking and o2_seconds > 0.0 and not _died_this_run:
-		o2_seconds = max(0.0, o2_seconds - delta)
-		o2_changed.emit(o2_seconds)
-		if o2_seconds <= 0.0:
-			_trigger_death("o2")
+func _ready() -> void:
+	_load_costs()
 
 
 func reset_for_new_run(config: Dictionary) -> void:
@@ -32,12 +56,11 @@ func reset_for_new_run(config: Dictionary) -> void:
 	max_hp_bonus = 0
 	max_hp = base_max_hp
 	hp = max_hp
-	o2_seconds = float(config.get("start_o2_seconds", 252.0))
+	o2 = float(config.get("start_o2", 252.0))
 	ammo = int(config.get("start_ammo", 0))
-	o2_ticking = false
 	_died_this_run = false
 	hp_changed.emit(hp)
-	o2_changed.emit(o2_seconds)
+	o2_changed.emit(o2)
 	ammo_changed.emit(ammo)
 
 
@@ -61,9 +84,9 @@ func apply_hp_delta(v: int) -> void:
 func apply_o2_delta(v: float) -> void:
 	if _died_this_run:
 		return
-	o2_seconds = max(0.0, o2_seconds + v)
-	o2_changed.emit(o2_seconds)
-	if o2_seconds <= 0.0:
+	o2 = max(0.0, o2 + v)
+	o2_changed.emit(o2)
+	if o2 <= 0.0:
 		_trigger_death("o2")
 
 
@@ -72,8 +95,27 @@ func apply_ammo_delta(v: int) -> void:
 	ammo_changed.emit(ammo)
 
 
-func set_o2_ticking(active: bool) -> void:
-	o2_ticking = active
+## Сколько кислорода стоит действие kind в узле node_id (пусто — текущий
+## модуль игрока). Незагерметизированный узел дороже.
+func get_o2_cost(kind: String, node_id: String = "") -> float:
+	var base := float(o2_costs.get(kind, 0.0))
+	if base <= 0.0:
+		return 0.0
+	return base * _environment_multiplier(node_id)
+
+
+## Списывает стоимость действия. Возвращает true, если действие можно
+## продолжать: false означает, что кислород кончился и игрок уже мёртв
+## (экран смерти выставит EventBus.player_died).
+func spend_o2(kind: String, node_id: String = "") -> bool:
+	if _died_this_run:
+		return false
+	var cost := get_o2_cost(kind, node_id)
+	if cost <= 0.0:
+		return true
+	apply_o2_delta(-cost)
+	o2_spent.emit(kind, cost)
+	return not _died_this_run
 
 
 func is_dead() -> bool:
@@ -85,7 +127,7 @@ func to_save_data() -> Dictionary:
 		"hp": hp,
 		"max_hp": max_hp,
 		"base_max_hp": base_max_hp,
-		"o2_seconds": o2_seconds,
+		"o2": o2,
 		"ammo": ammo,
 	}
 
@@ -95,13 +137,43 @@ func load_save_data(data: Dictionary) -> void:
 	base_max_hp = int(data.get("base_max_hp", max_hp))
 	max_hp_bonus = max_hp - base_max_hp
 	hp = clampi(int(data.get("hp", hp)), 0, max_hp)
-	o2_seconds = max(0.0, float(data.get("o2_seconds", o2_seconds)))
+	# "o2_seconds" — ключ сейвов версии 1, когда кислород шёл по таймеру.
+	o2 = max(0.0, float(data.get("o2", data.get("o2_seconds", o2))))
 	ammo = max(0, int(data.get("ammo", ammo)))
-	o2_ticking = false
 	_died_this_run = false
 	hp_changed.emit(hp)
-	o2_changed.emit(o2_seconds)
+	o2_changed.emit(o2)
 	ammo_changed.emit(ammo)
+
+
+## Множитель среды: в модуле без давления каждое действие стоит дороже.
+func _environment_multiplier(node_id: String) -> float:
+	var target := node_id if node_id != "" else LocationSystem.current_node_id
+	if target == "" or MapSystem.is_node_sealed(target):
+		return 1.0
+	return o2_unsealed_multiplier
+
+
+func _load_costs() -> void:
+	var config := _load_res_json(CONFIG_PATH)
+	o2_costs = DEFAULT_O2_COSTS.duplicate()
+	var costs = config.get("o2_costs", {})
+	if costs is Dictionary:
+		for kind in costs.keys():
+			if not DEFAULT_O2_COSTS.has(kind):
+				push_warning("ResourceSystem: неизвестное действие в o2_costs — '%s'" % kind)
+				continue
+			o2_costs[str(kind)] = max(0.0, float(costs[kind]))
+	o2_unsealed_multiplier = max(1.0, float(config.get("o2_unsealed_multiplier", DEFAULT_UNSEALED_MULTIPLIER)))
+
+
+func _load_res_json(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		push_warning("ResourceSystem: файл не найден %s" % path)
+		return {}
+	var f := FileAccess.open(path, FileAccess.READ)
+	var parsed = JSON.parse_string(f.get_as_text())
+	return parsed if parsed is Dictionary else {}
 
 
 func _trigger_death(cause: String) -> void:

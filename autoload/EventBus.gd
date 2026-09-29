@@ -6,4 +6,3 @@ extends Node
 
 signal player_died(cause: String)          # cause: "hp" | "o2"
 signal returned_to_hub()                    # эпизод завершён, игрок в хабе
-signal full_access_changed(value: bool)

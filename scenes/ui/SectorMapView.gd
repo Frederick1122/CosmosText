@@ -480,12 +480,23 @@ func _is_node_visible(node: Dictionary) -> bool:
 
 func _is_node_interactive(node: Dictionary) -> bool:
 	var state: String = str(node.get("state", "locked"))
-	if state == "locked":
+	# Запертый узел кликабелен, если у него есть замок: с ключом он откроется,
+	# без ключа — подскажет, чего не хватает.
+	if state == "locked" and not _has_lock(node):
 		return false
 	var node_floor_id := _node_floor_id(node)
 	if _current_floor_id != "" and node_floor_id != "" and node_floor_id != _current_floor_id:
 		return false
 	return true
+
+
+func _has_lock(node: Dictionary) -> bool:
+	var lock = node.get("lock", {})
+	return lock is Dictionary and not lock.is_empty()
+
+
+func _is_node_unlockable(node: Dictionary) -> bool:
+	return bool(node.get("unlockable", false)) and not _is_unknown_room(node)
 
 
 func _is_elevator_node(node: Dictionary) -> bool:
@@ -520,9 +531,18 @@ func _node_icon_text(node: Dictionary) -> String:
 		"cleared":
 			return "✓"
 		"locked":
-			return "?"
+			return "•" if _is_node_unlockable(node) else "?"
 		_:
 			return "•"
+
+
+func _node_lock_text(node: Dictionary) -> String:
+	var lock = node.get("lock", {})
+	if not (lock is Dictionary) or lock.is_empty() or str(node.get("state", "locked")) != "locked":
+		return ""
+	if _is_node_unlockable(node):
+		return "Заперто — ключ подходит"
+	return EffectResolver.lock_hint(lock)
 
 
 func _floor_button_text(floor: Dictionary) -> String:
@@ -553,8 +573,10 @@ func _node_tooltip(node: Dictionary) -> String:
 		return "Неизвестный отсек\nПалуба: " + _floor_title(_node_floor_id(node))
 	var cfg := _node_map(node)
 	var state: String = str(node.get("state", "locked"))
+	# Подпись под иконкой скрыта — тултип не должен раскрывать то же самое.
+	var hidden := state == "locked" and not bool(cfg.get("reveal_title_when_locked", true))
 	var lines := [
-		str(node.get("title", node.get("id", ""))),
+		"Неизвестно" if hidden else str(node.get("title", node.get("id", ""))),
 		_state_text(state),
 		"Палуба: " + _floor_title(_node_floor_id(node)),
 		"Герметично" if bool(node.get("sealed", true)) else "Расходует O2",
@@ -563,8 +585,11 @@ func _node_tooltip(node: Dictionary) -> String:
 		var target_floor_id := str(cfg.get("target_floor", ""))
 		if target_floor_id != "":
 			lines.append("Ведет: " + _floor_title(target_floor_id))
+	var lock_text := _node_lock_text(node)
+	if lock_text != "" and not hidden:
+		lines.append(lock_text)
 	var note := str(cfg.get("note", ""))
-	if note != "":
+	if note != "" and not hidden:
 		lines.append(note)
 	return _join_strings(lines, "\n")
 
@@ -702,6 +727,11 @@ func _apply_node_style(btn: Button, node: Dictionary) -> void:
 		hover = Color("#2d3847")
 		pressed = Color("#1a212b")
 		border = Color("#566477")
+	elif state == "locked" and _is_node_unlockable(node):
+		normal = Color("#4a3a16")
+		hover = Color("#6b5420")
+		pressed = Color("#33280f")
+		border = Color("#e0b153")
 	elif state == "locked":
 		normal = Color("#171c25")
 		hover = Color("#171c25")

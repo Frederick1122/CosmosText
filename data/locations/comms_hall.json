@@ -1,0 +1,103 @@
+{
+  "id": "comms_hall",
+  "image": "comms_sentry",
+  "title": "Зал связи",
+  "description": "Давление здесь сброшено: дышишь своим запасом. Ряды передающих стоек, половина под напряжением. В центре зала на треноге стоит станционная турель охраны — и она разворачивается на движение.",
+  "descriptions": [
+    {
+      "requires": [
+        {
+          "type": "flag",
+          "flag": "sentry_down"
+        }
+      ],
+      "text": "Зал связи без давления. Турель охраны разбита и висит на треноге. Консоль наведения мигает: связь с мачтой есть."
+    }
+  ],
+  "events": [
+    {
+      "id": "sentry_wakes",
+      "start": "auto",
+      "repeatable": true,
+      "triggers": [
+        {
+          "type": "flag",
+          "flag": "sentry_down",
+          "value": false
+        }
+      ],
+      "situation": "sit_4_2_sentry"
+    },
+    {
+      "id": "emergency_bottle",
+      "start": "manual",
+      "label": "Снять аварийный баллон с держателя",
+      "repeatable": false,
+      "triggers": [
+        {
+          "type": "flag",
+          "flag": "sentry_down"
+        }
+      ],
+      "text": "У шлюза зала связи — аварийный баллон в держателе. Хватит на полторы минуты работы без давления.",
+      "effects": [
+        {
+          "type": "o2_delta",
+          "value": 90
+        }
+      ]
+    },
+    {
+      "id": "patch_console",
+      "start": "manual",
+      "label": "Перебрать консоль наведения",
+      "repeatable": false,
+      "triggers": [
+        {
+          "type": "flag",
+          "flag": "sentry_down"
+        },
+        {
+          "type": "flag",
+          "flag": "mast_open",
+          "value": false
+        }
+      ],
+      "text": "Шина наведения перебрана на живые стойки. Люк к мачте разблокирован.",
+      "effects": [
+        {
+          "type": "flag_set",
+          "flag": "mast_open"
+        },
+        {
+          "type": "open_map_node",
+          "node": "antenna_mast"
+        }
+      ]
+    },
+    {
+      "id": "salvage_racks",
+      "start": "manual",
+      "label": "Разобрать обесточенные стойки",
+      "repeatable": false,
+      "triggers": [
+        {
+          "type": "flag",
+          "flag": "sentry_down"
+        }
+      ],
+      "text": "Из мёртвых стоек выходит горсть годного металла и моток изоленты.",
+      "effects": [
+        {
+          "type": "item_add",
+          "item": "scrap_metal",
+          "count": 2
+        },
+        {
+          "type": "item_add",
+          "item": "duct_tape"
+        }
+      ]
+    }
+  ]
+}

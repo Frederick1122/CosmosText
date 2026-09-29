@@ -1,0 +1,177 @@
+{
+	"hub_node": "dock_bay",
+	"id": "wreck_02",
+	"map": {
+		"cell_size": {
+			"x": 118.0,
+			"y": 112.0
+		},
+		"default_floor": "ring_a",
+		"floor_buttons_side": "right",
+		"floors": [
+			{
+				"id": "ring_a",
+				"label": "A",
+				"title": "Стыковочный ярус"
+			},
+			{
+				"id": "ring_b",
+				"label": "B",
+				"title": "Антенный ярус"
+			}
+		],
+		"grid": true,
+		"grid_columns": 7,
+		"grid_rows": 5,
+		"module_size": {
+			"x": 74.0,
+			"y": 74.0
+		},
+		"viewport_height": 720.0
+	},
+	"nodes": {
+		"antenna_mast": {
+			"connections": [
+				"comms_hall"
+			],
+			"location_id": "antenna_mast",
+			"map": {
+				"cell": {
+					"x": 6.0,
+					"y": 3.0
+				},
+				"floor": "ring_b",
+				"label": "Антенна",
+				"note": "Выход к мачте заварен",
+				"order": 60.0,
+				"visible_when_locked": true
+			},
+			"sealed": false,
+			"state": "locked",
+			"title": "Мачта дальней связи"
+		},
+		"comms_hall": {
+			"connections": [
+				"lift_b_to_a",
+				"antenna_mast"
+			],
+			"location_id": "comms_hall",
+			"map": {
+				"cell": {
+					"x": 4.0,
+					"y": 3.0
+				},
+				"floor": "ring_b",
+				"label": "Связь",
+				"note": "Давление сброшено, кислород уходит",
+				"order": 50.0
+			},
+			"sealed": false,
+			"state": "available",
+			"title": "Зал связи"
+		},
+		"crew_quarters": {
+			"connections": [
+				"dock_bay",
+				"med_bay"
+			],
+			"location_id": "crew_quarters",
+			"map": {
+				"cell": {
+					"x": 3.0,
+					"y": 4.0
+				},
+				"floor": "ring_a",
+				"label": "Каюты",
+				"note": "Жилой блок дежурной смены",
+				"order": 20.0
+			},
+			"sealed": true,
+			"state": "available",
+			"title": "Каюты смены"
+		},
+		"dock_bay": {
+			"connections": [
+				"crew_quarters",
+				"lift_a_to_b"
+			],
+			"location_id": "dock_bay",
+			"map": {
+				"cell": {
+					"x": 2.0,
+					"y": 3.0
+				},
+				"floor": "ring_a",
+				"label": "Стыковка",
+				"note": "Шаттл пристыкован, точка чекпойнта",
+				"order": 10.0
+			},
+			"sealed": true,
+			"state": "available",
+			"title": "Стыковочный узел"
+		},
+		"lift_a_to_b": {
+			"connections": [
+				"dock_bay",
+				"lift_b_to_a"
+			],
+			"map": {
+				"cell": {
+					"x": 5.0,
+					"y": 3.0
+				},
+				"floor": "ring_a",
+				"kind": "elevator",
+				"label": "Лифт",
+				"note": "Шахта к антенному ярусу",
+				"order": 30.0,
+				"target_floor": "ring_b"
+			},
+			"sealed": true,
+			"state": "available",
+			"title": "Лифт к антенному ярусу"
+		},
+		"lift_b_to_a": {
+			"connections": [
+				"lift_a_to_b",
+				"comms_hall"
+			],
+			"map": {
+				"cell": {
+					"x": 2.0,
+					"y": 3.0
+				},
+				"floor": "ring_b",
+				"kind": "elevator",
+				"label": "Лифт",
+				"note": "Шахта обратно к стыковке",
+				"order": 40.0,
+				"target_floor": "ring_a"
+			},
+			"sealed": true,
+			"state": "available",
+			"title": "Лифт к стыковочному ярусу"
+		},
+		"med_bay": {
+			"connections": [
+				"crew_quarters"
+			],
+			"location_id": "med_bay",
+			"map": {
+				"cell": {
+					"x": 3.0,
+					"y": 2.0
+				},
+				"floor": "ring_a",
+				"label": "Медблок",
+				"note": "Дверь на карантинном замке",
+				"order": 25.0,
+				"visible_when_locked": true
+			},
+			"sealed": true,
+			"state": "locked",
+			"title": "Медицинский блок"
+		}
+	},
+	"title": "Ретранслятор «Вехтер-9»"
+}

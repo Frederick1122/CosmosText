@@ -26,7 +26,7 @@ func purchase_full_access() -> void:
 	if success:
 		has_full_access = true
 		full_access_changed.emit(true)
-		EventBus.full_access_changed.emit(true)
+		SaveManager.save_meta()  # покупка не должна ждать смерти, чтобы попасть в meta.json
 	purchase_completed.emit(success)
 
 

@@ -56,6 +56,36 @@ func has_item(item_id: String) -> bool:
 	return count_item(item_id) > 0
 
 
+## Ключи. Предмет-ключ описан полем "unlocks": ["id замка", ...].
+func item_unlocks(item_id: String, lock_id: String) -> bool:
+	var unlocks = get_item_data(item_id).get("unlocks", [])
+	return unlocks is Array and unlocks.has(lock_id)
+
+
+## id предмета-ключа от замка — в сумке или надетого. "" — ключа нет.
+func find_key(lock_id: String) -> String:
+	if lock_id == "":
+		return ""
+	for entry in slots:
+		var item_id := str(entry.get("id", ""))
+		if item_unlocks(item_id, lock_id):
+			return item_id
+	for item_id in CharacterSystem.equipment.values():
+		if item_unlocks(str(item_id), lock_id):
+			return str(item_id)
+	return ""
+
+
+## Все предметы контента, открывающие замок — для подсказок в UI.
+func keys_for_lock(lock_id: String) -> Array:
+	var result: Array = []
+	for item_id in _item_db.keys():
+		if item_unlocks(str(item_id), lock_id):
+			result.append(str(item_id))
+	result.sort()
+	return result
+
+
 func count_item(item_id: String) -> int:
 	for entry in slots:
 		if entry.get("id", "") == item_id:
@@ -99,8 +129,10 @@ func use_item(item_id: String) -> bool:
 	return true
 
 
+## Сюжетные предметы и ключи нельзя выбросить: иначе замок не открыть.
 func can_drop(item_id: String) -> bool:
-	return has_item(item_id) and get_item_data(item_id).get("category", "") != "quest"
+	var category := str(get_item_data(item_id).get("category", ""))
+	return has_item(item_id) and category != "quest" and category != "key"
 
 
 func drop_item(item_id: String) -> bool:
@@ -110,6 +142,23 @@ func drop_item(item_id: String) -> bool:
 	if LocationSystem.is_active():
 		LocationSystem.stash_add(item_id, 1)  # в модуле предмет остаётся лежать на полу
 	return true
+
+
+## Сумка уменьшилась (например, уничтожен надетый рюкзак) — лишнее ссыпается
+## на пол модуля, как при получении предмета в переполненную сумку.
+## Вне модуля ничего не делаем: уронить предмет некуда, терять его нельзя.
+func spill_overflow() -> void:
+	if used_slots() <= max_slots or not LocationSystem.is_active():
+		return
+	while used_slots() > max_slots and not slots.is_empty():
+		var entry: Dictionary = slots[slots.size() - 1]
+		var item_id := str(entry.get("id", ""))
+		var count := int(entry.get("count", 1))
+		slots.remove_at(slots.size() - 1)
+		item_removed.emit(item_id)
+		LocationSystem.stash_add(item_id, count)
+		var item_name := str(get_item_data(item_id).get("name", item_id))
+		LocationSystem.add_notice("Не поместилось в сумку: %s ×%d — осталось лежать здесь." % [item_name, count])
 
 
 ## Взаимодействия предмета, чьи requires сейчас выполнены.

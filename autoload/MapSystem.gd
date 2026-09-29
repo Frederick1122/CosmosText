@@ -7,6 +7,8 @@ signal node_state_changed(node_id: String, state: String)
 signal sector_loaded(sector_id: String)
 signal floor_changed(floor_id: String)
 signal fog_changed()
+## Узел отказал в проходе (заперт, нет ключа) — UI показывает текст на карте.
+signal node_blocked(node_id: String, message: String)
 
 var current_sector_id: String = ""
 var sector_title: String = ""
@@ -49,6 +51,7 @@ func get_visible_nodes() -> Array:
 		var entry: Dictionary = nodes[node_id].duplicate(true)
 		entry["id"] = node_id
 		entry["explored"] = is_node_explored(str(node_id))
+		entry["unlockable"] = can_unlock_node(str(node_id))
 		entry["fog_visible"] = true
 		result.append(entry)
 	return result
@@ -76,6 +79,7 @@ func get_map_nodes(include_locked: bool = true) -> Array:
 		var entry: Dictionary = data.duplicate(true)
 		entry["id"] = node_id
 		entry["explored"] = is_node_explored(str(node_id))
+		entry["unlockable"] = can_unlock_node(str(node_id))
 		entry["fog_visible"] = is_node_fog_visible(str(node_id))
 		result.append(entry)
 	result.sort_custom(func(a, b): return _node_map_order(a) < _node_map_order(b))
@@ -99,23 +103,66 @@ func select_node(node_id: String) -> void:
 	var data: Dictionary = nodes[node_id]
 	var state: String = data.get("state", "locked")
 	if state == "locked":
-		push_warning("MapSystem: узел '%s' закрыт" % node_id)
-		return
+		# Запертый узел с замком открывается подходящим ключом прямо с карты.
+		var lock := get_node_lock(node_id)
+		if lock.is_empty():
+			push_warning("MapSystem: узел '%s' закрыт" % node_id)
+			return
+		if not EffectResolver.can_open_lock(lock):
+			# Незнакомый отсек не выдаёт, какой ключ ему нужен.
+			var title := str(data.get("title", node_id)) if is_node_explored(node_id) else "Отсек"
+			var hint := EffectResolver.lock_hint(lock) if is_node_explored(node_id) else "Заперто"
+			node_blocked.emit(node_id, "%s: %s" % [title, hint])
+			return
+		var key_name := EffectResolver.open_lock(lock)
+		unlock_node(node_id)
+		var opened := str(lock.get("text", "Замок поддался."))
+		if key_name != "":
+			opened += " (%s)" % key_name
+		JournalSystem.add("event", "%s: %s" % [str(data.get("title", node_id)), opened])
 	var node_floor_id := _node_floor_id(data)
 	if current_floor_id != "" and node_floor_id != "" and node_floor_id != current_floor_id:
 		push_warning("MapSystem: узел '%s' находится на другой палубе" % node_id)
 		return
 	mark_explored(node_id)
 	if _is_elevator_node(data):
-		_move_by_elevator(data)
+		_move_by_elevator(node_id, data)
 		return
 	var location_id := str(data.get("location_id", ""))
 	if location_id == "":
 		push_warning("MapSystem: у узла '%s' нет location_id" % node_id)
 		return
+	# Переход по кораблю стоит кислорода: цену считает ResourceSystem по узлу
+	# назначения (в отсеке без давления дороже). Если баллон кончился в пути,
+	# в модуль игрок уже не входит — экран смерти выставит player_died.
+	if not ResourceSystem.spend_o2("move", node_id):
+		return
 	# В пройденные (cleared) и опасные модули можно возвращаться.
-	ResourceSystem.set_o2_ticking(not bool(data.get("sealed", true)))
 	GameState.enter_location(location_id, node_id)
+
+
+## Загерметизирован ли узел: в разгерметизированном действия дороже по O2.
+func is_node_sealed(node_id: String) -> bool:
+	if not nodes.has(node_id) or not (nodes[node_id] is Dictionary):
+		return true
+	return bool(nodes[node_id].get("sealed", true))
+
+
+## Замок узла: { "key": "<id замка>", "consume": bool, "text": "..." }.
+func get_node_lock(node_id: String) -> Dictionary:
+	if not nodes.has(node_id) or not (nodes[node_id] is Dictionary):
+		return {}
+	var lock = nodes[node_id].get("lock", {})
+	return lock if lock is Dictionary else {}
+
+
+## Заперт, но подходящий ключ уже в сумке — карта подсвечивает такой узел.
+func can_unlock_node(node_id: String) -> bool:
+	if not nodes.has(node_id) or str(nodes[node_id].get("state", "locked")) != "locked":
+		return false
+	var lock := get_node_lock(node_id)
+	return not lock.is_empty() and EffectResolver.can_open_lock(lock)
+
 
 func unlock_node(node_id: String) -> void:
 	set_node_state(node_id, "available")
@@ -285,7 +332,7 @@ func _all_floor_ids() -> Array:
 	return result
 
 
-func _move_by_elevator(node: Dictionary) -> void:
+func _move_by_elevator(node_id: String, node: Dictionary) -> void:
 	var cfg := _node_map(node)
 	var target_floor_id := str(cfg.get("target_floor", ""))
 	if target_floor_id == "":
@@ -294,7 +341,8 @@ func _move_by_elevator(node: Dictionary) -> void:
 	if not _is_valid_floor_id(target_floor_id):
 		push_warning("MapSystem: лифт ведет на неизвестную палубу '%s'" % target_floor_id)
 		return
-	ResourceSystem.set_o2_ticking(false)
+	if not ResourceSystem.spend_o2("elevator", node_id):
+		return
 	set_current_floor(target_floor_id)
 
 

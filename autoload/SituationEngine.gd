@@ -70,6 +70,11 @@ func get_current_text() -> String:
 	return _current_data.get("text", "")
 
 
+## Пиксельная иллюстрация ситуации (assets/art/scenes/<image>.png).
+func get_current_image() -> String:
+	return str(_current_data.get("image", ""))
+
+
 func get_available_options() -> Array:
 	var result: Array = []
 	for opt in _current_data.get("options", []):
@@ -78,10 +83,14 @@ func get_available_options() -> Array:
 	return result
 
 
+## Выбор стоит кислорода: если баллон кончился, вариант не применяется —
+## экран смерти выставит GameState по EventBus.player_died.
 func select_option(option_id: String) -> void:
 	var chosen = _find_option(option_id)
 	if chosen == null:
 		push_error("SituationEngine: опция '%s' не найдена в '%s'" % [option_id, current_id])
+		return
+	if not ResourceSystem.spend_o2("choice"):
 		return
 	EffectResolver.apply_effects(chosen.get("effects", []))
 	option_selected.emit(option_id)
@@ -90,6 +99,27 @@ func select_option(option_id: String) -> void:
 	var ended_id := current_id
 	var next_id: String = chosen.get("next", "")
 	situation_ended.emit(ended_id, next_id)
+
+
+func get_option_label(option_id: String) -> String:
+	var opt = _find_option(option_id)
+	return str(opt.get("label", option_id)) if opt is Dictionary else option_id
+
+
+## Завершает ли вариант происходящее: уводит на карту, заканчивает забег или
+## закрывает событие возвратом в модуль. Вариант, начинающий бой или ведущий
+## в следующую ситуацию, продолжением цепочки не считается завершающим.
+func is_closing_option(opt: Dictionary) -> bool:
+	for effect in opt.get("effects", []):
+		if not (effect is Dictionary):
+			continue
+		match str(effect.get("type", "")):
+			"end_run":
+				return true
+			"start_combat":
+				return false
+	var next_id := str(opt.get("next", ""))
+	return next_id == "" or next_id.begins_with("map:")
 
 
 func _find_option(option_id: String):

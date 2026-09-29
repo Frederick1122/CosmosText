@@ -121,12 +121,29 @@
 			"value": 90.0
 		}
 	},
+	"cargo_key": {
+		"category": "key",
+		"description": "Магнитный ключ такелажника. Разовый: контакт выгорает при первом срабатывании.",
+		"name": "Магнитный ключ такелажника",
+		"slot_cost": 0.0,
+		"stackable": false,
+		"unlocks": [ "rigger_locker" ]
+	},
+	"hex_key": {
+		"category": "key",
+		"description": "Шестигранник из аварийного набора. Открывает служебные панели и инструментальные ящики — и не изнашивается.",
+		"name": "Шестигранный ключ",
+		"slot_cost": 0.0,
+		"stackable": false,
+		"unlocks": [ "service_panel", "tool_crate" ]
+	},
 	"pilot_keycard": {
-		"category": "quest",
-		"description": "Карта с допуском экипажа. На пластике — имя «Л. Верес».",
+		"category": "key",
+		"description": "Карта с допуском экипажа. На пластике — имя «Л. Верес». Снимает гермозамок реакторного отсека.",
 		"name": "Ключ-карта пилота",
-		"slot_cost": 1.0,
-		"stackable": false
+		"slot_cost": 0.0,
+		"stackable": false,
+		"unlocks": [ "reactor_door" ]
 	},
 	"pipe_scrap": {
 		"category": "weapon",
@@ -193,5 +210,24 @@
 		"name": "Схема обломка",
 		"slot_cost": 1.0,
 		"stackable": false
+	},
+	"station_keycard": {
+		"category": "key",
+		"description": "Карта доступа старшего смены «Вехтер-9». Снимает карантинный замок медблока.",
+		"name": "Карта доступа станции",
+		"slot_cost": 0.0,
+		"stackable": false,
+		"unlocks": [ "med_bay_quarantine" ]
+	},
+	"stim_shot": {
+		"category": "consumable",
+		"description": "Боевой стимулятор из медблока станции. Держит на ногах минуту-другую.",
+		"name": "Стимулятор",
+		"slot_cost": 1.0,
+		"stackable": true,
+		"use_effect": {
+			"type": "hp_delta",
+			"value": 25.0
+		}
 	}
 }

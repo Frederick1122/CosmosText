@@ -112,6 +112,7 @@ func remove_equipped(item_id: String) -> bool:
 		if equipment[slot] == item_id:
 			equipment.erase(slot)
 			_recalculate()
+			InventorySystem.spill_overflow()  # рюкзак мог унести с собой слоты сумки
 			return true
 	return false
 

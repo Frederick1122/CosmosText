@@ -1,7 +1,19 @@
 {
   "id": "alien_shuttle",
+  "image": "shuttle_bay",
   "title": "Чужой шаттл",
-  "description": "Небольшой шаттл, пристыкованный к грузовому шлюзу. Маркировка на обшивке незнакомая, внутри темно и тихо. Сигнал, который ловит скафандр, идёт отсюда. У входа — оружейный шкаф с кодовым замком.",
+  "description": "Небольшой шаттл, пристыкованный к грузовому шлюзу. Маркировка на обшивке незнакомая, внутри темно и тихо. Сигнал, который ловит скафандр, идёт отсюда. У входа — оружейный шкаф с кодовым замком. Гнездо энергоячейки в кабине пустое.",
+  "descriptions": [
+    {
+      "requires": [
+        {
+          "type": "flag",
+          "flag": "left_persephone"
+        }
+      ],
+      "text": "Кабина чужого шаттла. Энергоячейка стоит в гнезде, панель ждёт команды на отстыковку."
+    }
+  ],
   "events": [
     {
       "id": "search_cockpit",
@@ -10,7 +22,12 @@
       "repeatable": false,
       "triggers": [],
       "text": "Под креслом пилота — пара магнитных ботинок. Кто-то ушёл отсюда в спешке.",
-      "effects": [ { "type": "item_add", "item": "mag_boots" } ]
+      "effects": [
+        {
+          "type": "item_add",
+          "item": "mag_boots"
+        }
+      ]
     },
     {
       "id": "open_locker",
@@ -27,6 +44,19 @@
       "repeatable": false,
       "triggers": [],
       "situation": "sit_2_3_supply_crate"
+    },
+    {
+      "id": "install_power_cell",
+      "start": "manual",
+      "label": "Поставить энергоячейку в гнездо шаттла",
+      "repeatable": true,
+      "triggers": [
+        {
+          "type": "has_item",
+          "item": "power_cell"
+        }
+      ],
+      "situation": "sit_3_4_departure"
     }
   ]
 }

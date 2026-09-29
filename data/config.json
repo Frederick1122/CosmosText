@@ -3,8 +3,16 @@
   "opening_situation_id": "",
   "inventory_slots": 6,
   "start_hp": 100,
-  "start_o2_seconds": 252,
+  "start_o2": 252,
   "start_ammo": 0,
+  "o2_costs": {
+    "move": 5,
+    "elevator": 3,
+    "action": 3,
+    "choice": 2,
+    "combat_turn": 3
+  },
+  "o2_unsealed_multiplier": 2.0,
   "start_equipment": { "body": "flight_suit" },
   "start_skill_points": 1
 }

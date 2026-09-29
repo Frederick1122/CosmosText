@@ -17,6 +17,13 @@ DATA = os.path.join(ROOT, "data")
 # Должны совпадать с CharacterSystem.SLOTS / STAT_TITLES.
 EQUIP_SLOTS = ("head", "body", "arms", "legs", "back")
 STATS = ("armor", "melee_damage", "ranged_damage", "hit_chance", "flee_chance", "max_hp", "inventory_slots")
+# Должны совпадать с ResourceSystem.DEFAULT_O2_COSTS.
+O2_COST_KINDS = ("move", "elevator", "action", "choice", "combat_turn")
+# Должны совпадать с CombatSystem: типы ИИ и предел дистанции.
+ENEMY_AI_TYPES = ("brawler", "shooter", "turret")
+MAX_COMBAT_RANGE = 5
+# Пиксельные иллюстрации сцен (поле "image" у локаций, событий и ситуаций).
+SCENE_ART_DIR = os.path.join(ROOT, "assets", "art", "scenes")
 
 errors = []
 warnings = []
@@ -137,6 +144,7 @@ def main():
 
     skills = load_optional("skills.json")
     recipes = load_optional("recipes.json")
+    endings = load_optional("endings.json")
 
     situations_raw = load_dir(os.path.join(DATA, "situations"))
     sectors_raw = load_dir(os.path.join(DATA, "sectors"))
@@ -183,10 +191,53 @@ def main():
                     errors.append(f"locations/{lid}: дублирующийся id события '{ev['id']}'")
                 event_keys.add(key)
 
+    # Замки и ключи: "unlocks" у предметов задаёт, какие замки открываются.
+    lock_keys = {}
+    for item_id, item in items.items():
+        if not isinstance(item, dict):
+            continue
+        unlocks = item.get("unlocks", [])
+        if not isinstance(unlocks, list):
+            errors.append(f"items/{item_id}.unlocks: ожидается массив id замков")
+            continue
+        for lock_id in unlocks:
+            if not isinstance(lock_id, str) or not lock_id.strip():
+                errors.append(f"items/{item_id}.unlocks: id замка должен быть непустой строкой")
+                continue
+            lock_keys.setdefault(lock_id, []).append(item_id)
+        if unlocks and item.get("category") != "key":
+            warnings.append(f"items/{item_id}: предмет открывает замки, но его category не 'key'")
+        if item.get("category") == "key" and not unlocks:
+            errors.append(f"items/{item_id}: ключ без списка 'unlocks' ничего не открывает")
+
+    def check_lock(lock, ctx):
+        if not isinstance(lock, dict):
+            errors.append(f"{ctx}.lock: ожидается объект {{ key, consume, text }}")
+            return
+        lock_id = lock.get("key", "")
+        if not isinstance(lock_id, str) or not lock_id.strip():
+            errors.append(f"{ctx}.lock.key: нужен непустой id замка")
+        elif lock_id not in lock_keys:
+            errors.append(f"{ctx}.lock.key: замок '{lock_id}' не открывает ни один предмет-ключ")
+        if "consume" in lock and not isinstance(lock["consume"], bool):
+            errors.append(f"{ctx}.lock.consume: должно быть true/false")
+        if "text" in lock and not isinstance(lock["text"], str):
+            errors.append(f"{ctx}.lock.text: должно быть строкой")
+
+    def check_image(name, ctx):
+        if name is None:
+            return
+        if not isinstance(name, str) or not name.strip():
+            errors.append(f"{ctx}.image: должно быть именем файла без расширения")
+            return
+        if not os.path.exists(os.path.join(SCENE_ART_DIR, name + ".png")):
+            errors.append(f"{ctx}.image: нет файла assets/art/scenes/{name}.png")
+
     all_node_ids = set()
     nodes_without_location = set()
     referenced_situations = set()
     referenced_locations = set()
+    referenced_endings = set()
 
     start_sector = config.get("start_sector_id", "")
     if start_sector and start_sector not in sectors:
@@ -348,6 +399,10 @@ def main():
                     errors.append(f"sectors/{secid}: доступный узел '{node_id}' без location_id — клик по нему ничего не сделает")
                 else:
                     warnings.append(f"sectors/{secid}: закрытый узел '{node_id}' пока без location_id")
+            if "lock" in node:
+                check_lock(node["lock"], f"sectors/{secid}.{node_id}")
+                if node.get("state", "locked") != "locked":
+                    warnings.append(f"sectors/{secid}: у узла '{node_id}' есть замок, но он не 'locked' — ключ не понадобится")
             for conn in node.get("connections", []):
                 if conn not in nodes:
                     warnings.append(
@@ -394,6 +449,10 @@ def main():
                     continue
                 if key not in event_keys:
                     errors.append(f"{ctx}: event_done ссылается на неизвестное событие '{key}'")
+            elif t == "has_key":
+                lock_id = req.get("lock", "")
+                if lock_id not in lock_keys:
+                    errors.append(f"{ctx}: has_key ссылается на замок '{lock_id}', который не открывает ни один ключ")
             elif t in ("visits_gte", "visits_lte"):
                 value = req.get("value")
                 if not isinstance(value, int) or isinstance(value, bool) or value < 0:
@@ -442,6 +501,11 @@ def main():
                 value = eff.get("value", 1)
                 if not isinstance(value, int) or isinstance(value, bool):
                     errors.append(f"{ctx}: skill_points_add.value должен быть целым")
+            elif t == "end_run":
+                ending = eff.get("ending", "")
+                referenced_endings.add(ending)
+                if ending not in endings:
+                    errors.append(f"{ctx}: effect 'end_run' ссылается на неизвестный финал '{ending}'")
             elif t in ("hp_delta", "o2_delta", "ammo_delta", "flag_set", "reveal_map"):
                 pass
             elif t is None:
@@ -450,7 +514,13 @@ def main():
                 warnings.append(f"{ctx}: неизвестный тип effect '{t}'")
 
     for sid, sit in situations.items():
-        check_requires(sit.get("requires", []), f"situations/{sid}")
+        if "requires" in sit:
+            errors.append(
+                f"situations/{sid}: поле 'requires' верхнего уровня не поддерживается "
+                f"движком — условия задаются у вариантов (options[].requires) "
+                f"или у события локации (events[].triggers)"
+            )
+        check_image(sit.get("image"), f"situations/{sid}")
         for opt in sit.get("options", []):
             opt_ctx = f"situations/{sid}#{opt.get('id', '?')}"
             check_requires(opt.get("requires", []), opt_ctx)
@@ -468,6 +538,9 @@ def main():
     events_total = 0
     for lid, loc in locations.items():
         ctx = f"locations/{lid}"
+        check_image(loc.get("image"), ctx)
+        if "base" in loc and not isinstance(loc["base"], bool):
+            errors.append(f"{ctx}.base: должно быть true/false")
         if not str(loc.get("description", "")).strip():
             warnings.append(f"{ctx}: нет базового описания (description)")
         variants = loc.get("descriptions", [])
@@ -500,6 +573,9 @@ def main():
                 errors.append(f"{ev_ctx}: repeatable должен быть true/false")
             check_requires(ev.get("triggers", []), f"{ev_ctx}.triggers", lid)
             check_effects(ev.get("effects", []), ev_ctx)
+            check_image(ev.get("image"), ev_ctx)
+            if "lock" in ev:
+                check_lock(ev["lock"], ev_ctx)
             sit = ev.get("situation", "")
             if sit:
                 referenced_situations.add(sit)
@@ -512,12 +588,39 @@ def main():
         if lid not in referenced_locations:
             warnings.append(f"locations/{lid}: локация не привязана ни к одному узлу карты")
 
+    for end_id, ending in endings.items():
+        ctx = f"endings/{end_id}"
+        if not isinstance(ending, dict):
+            errors.append(f"{ctx}: ожидается объект")
+            continue
+        if not str(ending.get("title", "")).strip():
+            errors.append(f"{ctx}: нет заголовка (title)")
+        if not str(ending.get("text", "")).strip():
+            errors.append(f"{ctx}: нет текста финала (text)")
+        if end_id not in referenced_endings:
+            warnings.append(f"{ctx}: финал недостижим — ни один effect 'end_run' на него не ссылается")
+
     for eid, enemy in enemies.items():
         for special in enemy.get("special_actions", []):
             check_requires(special.get("requires", []), f"enemies/{eid}#{special.get('id', '?')}")
             eff_type = special.get("effect", {}).get("type")
             if eff_type not in ("skip_enemy_turn_and_guarantee_hit",):
                 warnings.append(f"enemies/{eid}#{special.get('id', '?')}: неизвестный тип spec-эффекта '{eff_type}'")
+        ai = enemy.get("ai", "brawler")
+        if ai not in ENEMY_AI_TYPES:
+            errors.append(f"enemies/{eid}.ai: '{ai}' — допустимы {', '.join(ENEMY_AI_TYPES)}")
+        attack = enemy.get("attack", {})
+        if not isinstance(attack, dict):
+            errors.append(f"enemies/{eid}.attack: ожидается объект")
+        else:
+            reach = attack.get("range", 1)
+            if not is_positive_int(reach) or reach > MAX_COMBAT_RANGE:
+                errors.append(f"enemies/{eid}.attack.range: целое от 1 до {MAX_COMBAT_RANGE}")
+        for field in ("start_range", "preferred_range"):
+            if field in enemy:
+                value = enemy[field]
+                if not isinstance(value, int) or isinstance(value, bool) or value < 0 or value > MAX_COMBAT_RANGE:
+                    errors.append(f"enemies/{eid}.{field}: целое от 0 до {MAX_COMBAT_RANGE}")
         for loot_item in enemy.get("loot", []):
             if loot_item not in items:
                 errors.append(f"enemies/{eid}: loot ссылается на неизвестный предмет '{loot_item}'")
@@ -608,13 +711,33 @@ def main():
     if not isinstance(start_points, int) or isinstance(start_points, bool) or start_points < 0:
         errors.append("config.json: start_skill_points должен быть неотрицательным целым")
 
+    start_o2 = config.get("start_o2")
+    if not is_number(start_o2) or start_o2 <= 0:
+        errors.append("config.json: start_o2 должен быть положительным числом")
+    o2_costs = config.get("o2_costs", {})
+    if not isinstance(o2_costs, dict):
+        errors.append("config.json: o2_costs должен быть объектом {действие: цена}")
+    else:
+        for kind, value in o2_costs.items():
+            if kind not in O2_COST_KINDS:
+                errors.append(f"config.json: o2_costs — неизвестное действие '{kind}' (допустимы: {', '.join(O2_COST_KINDS)})")
+            elif not is_number(value) or value < 0:
+                errors.append(f"config.json: o2_costs.{kind} — цена должна быть неотрицательным числом")
+        for kind in O2_COST_KINDS:
+            if kind not in o2_costs:
+                warnings.append(f"config.json: o2_costs.{kind} не задан — взята цена по умолчанию из ResourceSystem")
+    multiplier = config.get("o2_unsealed_multiplier", 1.0)
+    if not is_number(multiplier) or multiplier < 1.0:
+        errors.append("config.json: o2_unsealed_multiplier должен быть числом не меньше 1")
+
     for sid in sorted(situations):
         if sid not in referenced_situations:
             warnings.append(f"situations/{sid}: ситуация не достижима из стартового конфига, событий или next-ссылок")
 
     print(f"Локаций: {len(locations)} (событий: {events_total}) | Ситуаций: {len(situations)} | "
           f"Секторов: {len(sectors)} | Предметов: {len(items)} | Навыков: {len(skills)} | "
-          f"Рецептов: {len(recipes)} | Врагов: {len(enemies)} | Лор-фрагментов: {len(lore)}")
+          f"Рецептов: {len(recipes)} | Врагов: {len(enemies)} | Лор-фрагментов: {len(lore)} | "
+          f"Финалов: {len(endings)}")
 
     if warnings:
         print(f"\nПредупреждения ({len(warnings)}):")

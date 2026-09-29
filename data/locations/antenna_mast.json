@@ -1,0 +1,31 @@
+{
+  "id": "antenna_mast",
+  "image": "antenna_mast",
+  "title": "Мачта дальней связи",
+  "description": "Короткий выход в вакуум вдоль мачты. Тарелка дальней связи смотрит в пустоту и ждёт наводки. Отсюда видно «Персефону» — тёмный обломок в паре километров.",
+  "descriptions": [
+    {
+      "requires": [ { "type": "flag", "flag": "beacon_online" } ],
+      "text": "Мачта дальней связи. Тарелка наведена, маяк бьёт узким лучом в сторону колонии. Ответа пока нет."
+    }
+  ],
+  "events": [
+    {
+      "id": "align_dish",
+      "start": "manual",
+      "label": "Навести тарелку и включить передатчик",
+      "repeatable": true,
+      "triggers": [ { "type": "flag", "flag": "beacon_online", "value": false } ],
+      "situation": "sit_4_3_beacon"
+    },
+    {
+      "id": "read_mast_log",
+      "start": "manual",
+      "label": "Считать журнал последнего сеанса",
+      "repeatable": false,
+      "triggers": [ { "type": "flag", "flag": "beacon_online" } ],
+      "text": "Передатчик хранит последний исходящий сеанс. Запись добавлена в журнал.",
+      "effects": [ { "type": "unlock_lore", "id": "log_06" } ]
+    }
+  ]
+}

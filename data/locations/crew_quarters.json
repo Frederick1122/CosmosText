@@ -1,0 +1,55 @@
+{
+  "id": "crew_quarters",
+  "title": "Каюты смены",
+  "description": "Шесть коек, четыре из них застелены. Личные шкафчики вскрыты изнутри — уходили сами и торопились. На переборке от руки: «карантин, медблок не открывать».",
+  "descriptions": [
+    {
+      "requires": [ { "type": "flag", "flag": "med_bay_open" } ],
+      "text": "Каюты смены. Шкафчики пусты, дверь медблока напротив больше не мигает красным."
+    }
+  ],
+  "events": [
+    {
+      "id": "first_look",
+      "start": "auto",
+      "repeatable": false,
+      "triggers": [],
+      "text": "Воздух густой, вентиляция стоит. Под одной из коек — аптечка, в углу свалены обрывки чехлов."
+    },
+    {
+      "id": "search_bunks",
+      "start": "manual",
+      "label": "Обыскать койки",
+      "repeatable": false,
+      "triggers": [],
+      "text": "Под матрасами — аптечка и ворох ветоши.",
+      "effects": [
+        { "type": "item_add", "item": "medkit" },
+        { "type": "item_add", "item": "cloth_rags", "count": 2 }
+      ]
+    },
+    {
+      "id": "pry_locker",
+      "start": "manual",
+      "label": "Вскрыть шкафчик старшего смены",
+      "repeatable": false,
+      "triggers": [],
+      "situation": "sit_4_1_locker"
+    },
+    {
+      "id": "use_station_keycard",
+      "start": "manual",
+      "label": "Снять карантин с двери медблока",
+      "repeatable": false,
+      "triggers": [
+        { "type": "flag", "flag": "med_bay_open", "value": false }
+      ],
+      "lock": { "key": "med_bay_quarantine", "consume": true, "text": "Замок снимает карантин." },
+      "text": "Замок думает долго, потом снимает карантин. Дверь медблока уходит в переборку.",
+      "effects": [
+        { "type": "flag_set", "flag": "med_bay_open" },
+        { "type": "open_map_node", "node": "med_bay" }
+      ]
+    }
+  ]
+}

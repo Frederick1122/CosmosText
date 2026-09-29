@@ -35,6 +35,8 @@ func apply_effect(effect: Dictionary) -> void:
 				_as_array(effect.get("on_win", [])),
 				_as_array(effect.get("on_flee", []))
 			)
+		"end_run":
+			GameState.finish_run(str(effect.get("ending", "")))
 		_:
 			push_warning("EffectResolver: неизвестный тип эффекта '%s'" % effect.get("type", ""))
 
@@ -60,7 +62,7 @@ func check_requirement(req: Dictionary) -> bool:
 				"hp":
 					current = ResourceSystem.hp
 				"o2":
-					current = ResourceSystem.o2_seconds
+					current = ResourceSystem.o2
 				"ammo":
 					current = ResourceSystem.ammo
 			return current >= float(req.get("value", 0))
@@ -70,6 +72,9 @@ func check_requirement(req: Dictionary) -> bool:
 			return LocationSystem.current_id == str(req.get("location", ""))
 		"event_done":
 			return LocationSystem.is_event_done(str(req.get("event", ""))) == bool(req.get("value", true))
+		"has_key":
+			var owned_key := InventorySystem.find_key(str(req.get("lock", ""))) != ""
+			return owned_key == bool(req.get("value", true))
 		"visits_gte":
 			return LocationSystem.get_visits() >= int(req.get("value", 0))
 		"visits_lte":
@@ -84,6 +89,49 @@ func check_requirements(reqs: Array) -> bool:
 		if r is Dictionary and not check_requirement(r):
 			return false
 	return true
+
+
+# --- Замки и ключи --------------------------------------------------------------
+# Замок в контенте (узел карты, событие-ящик) описан словарём:
+#   { "key": "<id замка>", "consume": true, "text": "<что видно игроку>" }
+# Ключ — предмет с "unlocks": ["<id замка>", ...].
+
+func lock_id(lock: Dictionary) -> String:
+	return str(lock.get("key", ""))
+
+
+func can_open_lock(lock: Dictionary) -> bool:
+	var id := lock_id(lock)
+	return id == "" or InventorySystem.find_key(id) != ""
+
+
+## Открывает замок подходящим ключом. Возвращает название ключа ("" — замка
+## нет или ключ не тратится). Одноразовый ключ (consume) уходит из сумки.
+func open_lock(lock: Dictionary) -> String:
+	var id := lock_id(lock)
+	if id == "":
+		return ""
+	var key_item := InventorySystem.find_key(id)
+	if key_item == "":
+		return ""
+	var key_name := str(InventorySystem.get_item_data(key_item).get("name", key_item))
+	if bool(lock.get("consume", false)):
+		_remove_item(key_item, 1)
+		return key_name
+	return key_name
+
+
+## Подсказка для UI: «Заперто. Нужен: Ключ-карта пилота».
+func lock_hint(lock: Dictionary) -> String:
+	var id := lock_id(lock)
+	if id == "":
+		return ""
+	var names: Array = []
+	for item_id in InventorySystem.keys_for_lock(id):
+		names.append(str(InventorySystem.get_item_data(item_id).get("name", item_id)))
+	if names.is_empty():
+		return "Заперто"
+	return "Заперто. Нужен: %s" % ", ".join(names)
 
 
 ## Лишнее, что не поместилось в сумку, остаётся на полу текущего модуля.

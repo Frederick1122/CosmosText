@@ -5,13 +5,14 @@ extends Node
 
 signal screen_changed(screen: int)
 
-enum Screen { MAIN_MENU, SECTOR_MAP, SITUATION, COMBAT, DEATH, LOCATION }
+enum Screen { MAIN_MENU, SECTOR_MAP, SITUATION, COMBAT, DEATH, LOCATION, VICTORY }
 
 ## Предохранитель от цепочек автособытий, зацикленных контентом.
 const MAX_AUTO_EVENTS_PER_STEP := 32
 
 var current_screen: int = Screen.MAIN_MENU
 var last_death_cause: String = ""
+var last_ending_id: String = ""
 var has_left_capsule: bool = false
 
 func _ready() -> void:
@@ -68,13 +69,26 @@ func leave_location() -> void:
 		has_left_capsule = true
 	_set_screen(Screen.SECTOR_MAP)
 
-## Ручной запуск события из меню модуля.
+## Ручной запуск события из меню модуля. Действие стоит кислорода, а
+## запертое событие-ящик требует подходящего ключа.
 func start_location_event(event_id: String) -> void:
 	if not LocationSystem.is_event_available(event_id):
 		push_warning("GameState: событие '%s' сейчас недоступно" % event_id)
 		return
+	var ev := LocationSystem.find_event(event_id)
+	var lock := LocationSystem.get_event_lock(ev)
 	LocationSystem.clear_notices()
-	if _run_event(LocationSystem.find_event(event_id)):
+	if not lock.is_empty() and not EffectResolver.can_open_lock(lock):
+		LocationSystem.add_notice(EffectResolver.lock_hint(lock))
+		_show_location()
+		return
+	if not ResourceSystem.spend_o2("action"):
+		return
+	if not lock.is_empty():
+		var key_name := EffectResolver.open_lock(lock)
+		if key_name != "":
+			LocationSystem.add_notice("Открыто ключом: %s." % key_name)
+	if _run_event(ev):
 		return
 	_resume_location()
 
@@ -88,6 +102,26 @@ func refresh_location() -> void:
 ## Ситуация без доступных опций — игрок нажал «Продолжить».
 func finish_situation() -> void:
 	_on_situation_ended(SituationEngine.current_id, "")
+
+
+## Победное завершение забега (эффект end_run). Забег закончен: run.json и
+## чекпойнт удаляются, итог уходит в meta — как и при смерти, но без отката.
+func finish_run(ending_id: String) -> void:
+	if not ChronicleSystem.has_ending(ending_id):
+		push_error("GameState: неизвестный финал '%s'" % ending_id)
+		return
+	last_ending_id = ending_id
+	last_death_cause = ""
+	LocationSystem.leave()
+	JournalSystem.add("victory", "Забег завершён: %s" % ChronicleSystem.get_ending_title(ending_id))
+	ChronicleSystem.record_victory(ending_id)
+	SaveManager.finish_run()
+	_set_screen(Screen.VICTORY)
+
+
+## Возврат в главное меню с экрана победы.
+func go_to_main_menu() -> void:
+	_set_screen(Screen.MAIN_MENU)
 
 
 func choose_restart() -> void:
@@ -131,14 +165,15 @@ func _run_event(ev: Dictionary) -> bool:
 
 
 func _show_location() -> void:
-	if LocationSystem.current_node_id != "" and LocationSystem.current_node_id == MapSystem.hub_node_id:
-		EventBus.returned_to_hub.emit()  # хаб — точка чекпойнта
+	var at_hub := LocationSystem.current_node_id != "" and LocationSystem.current_node_id == MapSystem.hub_node_id
+	if at_hub or LocationSystem.is_base():
+		EventBus.returned_to_hub.emit()  # хаб и любой модуль-база — точка чекпойнта
 	_set_screen(Screen.LOCATION)
 
 
 func _on_situation_ended(_id: String, next: String) -> void:
-	if current_screen == Screen.DEATH:
-		return
+	if current_screen == Screen.DEATH or current_screen == Screen.VICTORY:
+		return  # забег уже завершён эффектом end_run или смертью
 	if CombatSystem.state == CombatSystem.State.PLAYER_TURN:
 		return  # эффект start_combat уже переключил экран на бой
 	if next == "":
@@ -204,9 +239,5 @@ func load_save_data(data: Dictionary) -> void:
 
 func _set_screen(screen: int) -> void:
 	current_screen = screen
-	if screen == Screen.SECTOR_MAP:
-		# Защитное правило: карта не тратит O2 сама по себе — тикает только
-		# внутри незагерметизированного узла (MapSystem.select_node включает
-		# его явно). Без этого сбоя не будет, но так надёжнее.
-		ResourceSystem.set_o2_ticking(false)
+	SaveManager.autosave()  # карта и экран модуля — безопасные точки записи
 	screen_changed.emit(screen)

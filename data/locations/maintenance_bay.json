@@ -1,0 +1,57 @@
+{
+  "id": "maintenance_bay",
+  "title": "Технический отсек",
+  "image": "service_corridor",
+  "description": "Узкая ремонтная ниша за служебной панелью. Вдоль стены — стеллаж с разобранным оборудованием, в углу заперт инструментальный ящик такелажников.",
+  "descriptions": [
+    {
+      "requires": [ { "type": "event_done", "event": "open_tool_crate" } ],
+      "text": "Технический отсек. Стеллаж разобран, инструментальный ящик открыт и пуст. Пахнет горелой изоляцией."
+    }
+  ],
+  "events": [
+    {
+      "id": "first_look",
+      "start": "auto",
+      "repeatable": false,
+      "triggers": [],
+      "image": "service_corridor",
+      "text": "Панель отходит, за ней — ремонтная ниша. Судя по разложенному инструменту, отсюда чинили грузовую палубу до самого удара."
+    },
+    {
+      "id": "strip_rack",
+      "start": "manual",
+      "label": "Разобрать стеллаж на детали",
+      "repeatable": false,
+      "triggers": [],
+      "text": "Стеллаж поддаётся шестиграннику: уголки, кусок обшивки и моток изоленты отправляются в сумку.",
+      "effects": [
+        { "type": "item_add", "item": "scrap_metal" },
+        { "type": "item_add", "item": "duct_tape" }
+      ]
+    },
+    {
+      "id": "open_tool_crate",
+      "start": "manual",
+      "label": "Вскрыть инструментальный ящик",
+      "repeatable": false,
+      "triggers": [],
+      "lock": { "key": "tool_crate", "consume": false, "text": "Шестигранник проворачивает замок." },
+      "text": "В ящике — магнитный ключ такелажника, запасной баллон и латка для скафандра.",
+      "effects": [
+        { "type": "item_add", "item": "cargo_key" },
+        { "type": "item_add", "item": "o2_canister" },
+        { "type": "item_add", "item": "improvised_bandage" }
+      ]
+    },
+    {
+      "id": "read_repair_log",
+      "start": "manual",
+      "label": "Просмотреть журнал ремонтов",
+      "repeatable": false,
+      "triggers": [],
+      "text": "Последняя запись оборвана на полуслове. Запись добавлена в архив.",
+      "effects": [ { "type": "unlock_lore", "id": "log_07" } ]
+    }
+  ]
+}

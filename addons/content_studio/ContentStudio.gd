@@ -12,10 +12,10 @@ const KINDS := [
 	["recipes", "Крафты"],
 	["lore", "Журнал"],
 ]
-const ITEM_CATEGORIES := ["quest", "consumable", "weapon", "armor", "gear", "component"]
+const ITEM_CATEGORIES := ["quest", "key", "consumable", "weapon", "armor", "gear", "component"]
 const EFFECT_TYPES := ["", "hp_delta", "o2_delta", "ammo_delta", "item_add", "item_remove", "flag_set", "unlock_lore", "reveal_map", "open_map_node", "lock_map_node", "skill_points_add", "start_combat"]
 const EVENT_STARTS := ["manual", "auto"]
-const REQUIREMENT_TYPES := ["has_item", "flag", "stat_gte", "skill_gte", "in_location", "event_done", "visits_gte", "visits_lte"]
+const REQUIREMENT_TYPES := ["has_item", "has_key", "flag", "stat_gte", "skill_gte", "in_location", "event_done", "visits_gte", "visits_lte"]
 const NODE_STATES := ["locked", "available", "dangerous", "cleared"]
 
 var kind_selector: OptionButton
@@ -368,7 +368,6 @@ func _build_situation_form() -> void:
 	_section("Ситуация")
 	_line("ID", str(_entry.get("id", _asset_id)), func(value): _set_entry_value("id", value))
 	_text("Текст", str(_entry.get("text", "")), func(value): _set_entry_value("text", value))
-	_requirements_editor("Общие условия", _entry.get("requires", []), func(value): _set_entry_value("requires", value))
 	_section("Варианты выбора")
 	_build_array_list("options", "Вариант", func(option): _build_option_fields(option))
 
@@ -481,7 +480,7 @@ func _default_entry(kind: String, id: String) -> Dictionary:
 		"locations":
 			return {"id": id, "title": "Новая локация", "description": "", "events": []}
 		"situations":
-			return {"id": id, "text": "", "requires": [], "options": []}
+			return {"id": id, "text": "", "options": []}
 		"items":
 			return {"name": "Новый предмет", "category": "component", "slot_cost": 1, "stackable": false, "description": "", "interactions": []}
 		"recipes":

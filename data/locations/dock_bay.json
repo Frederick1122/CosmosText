@@ -1,0 +1,53 @@
+{
+  "id": "dock_bay",
+  "image": "dock_bay",
+  "title": "Стыковочный узел",
+  "description": "Шлюз ретранслятора «Вехтер-9». Шаттл пристыкован, стыковочный воротник держит давление. Аварийные лампы горят ровно — станция ещё жива, хотя людей не слышно.",
+  "descriptions": [
+    {
+      "requires": [ { "type": "flag", "flag": "beacon_online" } ],
+      "text": "Стыковочный узел «Вехтер-9». Над шлюзом мигает зелёным: передатчик работает, сигнал ушёл. Шаттл ждёт у воротника, но лететь пока некуда."
+    }
+  ],
+  "events": [
+    {
+      "id": "arrival",
+      "start": "auto",
+      "repeatable": false,
+      "triggers": [],
+      "text": "Стыковочный воротник схватывается с лязгом. Шаттл выгорел досуха: энергоячейка ушла на перелёт, обратной дороги на «Персефону» нет.",
+      "effects": [
+        { "type": "unlock_lore", "id": "log_04" },
+        { "type": "flag_set", "flag": "docked_wechter" }
+      ]
+    },
+    {
+      "id": "check_shuttle",
+      "start": "manual",
+      "label": "Осмотреть шаттл",
+      "repeatable": true,
+      "triggers": [],
+      "text": "Панель шаттла мертва. Без второй энергоячейки это просто жестяная коробка у шлюза."
+    },
+    {
+      "id": "rescue_dock",
+      "start": "manual",
+      "label": "Открыть шлюз пришедшему кораблю",
+      "repeatable": true,
+      "triggers": [ { "type": "flag", "flag": "beacon_online" } ],
+      "situation": "sit_4_4_rescue"
+    },
+    {
+      "id": "strip_dock_panel",
+      "start": "manual",
+      "label": "Снять обшивку стыковочной панели",
+      "repeatable": false,
+      "triggers": [ { "type": "has_item", "item": "pipe_scrap" } ],
+      "text": "Труба входит под кромку панели. Пара листов обшивки и моток изоленты — пригодятся.",
+      "effects": [
+        { "type": "item_add", "item": "scrap_metal", "count": 2 },
+        { "type": "item_add", "item": "duct_tape" }
+      ]
+    }
+  ]
+}

@@ -2,7 +2,13 @@
 .godot/
 .import/
 export.cfg
-export_presets.cfg
+
+# Сборки и подписи (пресет экспорта коммитится, ключи — нет)
+build/
+*.keystore
+*.jks
+*.apk
+*.aab
 
 # Imported translations (automatically generated from CSV files)
 *.translation
@@ -14,3 +20,8 @@ data_*/
 # System/tooling
 .DS_Store
 artifacts/
+
+# Python (валидатор и генератор арта)
+__pycache__/
+*.py[cod]
+mcp/.venv/

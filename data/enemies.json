@@ -1,25 +1,88 @@
 {
   "drone_cargo": {
-    "name": "Сервисный дрон",
-    "hp": 40,
-    "attack": { "min": 5, "max": 15, "hit_chance": 0.6 },
+    "ai": "brawler",
+    "attack": {
+      "hit_chance": 0.6,
+      "max": 15,
+      "min": 5,
+      "range": 1
+    },
     "flee_risk": 0.4,
-    "loot": ["scrap_metal"],
+    "hp": 40,
+    "loot": [
+      "scrap_metal"
+    ],
+    "name": "Сервисный дрон",
+    "preferred_range": 0,
     "special_actions": [
       {
+        "effect": {
+          "type": "skip_enemy_turn_and_guarantee_hit",
+          "value": 15
+        },
         "id": "distract_datapad",
         "label": "Использовать планшет как отвлекающий манёвр",
-        "requires": [ { "type": "has_item", "item": "broken_datapad" } ],
-        "effect": { "type": "skip_enemy_turn_and_guarantee_hit", "value": 15 }
+        "requires": [
+          {
+            "item": "broken_datapad",
+            "type": "has_item"
+          }
+        ]
       }
-    ]
+    ],
+    "start_range": 2,
+    "weapon": "искрящий манипулятор"
+  },
+  "station_sentry": {
+    "ai": "turret",
+    "attack": {
+      "hit_chance": 0.55,
+      "max": 16,
+      "min": 8,
+      "range": 5
+    },
+    "flee_risk": 0.3,
+    "hp": 45,
+    "loot": [
+      "scrap_metal",
+      "duct_tape"
+    ],
+    "name": "Турель охраны",
+    "preferred_range": 5,
+    "special_actions": [
+      {
+        "effect": {
+          "type": "skip_enemy_turn_and_guarantee_hit",
+          "value": 12
+        },
+        "id": "jam_optics",
+        "label": "Залепить оптику ветошью",
+        "requires": [
+          {
+            "item": "cloth_rags",
+            "type": "has_item"
+          }
+        ]
+      }
+    ],
+    "start_range": 4,
+    "weapon": "спаренный ствол на подвесе"
   },
   "strain_l7": {
-    "name": "Штамм Л-7",
-    "hp": 60,
-    "attack": { "min": 10, "max": 20, "hit_chance": 0.5 },
+    "ai": "brawler",
+    "attack": {
+      "hit_chance": 0.5,
+      "max": 20,
+      "min": 10,
+      "range": 1
+    },
     "flee_risk": 0.6,
+    "hp": 60,
     "loot": [],
-    "special_actions": []
+    "name": "Штамм Л-7",
+    "preferred_range": 0,
+    "special_actions": [],
+    "start_range": 2,
+    "weapon": "жгуты живой ткани"
   }
 }

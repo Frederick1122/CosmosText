@@ -1,6 +1,7 @@
 {
   "id": "reactor",
   "title": "Реакторный отсек",
+  "image": "reactor_core",
   "description": "Гермодверь реакторного отсека заблокирована. Рядом горит считыватель карт — ждёт допуска экипажа.",
   "descriptions": [
     {
@@ -16,15 +17,14 @@
     {
       "id": "use_keycard",
       "start": "manual",
-      "label": "Приложить ключ-карту пилота",
+      "label": "Приложить карту к считывателю гермодвери",
       "repeatable": false,
       "triggers": [
-        { "type": "has_item", "item": "pilot_keycard" },
         { "type": "flag", "flag": "reactor_unlocked", "value": false }
       ],
+      "lock": { "key": "reactor_door", "consume": true, "text": "Считыватель принимает карту." },
       "text": "Считыватель щёлкает, карта застревает в прорези и больше не выходит. Гермодверь ползёт в сторону.",
       "effects": [
-        { "type": "item_remove", "item": "pilot_keycard" },
         { "type": "flag_set", "flag": "reactor_unlocked" }
       ]
     },

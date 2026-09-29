@@ -10,6 +10,11 @@ var _deferred_release: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
+	if not OS.is_debug_build():
+		# В релизной сборке мост не поднимается: это открытый TCP-порт,
+		# позволяющий кликать и снимать скриншоты извне.
+		set_process(false)
+		return
 	var config := ConfigFile.new()
 	if config.load("res://mcp_ports.cfg") == OK:
 		port = config.get_value("mcp", "game_port", DEFAULT_PORT)

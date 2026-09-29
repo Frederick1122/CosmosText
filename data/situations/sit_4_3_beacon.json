@@ -1,0 +1,30 @@
+{
+  "id": "sit_4_3_beacon",
+  "image": "antenna_mast",
+  "text": "Тарелка слушается ручного привода. Мощности хватит на один узкий луч — и на один адрес. Колония Мейер-4 ответит по протоколу спасения, но вопросы про «Персефону» задаст первой. Частота флота отзовётся быстрее, только вместе с ответом придут те, кто глушил маршрутный компьютер.",
+  "options": [
+    {
+      "id": "A",
+      "label": "Бить на колонию Мейер-4 — по протоколу спасения",
+      "requires": [],
+      "effects": [
+        { "type": "flag_set", "flag": "beacon_online" },
+        { "type": "flag_set", "flag": "beacon_target", "value": "colony" },
+        { "type": "skill_points_add", "value": 1 }
+      ],
+      "next": ""
+    },
+    {
+      "id": "B",
+      "label": "Бить на аварийную частоту флота — ответят быстрее",
+      "requires": [],
+      "effects": [
+        { "type": "flag_set", "flag": "beacon_online" },
+        { "type": "flag_set", "flag": "beacon_target", "value": "fleet" },
+        { "type": "o2_delta", "value": 90 },
+        { "type": "skill_points_add", "value": 1 }
+      ],
+      "next": ""
+    }
+  ]
+}

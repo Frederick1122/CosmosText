@@ -17,6 +17,7 @@ func unlock_fragment(id: String) -> void:
 		return
 	_unlocked[id] = true
 	fragment_unlocked.emit(id)
+	SaveManager.save_meta()  # архив переживает смерть, но только если записан сразу
 
 func is_unlocked(id: String) -> bool:
 	return _unlocked.has(id)

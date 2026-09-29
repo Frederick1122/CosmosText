@@ -15,6 +15,12 @@ var _failures: Array = []
 func _ready() -> void:
 	seed(1)
 	print("=== CosmoTextGame: смоук-тест ===")
+	# Чистый старт: meta переживает забеги, а тест проверяет в том числе первое
+	# открытие лора — иначе прошлый прогон делал бы результат недетерминированным.
+	_delete_save(SaveManager.RUN_PATH)
+	_delete_save(SaveManager.CHECKPOINT_PATH)
+	_delete_save(SaveManager.META_PATH)
+	ArchiveSystem.load_save_data([])
 
 	# --- Палуба 01: капсула ---
 	GameState.start_new_game()
@@ -46,6 +52,25 @@ func _ready() -> void:
 		"повторяемое ручное событие остаётся доступным")
 	_expect(_has_manual("follow_signal"), "после вступления доступен сигнал скафандра")
 
+	# --- База: склад, верстак, ручной чекпойнт ---
+	_expect(LocationSystem.is_base(), "капсула помечена как модуль-база")
+	_expect(LocationSystem.get_image() == "base_bay" and ResourceLoader.exists("res://assets/art/scenes/base_bay.png"),
+		"у базы есть пиксельная иллюстрация")
+	GameState.start_location_event("search_supply_kit")
+	SituationEngine.select_option("A")
+	_expect(InventorySystem.has_item("ration_bar") and InventorySystem.has_item("improvised_bandage"),
+		"аварийный набор вскрыт")
+	_expect(InventorySystem.drop_item("ration_bar")
+		and int(LocationSystem.get_stash().get("ration_bar", 0)) == 1,
+		"лишнее выложено на склад базы")
+	_expect(LocationSystem.stash_take("ration_bar") == 1 and InventorySystem.has_item("ration_bar"),
+		"со склада можно забрать обратно")
+	InventorySystem.remove_item("ration_bar")
+	InventorySystem.remove_item("improvised_bandage")
+	_delete_save(SaveManager.CHECKPOINT_PATH)
+	SaveManager.write_checkpoint()
+	_expect(FileAccess.file_exists(SaveManager.CHECKPOINT_PATH), "кнопка «Сохранить забег» на базе пишет чекпойнт")
+
 	# --- Палуба 02: грузовой отсек ---
 	GameState.leave_location()
 	_expect(GameState.has_left_capsule and MapSystem.get_explored_floor_ids().has("deck_01"),
@@ -65,6 +90,12 @@ func _ready() -> void:
 	ResourceSystem.apply_ammo_delta(10)  # чит для детерминированной победы
 	SituationEngine.select_option("A")
 	_expect(GameState.current_screen == Screen.COMBAT, "начат бой")
+	_expect(CombatSystem.range_steps == 2, "бой начинается с дистанции врага (2 шага)")
+	_expect(not _combat_move_enabled("strike") and _combat_move_enabled("shoot"),
+		"вплотную не ударить: удар доступен только на дистанции ≤ 1")
+	CombatSystem.player_action("approach")
+	_expect(CombatSystem.range_steps <= 2 and _combat_move_enabled("strike"),
+		"сближение подпускает дрона на дистанцию удара (шагов: %d)" % CombatSystem.range_steps)
 	CombatSystem.player_action("special", "distract_datapad")
 	var rounds := _fight()
 	_expect(GameState.current_screen == Screen.LOCATION and LocationSystem.current_id == "cargo_bay",
@@ -114,6 +145,50 @@ func _ready() -> void:
 		and int(LocationSystem.get_stash().get("cloth_rags", 0)) == 1,
 		"возврат в пройденный модуль без повторного боя, вещи на полу на месте")
 
+	# --- Ключи: техотсек за служебной панелью ---
+	GameState.leave_location()
+	_expect(_node_state("maintenance_bay") == "locked" and not MapSystem.can_unlock_node("maintenance_bay"),
+		"техотсек заперт, ключа нет")
+	MapSystem.select_node("maintenance_bay")
+	_expect(GameState.current_screen == Screen.SECTOR_MAP and _node_state("maintenance_bay") == "locked",
+		"без ключа запертый узел не открывается")
+	MapSystem.select_node("cargo_bay")
+	GameState.start_location_event("search_forklift")
+	SituationEngine.select_option("B")
+	_expect(InventorySystem.has_item("hex_key") and InventorySystem.free_slots() > 0,
+		"шестигранник найден под погрузчиком и не занимает слот сумки")
+	_expect(not InventorySystem.drop_item("hex_key"), "ключ нельзя выбросить")
+	_expect(_has_manual("open_rigger_locker") and LocationSystem.is_event_locked(LocationSystem.find_event("open_rigger_locker")),
+		"рундук такелажника виден в меню, но заперт")
+	GameState.start_location_event("open_rigger_locker")
+	_expect(not LocationSystem.is_event_done("open_rigger_locker") and _notice_contains("Заперто"),
+		"попытка вскрыть рундук без ключа только сообщает о замке")
+
+	GameState.leave_location()
+	_expect(MapSystem.can_unlock_node("maintenance_bay"), "с шестигранником узел подсвечен как открываемый")
+	MapSystem.select_node("maintenance_bay")
+	_expect(LocationSystem.current_id == "maintenance_bay" and _node_state("maintenance_bay") == "available"
+		and InventorySystem.has_item("hex_key"), "ключ открыл служебную панель и не израсходовался")
+	GameState.start_location_event("open_tool_crate")
+	_expect(InventorySystem.has_item("cargo_key") and InventorySystem.has_item("hex_key"),
+		"инструментальный ящик открыт тем же ключом, внутри магнитный ключ")
+	GameState.start_location_event("read_repair_log")
+	_expect(ArchiveSystem.is_unlocked("log_07"), "журнал ремонтов прочитан")
+	# Находки техотсека — на пол ниши: дальше по срезу сумка нужна свободной.
+	for surplus in ["scrap_metal", "scrap_metal", "duct_tape", "cloth_rags", "improvised_bandage"]:
+		InventorySystem.drop_item(surplus)
+	_expect(int(LocationSystem.get_stash().get("scrap_metal", 0)) == 2,
+		"лишние находки сложены на полу техотсека")
+
+	GameState.leave_location()
+	MapSystem.select_node("cargo_bay")
+	var ammo_in_locker := ResourceSystem.ammo
+	GameState.start_location_event("open_rigger_locker")
+	_expect(ResourceSystem.ammo == ammo_in_locker + 6 and not InventorySystem.has_item("cargo_key"),
+		"рундук вскрыт магнитным ключом, ключ выгорел")
+	for surplus in ["stim_shot", "duct_tape"]:
+		InventorySystem.drop_item(surplus)
+
 	# --- Шаттл: выбор одного из двух ---
 	GameState.leave_location()
 	MapSystem.select_node("alien_shuttle")
@@ -122,11 +197,12 @@ func _ready() -> void:
 	_expect(CharacterSystem.equip("mag_boots") == "" and is_equal_approx(CharacterSystem.get_stat("flee_chance"), 0.15),
 		"ботинки надеты: шанс побега +15%")
 	var ammo_before := ResourceSystem.ammo
+	var canisters_before := InventorySystem.count_item("o2_canister")
 	GameState.start_location_event("open_locker")
 	_expect(SituationEngine.current_id == "sit_2_2_locker", "оружейный шкаф: ситуация выбора")
 	SituationEngine.select_option("A")
 	_expect(InventorySystem.has_item("service_pistol") and ResourceSystem.ammo == ammo_before + 6
-		and not InventorySystem.has_item("o2_canister") and not _has_manual("open_locker"),
+		and InventorySystem.count_item("o2_canister") == canisters_before and not _has_manual("open_locker"),
 		"взят пистолет и патроны, баллоны остались в запертом шкафу")
 	_expect(CharacterSystem.learn("survival") and ResourceSystem.max_hp == 110, "Выживание: макс. HP 110")
 
@@ -161,26 +237,44 @@ func _ready() -> void:
 	GameState.leave_location()
 	MapSystem.select_node("lift_01_to_02")
 	MapSystem.select_node("lift_02_to_03")
+	var o2_before_move := ResourceSystem.o2
 	MapSystem.select_node("service_corridor")
-	_expect(LocationSystem.current_id == "service_corridor" and ResourceSystem.o2_ticking,
-		"коридор без давления: O2 тратится")
+	var unsealed_move_cost: float = float(ResourceSystem.o2_costs["move"]) * ResourceSystem.o2_unsealed_multiplier
+	_expect(LocationSystem.current_id == "service_corridor"
+		and is_equal_approx(o2_before_move - ResourceSystem.o2, unsealed_move_cost),
+		"переход в коридор без давления стоит двойной цены (%.0f)" % unsealed_move_cost)
+	var o2_before_action := ResourceSystem.o2
 	GameState.start_location_event("open_emergency_locker")
-	_expect(InventorySystem.count_item("o2_canister") == 3, "шкаф открыт навыком Инженерии")
+	_expect(InventorySystem.count_item("o2_canister") == 4,
+		"шкаф открыт навыком Инженерии (баллонов: %d, O2: %d)" % [InventorySystem.count_item("o2_canister"), int(ResourceSystem.o2)])
+	_expect(o2_before_action - ResourceSystem.o2 >= float(ResourceSystem.o2_costs["action"]),
+		"ручное событие тратит кислород")
+	var o2_before_item := ResourceSystem.o2
+	InventorySystem.use_item("o2_canister")
+	_expect(ResourceSystem.o2 > o2_before_item and InventorySystem.count_item("o2_canister") == 3,
+		"баллон восполняет кислород и сам его не тратит")
 	GameState.start_location_event("clear_rubble")
 	_expect(_node_state("reactor") == "available", "завал разобран трубой — реактор открыт")
 
 	GameState.leave_location()
+	o2_before_move = ResourceSystem.o2
 	MapSystem.select_node("reactor")
+	_expect(LocationSystem.current_id == "reactor"
+		and is_equal_approx(o2_before_move - ResourceSystem.o2, float(ResourceSystem.o2_costs["move"])),
+		"реакторный отсек за гермодверью — переход по базовой цене")
 	_expect(not _has_manual("extract_cell"), "без ключ-карты ячейку не достать")
 	GameState.start_location_event("use_keycard")
 	_expect(not InventorySystem.has_item("pilot_keycard") and SituationEngine.get_flag("reactor_unlocked") == true,
 		"ключ-карта израсходована, дверь открыта")
 	GameState.start_location_event("read_reactor_log")
 	_expect(ArchiveSystem.is_unlocked("log_03"), "журнал реактора прочитан")
+	# Выдыхаем запас баллонов: место в сумке нужно под энергоячейку.
+	while InventorySystem.has_item("o2_canister"):
+		InventorySystem.use_item("o2_canister")
 	GameState.start_location_event("extract_cell")
 	SituationEngine.select_option("A")
 	_expect(InventorySystem.has_item("power_cell") and SituationEngine.current_id == "sit_3_2_strain",
-		"ячейка взята — автособытие Штамма сработало сразу")
+		"ячейка взята — автособытие Штамма сработало сразу (сумка %d/%d: %s)" % [InventorySystem.used_slots(), InventorySystem.max_slots, str(InventorySystem.get_slots())])
 	SituationEngine.select_option("B")
 	_expect(GameState.current_screen == Screen.SECTOR_MAP and _node_state("reactor") == "dangerous", "побег от Штамма")
 
@@ -196,8 +290,8 @@ func _ready() -> void:
 	# --- Сохранение ---
 	SaveManager.save_run()
 	SaveManager.load_run()
-	_expect(LocationSystem.is_event_done("cargo_bay/search_containers") and LocationSystem.get_visits("cargo_bay") == 3,
-		"состояние событий и визитов переживает сохранение")
+	_expect(LocationSystem.is_event_done("cargo_bay/search_containers") and LocationSystem.get_visits("cargo_bay") == 5,
+		"состояние событий и визитов переживает сохранение (визитов: %d)" % LocationSystem.get_visits("cargo_bay"))
 	_expect(CharacterSystem.get_equipped("back") == "makeshift_backpack" and InventorySystem.max_slots == 9
 		and ResourceSystem.max_hp == 110 and CharacterSystem.get_skill_level("engineering") == 1,
 		"снаряжение, навыки и бонусы переживают сохранение")
@@ -206,6 +300,164 @@ func _ready() -> void:
 		and GameState.has_left_capsule, "туман и прогресс выхода переживают сохранение")
 	_expect(NotificationSystem.has_character_alert() and NotificationSystem.has_new_lore(),
 		"уведомления персонажа и журнала переживают сохранение")
+	_expect(_journal_has("Переход: Грузовой отсек") and _journal_has("Победа в бою.")
+		and JournalSystem.entry_count() > 10, "журнал забега переживает сохранение")
+
+	# --- Надёжность сейвов ---
+	_expect(int(_read_save(SaveManager.RUN_PATH).get("version", 0)) == SaveManager.SAVE_VERSION,
+		"в сейв записана версия формата")
+	_expect(not FileAccess.file_exists(SaveManager.RUN_PATH + ".tmp"),
+		"после записи не остаётся временного файла")
+	_expect(FileAccess.file_exists(SaveManager.META_PATH) and _read_save(SaveManager.META_PATH).get("archive", []).has("log_01"),
+		"лор попал в meta.json сразу, без смерти")
+
+	_write_save(SaveManager.RUN_PATH, "{\"version\": 1, \"resources\"")  # обрыв записи
+	_expect(not SaveManager.load_run(), "обрезанный сейв не загружается")
+	_write_save(SaveManager.RUN_PATH, JSON.stringify({"version": SaveManager.SAVE_VERSION + 1}))
+	_expect(not SaveManager.load_run(), "сейв новее игры не загружается")
+	SaveManager.save_run()
+	_expect(SaveManager.load_run(), "после перезаписи сейв снова читается")
+
+	# Автосохранение: бой — не точка записи, экран модуля — точка.
+	MapSystem.select_node("service_corridor")
+	_expect(GameState.current_screen == Screen.LOCATION and LocationSystem.current_id == "service_corridor",
+		"после загрузки сейва игрок снова входит в коридор")
+	_delete_save(SaveManager.RUN_PATH)
+	CombatSystem.start_combat("drone_cargo")
+	SaveManager.autosave()
+	_expect(not FileAccess.file_exists(SaveManager.RUN_PATH), "в бою автосохранения нет")
+	CombatSystem.reset_for_new_run()
+	GameState.refresh_location()
+	_expect(FileAccess.file_exists(SaveManager.RUN_PATH), "экран модуля — точка автосохранения")
+
+	_delete_save(SaveManager.RUN_PATH)
+	_delete_save(SaveManager.META_PATH)
+	SaveManager.notification(NOTIFICATION_APPLICATION_PAUSED)  # сворачивание приложения
+	_expect(FileAccess.file_exists(SaveManager.RUN_PATH) and FileAccess.file_exists(SaveManager.META_PATH),
+		"сворачивание приложения сохраняет забег и meta")
+
+	# --- Перелёт на «Вехтер-9» ---
+	GameState.leave_location()
+	MapSystem.select_node("lift_03_to_02")
+	MapSystem.select_node("alien_shuttle")
+	_expect(LocationSystem.current_id == "alien_shuttle" and _has_manual("install_power_cell"),
+		"с энергоячейкой в шаттле доступна установка")
+	GameState.start_location_event("install_power_cell")
+	_expect(SituationEngine.current_id == "sit_3_4_departure", "ситуация отлёта открыта")
+	SituationEngine.select_option("B")
+	_expect(LocationSystem.current_id == "alien_shuttle" and InventorySystem.has_item("power_cell")
+		and _has_manual("install_power_cell"), "отказ от старта возвращает в шаттл, ячейка цела")
+	GameState.start_location_event("install_power_cell")
+	SituationEngine.select_option("A")
+	_expect(MapSystem.current_sector_id == "wreck_02" and GameState.current_screen == Screen.SECTOR_MAP
+		and not InventorySystem.has_item("power_cell"), "прыжок выполнен: сектор wreck_02, ячейка израсходована")
+	_expect(FileAccess.file_exists(SaveManager.CHECKPOINT_PATH), "переход между секторами пишет чекпойнт")
+
+	# --- «Вехтер-9»: стыковка, каюты, медблок ---
+	MapSystem.select_node("dock_bay")
+	_expect(LocationSystem.current_id == "dock_bay" and ArchiveSystem.is_unlocked("log_04")
+		and SituationEngine.get_flag("docked_wechter") == true, "прибытие: автособытие и запись журнала")
+	GameState.leave_location()
+	MapSystem.select_node("crew_quarters")
+	GameState.start_location_event("search_bunks")
+	_expect(InventorySystem.has_item("medkit"), "в каютах найдена аптечка")
+	ResourceSystem.apply_hp_delta(-40)
+	var hp_before := ResourceSystem.hp
+	while InventorySystem.has_item("medkit"):
+		InventorySystem.use_item("medkit")
+	_expect(ResourceSystem.hp > hp_before and InventorySystem.free_slots() > 0,
+		"аптечки вылечили и освободили слот под находку")
+	GameState.start_location_event("pry_locker")
+	_expect(SituationEngine.current_id == "sit_4_1_locker" and _has_option("A") and _has_option("B"),
+		"шкафчик старшего смены: выбор карты или патронов")
+	SituationEngine.select_option("A")
+	_expect(InventorySystem.has_item("station_keycard") and not _has_manual("pry_locker"),
+		"взята карта доступа, шкафчик больше не вскрыть")
+	GameState.start_location_event("use_station_keycard")
+	_expect(_node_state("med_bay") == "available" and not InventorySystem.has_item("station_keycard"),
+		"карта открыла медблок и израсходована")
+	GameState.leave_location()
+	MapSystem.select_node("med_bay")
+	GameState.start_location_event("read_med_log")
+	_expect(ArchiveSystem.is_unlocked("log_05"), "карта пациента прочитана")
+	_expect(_has_manual("tap_medical_o2"), "с Инженерией доступна медицинская линия O2")
+	var o2_before := ResourceSystem.o2
+	GameState.start_location_event("tap_medical_o2")
+	_expect(ResourceSystem.o2 > o2_before, "кислород из медицинской линии получен")
+
+	# --- «Вехтер-9»: турель и маяк ---
+	GameState.leave_location()
+	MapSystem.select_node("lift_a_to_b")
+	_expect(MapSystem.current_floor_id == "ring_b", "лифт поднял на антенный ярус")
+	MapSystem.select_node("comms_hall")
+	_expect(SituationEngine.current_id == "sit_4_2_sentry" and not MapSystem.is_node_sealed("comms_hall"),
+		"зал связи без давления: турель и удвоенная цена действий")
+	SituationEngine.select_option("A")
+	_expect(GameState.current_screen == Screen.COMBAT, "бой с турелью начат")
+	var o2_before_turn := ResourceSystem.o2
+	CombatSystem.player_action("special", "jam_optics")
+	_expect(is_equal_approx(o2_before_turn - ResourceSystem.o2,
+		float(ResourceSystem.o2_costs["combat_turn"]) * ResourceSystem.o2_unsealed_multiplier),
+		"ход в бою тратит кислород по цене отсека")
+	rounds = _fight()
+	_expect(SituationEngine.get_flag("sentry_down") == true and _node_state("comms_hall") == "cleared",
+		"турель уничтожена (раундов: %d, HP: %d)" % [rounds, ResourceSystem.hp])
+	var o2_in_hall := ResourceSystem.o2
+	GameState.start_location_event("emergency_bottle")
+	_expect(ResourceSystem.o2 >= o2_in_hall + 90.0 - ResourceSystem.get_o2_cost("action"),
+		"аварийный баллон пополнил кислород в зале связи")
+	GameState.start_location_event("patch_console")
+	_expect(_node_state("antenna_mast") == "available", "консоль наведения открыла мачту")
+	GameState.leave_location()
+	MapSystem.select_node("antenna_mast")
+	GameState.start_location_event("align_dish")
+	_expect(SituationEngine.current_id == "sit_4_3_beacon", "на мачте открыт выбор адресата")
+	SituationEngine.select_option("A")
+	_expect(SituationEngine.get_flag("beacon_online") == true and str(SituationEngine.get_flag("beacon_target")) == "colony"
+		and not _has_manual("align_dish"), "маяк запущен на колонию, повторно не включить")
+	GameState.start_location_event("read_mast_log")
+	_expect(ArchiveSystem.is_unlocked("log_06"), "журнал последнего сеанса прочитан")
+
+	SaveManager.save_run()
+	SaveManager.load_run()
+	_expect(MapSystem.current_sector_id == "wreck_02" and MapSystem.current_floor_id == "ring_b"
+		and _node_state("med_bay") == "available" and SituationEngine.get_flag("beacon_online") == true,
+		"второй сектор и его прогресс переживают сохранение")
+
+	# --- Финал забега ---
+	var victories_before := ChronicleSystem.victories
+	MapSystem.select_node("lift_b_to_a")
+	MapSystem.select_node("dock_bay")
+	_expect(_has_manual("rescue_dock"), "после маяка в доке можно открыть шлюз")
+	GameState.start_location_event("rescue_dock")
+	_expect(SituationEngine.current_id == "sit_4_4_rescue" and _has_option("A") and not _has_option("B"),
+		"спасатели: доступен только тот корабль, которого звал маяк")
+	SituationEngine.select_option("C")
+	_expect(GameState.current_screen == Screen.LOCATION and _has_manual("rescue_dock"),
+		"отказ открыть шлюз оставляет игрока на станции")
+	GameState.start_location_event("rescue_dock")
+	SituationEngine.select_option("A")
+	_expect(GameState.current_screen == Screen.VICTORY and GameState.last_ending_id == "rescue_colony",
+		"забег завершён финалом «спасены колонией» (остаток O2: %d)" % int(ResourceSystem.o2))
+	_expect(ChronicleSystem.victories == victories_before + 1 and ChronicleSystem.is_ending_seen("rescue_colony"),
+		"победа записана в хронику")
+	_expect(not FileAccess.file_exists(SaveManager.RUN_PATH) and not FileAccess.file_exists(SaveManager.CHECKPOINT_PATH),
+		"после победы забег нельзя продолжить")
+	_expect(_read_save(SaveManager.META_PATH).get("chronicle", {}).get("victories", 0) == victories_before + 1,
+		"хроника сохранена в meta.json")
+	SaveManager.load_meta()
+	_expect(ChronicleSystem.victories == victories_before + 1 and ChronicleSystem.endings_total() == 2,
+		"хроника и справочник финалов переживают перезагрузку meta")
+
+	# --- Кислород: смерть от удушья ---
+	var entries_before := JournalSystem.entry_count()
+	ResourceSystem.apply_o2_delta(1.0 - ResourceSystem.o2)  # в баллоне остаётся 1 единица
+	MapSystem.select_node("dock_bay")
+	_expect(GameState.current_screen == Screen.DEATH and not LocationSystem.is_active()
+		and GameState.last_death_cause == "o2",
+		"переход без кислорода убивает и не пускает в модуль")
+	_expect(JournalSystem.entry_count() == entries_before + 1 and _journal_has("Смерть: закончился кислород."),
+		"смерть от удушья записана в журнал")
 
 	if _failures.is_empty():
 		print("SMOKE OK")
@@ -214,13 +466,30 @@ func _ready() -> void:
 	get_tree().quit(0 if _failures.is_empty() else 1)
 
 
+## Простейшая боевая тактика для теста: стрелять, если есть патроны, иначе
+## сначала сблизиться, потом бить.
 func _fight() -> int:
 	var rounds := 0
 	while CombatSystem.state == CombatSystem.State.PLAYER_TURN and rounds < 40:
-		CombatSystem.player_action("attack")
+		CombatSystem.player_action(_best_move())
 		rounds += 1
 	return rounds
 
+
+func _best_move() -> String:
+	if ResourceSystem.ammo > 0:
+		return "shoot"
+	if CombatSystem.range_steps > CombatSystem.MELEE_RANGE:
+		return "approach"
+	return "strike"
+
+
+
+func _combat_move_enabled(move_id: String) -> bool:
+	for move in CombatSystem.get_available_moves():
+		if str(move.get("id", "")) == move_id:
+			return bool(move.get("enabled", false))
+	return false
 
 func _expect(condition: bool, label: String) -> void:
 	print(("  ok   " if condition else "  FAIL ") + label)
@@ -231,6 +500,13 @@ func _expect(condition: bool, label: String) -> void:
 func _has_manual(event_id: String) -> bool:
 	for ev in LocationSystem.get_manual_events():
 		if str(ev.get("id", "")) == event_id:
+			return true
+	return false
+
+
+func _journal_has(fragment: String) -> bool:
+	for entry in JournalSystem.get_entries():
+		if str(entry.get("text", "")).contains(fragment):
 			return true
 	return false
 
@@ -251,3 +527,21 @@ func _notice_contains(fragment: String) -> bool:
 
 func _node_state(node_id: String) -> String:
 	return str(MapSystem.nodes.get(node_id, {}).get("state", ""))
+
+
+func _read_save(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {}
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
+	return parsed if parsed is Dictionary else {}
+
+
+func _write_save(path: String, text: String) -> void:
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f:
+		f.store_string(text)
+
+
+func _delete_save(path: String) -> void:
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

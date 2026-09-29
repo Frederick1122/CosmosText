@@ -11,8 +11,10 @@ config_version=5
 [application]
 
 config/name="CosmoTextGame"
+config/version="0.1.0"
 run/main_scene="res://scenes/Game.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
+config/icon="res://assets/icon.png"
 
 [autoload]
 
@@ -24,11 +26,13 @@ InventorySystem="*res://autoload/InventorySystem.gd"
 CharacterSystem="*res://autoload/CharacterSystem.gd"
 CraftingSystem="*res://autoload/CraftingSystem.gd"
 ArchiveSystem="*res://autoload/ArchiveSystem.gd"
+ChronicleSystem="*res://autoload/ChronicleSystem.gd"
 NotificationSystem="*res://autoload/NotificationSystem.gd"
 MapSystem="*res://autoload/MapSystem.gd"
 SituationEngine="*res://autoload/SituationEngine.gd"
 LocationSystem="*res://autoload/LocationSystem.gd"
 CombatSystem="*res://autoload/CombatSystem.gd"
+JournalSystem="*res://autoload/JournalSystem.gd"
 EconomyManager="*res://autoload/EconomyManager.gd"
 SaveManager="*res://autoload/SaveManager.gd"
 GameState="*res://autoload/GameState.gd"
@@ -38,7 +42,7 @@ GameState="*res://autoload/GameState.gd"
 window/size/viewport_width=1080
 window/size/viewport_height=1920
 window/stretch/mode="canvas_items"
-window/handheld/orientation="portrait"
+window/handheld/orientation=1
 
 [editor_plugins]
 
@@ -47,3 +51,4 @@ enabled=PackedStringArray("res://addons/mcp_bridge/plugin.cfg", "res://addons/co
 [rendering]
 
 renderer/rendering_method="mobile"
+textures/vram_compression/import_etc2_astc=true

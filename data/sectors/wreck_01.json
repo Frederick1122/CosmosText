@@ -59,7 +59,8 @@
 			"connections": [
 				"lift_02_to_01",
 				"lift_02_to_03",
-				"alien_shuttle"
+				"alien_shuttle",
+				"maintenance_bay"
 			],
 			"location_id": "cargo_bay",
 			"map": {
@@ -75,6 +76,31 @@
 			"sealed": true,
 			"state": "available",
 			"title": "Грузовой отсек"
+		},
+		"maintenance_bay": {
+			"connections": [
+				"cargo_bay"
+			],
+			"location_id": "maintenance_bay",
+			"lock": {
+				"key": "service_panel",
+				"consume": false,
+				"text": "Служебная панель открыта шестигранником."
+			},
+			"map": {
+				"cell": {
+					"x": 4.0,
+					"y": 1.0
+				},
+				"floor": "deck_02",
+				"label": "Техотсек",
+				"note": "Служебная панель на винтах под шестигранник",
+				"order": 55.0,
+				"visible_when_locked": true
+			},
+			"sealed": true,
+			"state": "locked",
+			"title": "Технический отсек"
 		},
 		"copilot_body": {
 			"connections": [
@@ -212,11 +238,11 @@
 				},
 				"floor": "deck_03",
 				"label": "Реактор",
-				"note": "Путь пока завален",
+				"note": "За гермодверью, нужен допуск экипажа",
 				"order": 90.0,
 				"visible_when_locked": true
 			},
-			"sealed": false,
+			"sealed": true,
 			"state": "locked",
 			"title": "Реакторный отсек"
 		},

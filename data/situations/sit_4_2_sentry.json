@@ -1,0 +1,42 @@
+{
+  "id": "sit_4_2_sentry",
+  "image": "comms_sentry",
+  "text": "Турель ведёт стволом за движением. Система опознавания мертва: для неё ты — чужой в отсеке без давления. Между стойками есть тень, но пол здесь голый, и шаг выдаёт.",
+  "options": [
+    {
+      "id": "A",
+      "label": "Принять бой",
+      "requires": [],
+      "effects": [
+        {
+          "type": "start_combat",
+          "enemy": "station_sentry",
+          "clear_node": "comms_hall",
+          "on_win": [
+            { "type": "flag_set", "flag": "sentry_down" },
+            { "type": "skill_points_add", "value": 1 }
+          ]
+        }
+      ],
+      "next": ""
+    },
+    {
+      "id": "B",
+      "label": "Подойти по стеллажам на магнитных ботинках и вырвать питание",
+      "requires": [ { "type": "has_item", "item": "mag_boots" } ],
+      "effects": [
+        { "type": "hp_delta", "value": -12 },
+        { "type": "flag_set", "flag": "sentry_down" },
+        { "type": "lock_map_node", "node": "comms_hall", "state": "cleared" }
+      ],
+      "next": ""
+    },
+    {
+      "id": "C",
+      "label": "Отойти в лифт, пока не задело",
+      "requires": [],
+      "effects": [ { "type": "lock_map_node", "node": "comms_hall", "state": "dangerous" } ],
+      "next": "map:wreck_02"
+    }
+  ]
+}
