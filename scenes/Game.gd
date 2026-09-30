@@ -134,6 +134,11 @@ func _build_static_layout() -> void:
 	body.add_theme_constant_override("separation", BODY_GAP)
 	body_margin.add_child(body)
 
+	# Основной контент занимает верх и середину экрана, HUD закреплён снизу.
+	# Узлы создаются выше в удобном для инициализации порядке, затем переставляются.
+	root_vbox.move_child(content_scroll, 0)
+	root_vbox.move_child(section_separator, 1)
+
 
 func _connect_signals() -> void:
 	GameState.screen_changed.connect(_on_screen_changed)
