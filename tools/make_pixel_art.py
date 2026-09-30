@@ -7,6 +7,7 @@
 Запуск из корня проекта: python tools/make_pixel_art.py
 Пишет:
   assets/art/scenes/<name>.png  — 160x96, RGB (цветовой тип 2), без альфы;
+  assets/art/scenes/title_screen.png — 240x150, RGB, заглавный кадр меню;
   assets/art/items/<item_id>.png — 16x16, RGBA (цветовой тип 6), фон прозрачный.
   assets/art/portraits/player.png — 64x64, RGBA, портрет игрока для боя;
   assets/art/enemies/<enemy_id>.png — 64x64, RGBA, портреты противников.
@@ -28,6 +29,7 @@ SEED = 20260929
 SCENE_W, SCENE_H = 160, 96
 ICON_W, ICON_H = 16, 16
 PORTRAIT_W, PORTRAIT_H = 64, 64
+TITLE_W, TITLE_H = 240, 150
 
 
 # ----------------------------------------------------------------------------
@@ -1043,6 +1045,368 @@ SCENES = (
 
 
 # ----------------------------------------------------------------------------
+# Заглавный кадр 240x150 — крупная иллюстрация главного меню.
+# Нижние ~30 строк специально притушены: поверх них ложится название игры.
+# ----------------------------------------------------------------------------
+
+# Рваная кромка носовой половины: смещения (верх, низ) от осевой линии.
+HULL_TEAR = ((-9, 9), (-9, 6), (-7, 9), (-9, 3), (-5, 8),
+             (-8, 5), (-3, 7), (-6, 2), (-2, 5), (-4, 1), (-1, 3))
+# Рваная кромка оторванной кормы (слева направо она «раскрывается»).
+STERN_TEAR = ((-2, 2), (-5, 3), (-3, 7), (-7, 4),
+              (-4, 9), (-9, 6), (-6, 10), (-10, 8))
+
+
+def _title_spans(profile, x0, x1):
+    """Силуэт по столбцам: {x: (верх, низ)} из функции профиля."""
+    spans = {}
+    for x in range(x0, x1 + 1):
+        top, bot = profile(x)
+        if bot >= top:
+            spans[x] = (top, bot)
+    return spans
+
+
+def _title_body(c, spans, p):
+    """Корпус: сначала тёмный контур по 8 соседям, затем четыре тона стали."""
+    inside = set()
+    for x, (top, bot) in spans.items():
+        for y in range(top, bot + 1):
+            inside.add((x, y))
+    order = sorted(inside)
+    for x, y in order:
+        for oy in (-1, 0, 1):
+            for ox in (-1, 0, 1):
+                if (x + ox, y + oy) not in inside:
+                    c.pixel(x + ox, y + oy, p["edge"])
+    for x, y in order:
+        top, bot = spans[x]
+        t = (y - top) / float(max(1, bot - top))
+        even = (x + y) % 2 == 0
+        if t < 0.12:
+            col = p["steel_l"]
+        elif t < 0.24:
+            col = p["steel_l"] if even else p["steel"]
+        elif t < 0.52:
+            col = p["steel"]
+        elif t < 0.63:
+            col = p["steel"] if even else p["steel_m"]
+        elif t < 0.84:
+            col = p["steel_m"]
+        else:
+            col = p["steel_d"]
+        c.pixel(x, y, col)
+
+
+def _title_chunk(c, x, y, w, h, p, top_col=None):
+    """Обломок: тёмный контур, тело и подсвеченная верхняя грань."""
+    c.fill_rect(x - 1, y - 1, x + w, y + h, p["edge"])
+    c.fill_rect(x, y, x + w - 1, y + h - 1, p["steel_m"])
+    c.hline(x, x + w - 1, y, top_col or p["steel"])
+
+
+def _title_shade_bottom(c, y0, y1, levels):
+    """Ступенчатое затемнение низа кадра с дизерингом на стыках ступеней."""
+    last = len(levels) - 1
+    span = float(max(1, y1 - y0))
+    for y in range(y0, y1 + 1):
+        t = (y - y0) / span * last
+        i = min(last, int(t))
+        f = t - i
+        for x in range(c.w):
+            step = i
+            if f >= 0.75:
+                step = min(last, i + 1)
+            elif f >= 0.25 and (x + y) % 2 == 0:
+                step = min(last, i + 1)
+            k = levels[step]
+            r, g, b, a = c.get(x, y)
+            c.pixel(x, y, (int(r * k), int(g * k), int(b * k), a))
+
+
+def scene_title_screen(c, rng):
+    """Заглавный кадр: обломок грузовика «Персефона» над холодной планетой."""
+    p = {
+        "sky0": (18, 22, 34), "sky1": (14, 18, 28), "sky2": (11, 14, 22),
+        "sky3": (9, 11, 17), "sky4": VOID,
+        "neb": (44, 66, 92), "neb_d": (26, 40, 58),
+        "star": STAR, "star_m": (168, 178, 200), "star_d": STAR_DIM,
+        "pl_l": (168, 192, 214), "pl": (104, 132, 162),
+        "pl_d": (54, 72, 100), "pl_n": (18, 24, 36),
+        "atmo": (150, 206, 228), "atmo_d": (64, 108, 138),
+        "steel_l": (176, 186, 202), "steel": (122, 132, 152),
+        "steel_m": (78, 88, 108), "steel_d": (46, 54, 70),
+        "edge": (16, 19, 27),
+        "win": (22, 28, 40), "win_lit": (240, 206, 132),
+        "amber": AMBER, "amber_d": (146, 106, 44), "cyan": CYAN,
+        "vent": (206, 232, 240), "vent_d": (96, 148, 172),
+        "ice": (186, 218, 232),
+        "red": RED,
+    }
+
+    # --- небо: пять полос от светлого верха к глухому низу ------------------
+    sky = (p["sky0"], p["sky1"], p["sky2"], p["sky3"], p["sky4"])
+    for i, col in enumerate(sky):
+        c.fill_rect(0, i * 30, c.w - 1, i * 30 + 29, col)
+    for i in range(1, len(sky)):
+        c.dither_rect(0, i * 30 - 3, c.w - 1, i * 30 + 2, sky[i - 1], sky[i])
+
+    # --- туманности: голубоватые пятна с дизерингом и размытым краем --------
+    for ncx, ncy, nrx, nry, phase in ((46, 24, 40, 19, 0), (200, 20, 34, 16, 1),
+                                      (122, 58, 46, 27, 0), (16, 76, 22, 15, 1)):
+        for y in range(ncy - nry - 6, ncy + nry + 7):
+            for x in range(ncx - nrx - 8, ncx + nrx + 9):
+                dx = (x - ncx) / float(nrx)
+                dy = (y - ncy) / float(nry)
+                d = dx * dx + dy * dy
+                if d > 1.6 or (x + y + phase) % 2:
+                    continue
+                if d < 0.35:
+                    c.pixel(x, y, p["neb"])
+                elif d < 0.7:
+                    c.pixel(x, y, p["neb"] if (x + 2 * y) % 4 == 0 else p["neb_d"])
+                elif d < 1.1:
+                    if (x + 2 * y) % 4 == 0:
+                        c.pixel(x, y, p["neb_d"])
+                elif (x * 3 + y) % 8 == 0:
+                    c.pixel(x, y, p["neb_d"])
+
+    # --- звёзды трёх яркостей -----------------------------------------------
+    c.noise_specks(rng, 0, 0, c.w - 1, c.h - 1, p["star_d"], 300)
+    c.noise_specks(rng, 0, 0, c.w - 1, 138, p["star_m"], 130)
+    c.noise_specks(rng, 0, 0, c.w - 1, 118, p["star"], 52)
+    for sx, sy in ((22, 16), (188, 30), (94, 10), (58, 100), (218, 62), (146, 18)):
+        c.pixel(sx, sy, p["star"])
+        c.pixel(sx - 1, sy, p["star_d"])
+        c.pixel(sx + 1, sy, p["star_d"])
+        c.pixel(sx, sy - 1, p["star_d"])
+        c.pixel(sx, sy + 1, p["star_d"])
+
+    # --- холодная планета в правом нижнем углу ------------------------------
+    pcx, pcy, pr = 252, 176, 96
+    lx, ly, lz = 0.62, -0.50, 0.60
+    x_from = max(0, pcx - pr - 3)
+    y_from = max(0, pcy - pr - 3)
+    for y in range(y_from, c.h):
+        for x in range(x_from, c.w):
+            nx = (x - pcx) / float(pr)
+            ny = (y - pcy) / float(pr)
+            d = nx * nx + ny * ny
+            if d > 1.0:
+                # тонкая атмосферная кайма: ярче со стороны светила
+                dist = (d ** 0.5) * pr
+                if dist > pr + 2.5:
+                    continue
+                f = (nx * lx + ny * ly) / (d ** 0.5)
+                if f > 0.05:
+                    c.pixel(x, y, p["atmo"])
+                elif f > -0.30:
+                    c.pixel(x, y, p["atmo"] if (x + y) % 2 == 0 else p["atmo_d"])
+                elif (x + y) % 2 == 0:
+                    c.pixel(x, y, p["atmo_d"])
+                continue
+            lam = nx * lx + ny * ly + ((1.0 - d) ** 0.5) * lz
+            even = (x + y) % 2 == 0
+            if lam > 0.78:
+                col = p["pl_l"]
+            elif lam > 0.62:
+                col = p["pl_l"] if even else p["pl"]
+            elif lam > 0.34:
+                col = p["pl"]
+            elif lam > 0.22:
+                col = p["pl"] if even else p["pl_d"]
+            elif lam > 0.06:
+                col = p["pl_d"]
+            elif lam > -0.04:
+                col = p["pl_d"] if even else p["pl_n"]
+            else:
+                col = p["pl_n"]
+            c.pixel(x, y, col)
+    # ледяные поля и полосы облаков на освещённой стороне
+    for icx, icy, irx, iry, phase in ((228, 96, 16, 7, 0), (206, 122, 20, 6, 1),
+                                      (236, 132, 12, 5, 0)):
+        for y in range(icy - iry, icy + iry + 1):
+            for x in range(icx - irx, icx + irx + 1):
+                dx = (x - icx) / float(irx)
+                dy = (y - icy) / float(iry)
+                if dx * dx + dy * dy <= 1.0 and (x + y + phase) % 2 == 0:
+                    if c.get(x, y) in (rgba(p["pl"]), rgba(p["pl_l"])):
+                        c.pixel(x, y, p["ice"])
+    c.specks_on(rng, 160, 84, c.w - 1, c.h - 1, p["pl"], p["pl_d"], 120)
+
+    # --- носовая половина «Персефоны»: модульный корпус с рёбрами -----------
+    def hull(x):
+        """Ось наклонена, силуэт набран из модулей разной высоты."""
+        yc = 76.0 - (x - 28) * 0.115
+        if x <= 38:                                 # клин носа
+            t = (x - 28) / 10.0
+            top, bot = -2.0 - t * 6.0, 2.0 + t * 4.0
+        elif x <= 52:                               # носовой модуль и рубка
+            top, bot = -8.0, 6.0
+            if 41 <= x <= 50:
+                top = -14.0
+        elif x <= 57:                               # переходный тоннель
+            top, bot = -6.0, 5.0
+        elif x <= 94:                               # грузовой барабан
+            top, bot = -13.0, 12.0
+            if (x - 60) % 9 in (0, 1):              # наружные шпангоуты
+                top, bot = -15.0, 12.0
+        elif x <= 99:
+            top, bot = -6.0, 5.0
+        elif x <= 126:                              # машинный модуль с баком
+            top, bot = -11.0, 10.0
+            if 104 <= x <= 118:
+                bot = 16.0
+        elif x <= 133:
+            top, bot = -7.0, 6.0
+        else:
+            top, bot = HULL_TEAR[x - 134]
+        return int(round(yc + top)), int(round(yc + bot))
+
+    bow = _title_spans(hull, 28, 144)
+    _title_body(c, bow, p)
+    # продольные швы обшивки: подчёркивают длину корпуса
+    for x, (top, bot) in sorted(bow.items()):
+        if bot - top < 9:
+            continue
+        c.pixel(x, top + 3, p["steel_l"])
+        c.pixel(x, bot - 3, p["steel_d"])
+    # шпангоуты барабана
+    for x in range(60, 95, 9):
+        if x not in bow:
+            continue
+        top, bot = bow[x]
+        c.vline(x, top + 1, top + 7, p["steel_l"])
+        c.vline(x + 1, top + 1, top + 7, p["steel_m"])
+    # рваная кромка разлома ловит свет — чтобы перелом читался
+    for x in range(134, 145):
+        top, bot = bow[x]
+        c.pixel(x, top, p["steel_l"])
+        c.pixel(x, bot, p["steel"])
+    # окна рубки: два из них горят
+    for x in range(42, 50):
+        c.pixel(x, bow[x][0] + 4, p["win_lit"] if x in (44, 45) else p["win"])
+    # ряд иллюминаторов грузового барабана
+    for x in range(63, 93, 5):
+        top, bot = bow[x]
+        c.hline(x, x + 1, (top + bot) // 2 - 2, p["win_lit"] if x == 78 else p["win"])
+    # машинный модуль: холодный свет реакторного окна
+    top, bot = bow[110]
+    c.hline(108, 112, top + 4, p["cyan"])
+    # мачта связи над рубкой и носовой габаритный огонь
+    mtop = bow[48][0]
+    c.vline(48, mtop - 12, mtop, p["edge"])
+    c.vline(47, mtop - 11, mtop, p["steel_l"])
+    c.hline(45, 50, mtop - 9, p["steel_m"])
+    c.pixel(47, mtop - 13, p["red"])
+    c.pixel(29, (bow[29][0] + bow[29][1]) // 2, p["red"])
+
+    # --- оторванная кормовая секция с дюзами --------------------------------
+    def stern(x):
+        yc = 46.0 + (x - 158) * 0.20
+        if x <= 165:
+            top, bot = STERN_TEAR[x - 158]
+        elif x <= 190:
+            top, bot = -11.0, 10.0
+            if (x - 168) % 10 in (0, 1):
+                top, bot = -13.0, 12.0
+        elif x <= 196:
+            top, bot = -13.0, 12.0
+        else:
+            top, bot = -14.0, 13.0
+        return int(round(yc + top)), int(round(yc + bot))
+
+    aft = _title_spans(stern, 158, 206)
+    _title_body(c, aft, p)
+    for x, (top, bot) in sorted(aft.items()):
+        if bot - top < 9:
+            continue
+        c.pixel(x, top + 3, p["steel_l"])
+        c.pixel(x, bot - 3, p["steel_d"])
+    for x in range(168, 191, 10):
+        top, bot = aft[x]
+        c.vline(x, top + 1, top + 7, p["steel_l"])
+        c.vline(x + 1, top + 1, top + 7, p["steel_m"])
+    for x in range(158, 166):
+        top, bot = aft[x]
+        c.pixel(x, top, p["steel_l"])
+        c.pixel(x, bot, p["steel"])
+    # три остывшие дюзы в кормовом срезе
+    top, bot = aft[206]
+    for k in range(3):
+        ey = top + 5 + k * 9
+        c.fill_rect(200, ey, 206, ey + 5, p["edge"])
+        c.fill_rect(201, ey + 1, 206, ey + 4, p["steel_d"])
+        c.vline(201, ey + 1, ey + 4, p["steel_m"])
+    c.hline(176, 180, aft[176][0] + 5, p["win"])
+    c.hline(186, 188, aft[186][0] + 6, p["win_lit"])
+
+    # --- шлейф обломков и замёрзшего топлива между половинами ---------------
+    for dx, dy, dw, dh in ((148, 44, 4, 3), (152, 74, 3, 2), (140, 92, 3, 2),
+                           (164, 86, 4, 2), (133, 30, 3, 2), (156, 26, 2, 2),
+                           (170, 98, 2, 2), (124, 102, 3, 2), (174, 34, 3, 2),
+                           (116, 26, 2, 2), (151, 58, 2, 2)):
+        _title_chunk(c, dx, dy, dw, dh, p)
+    # разреженная дымка замёрзшего топлива — не сплошное пятно
+    for fx, fy, fr, mod in ((153, 74, 8, 5), (168, 84, 6, 5)):
+        for y in range(fy - fr, fy + fr + 1):
+            for x in range(fx - fr, fx + fr + 1):
+                if (x - fx) ** 2 + (y - fy) ** 2 > fr * fr:
+                    continue
+                if (x * 2 + y) % mod:
+                    continue
+                c.pixel(x, y, p["vent_d"])
+    c.noise_specks(rng, 146, 34, 176, 96, p["ice"], 26)
+    c.noise_specks(rng, 144, 30, 180, 100, p["steel_m"], 16)
+
+    # --- аварийный маяк с ореолом -------------------------------------------
+    bx = 72
+    by = bow[bx][0] - 3
+    for y in range(by - 8, by + 5):
+        for x in range(bx - 8, bx + 9):
+            d = (x - bx) ** 2 + (y - by) ** 2
+            if d <= 4:
+                c.pixel(x, y, p["amber"])
+            elif d <= 16 and (x + y) % 2 == 0:
+                c.pixel(x, y, p["amber"])
+            elif d <= 44 and (x * 2 + y) % 5 == 0:
+                c.pixel(x, y, p["amber_d"])
+    c.pixel(bx, by, (255, 236, 196))
+    c.vline(bx, by + 3, by + 5, p["steel_d"])
+
+    # --- тонкая струя утечки газа из разлома --------------------------------
+    for i in range(46):
+        t = i / 45.0
+        jx = 128 + int(round(t * 30))
+        jy = 54 - int(round(t * 38))
+        w = t * 3.4
+        for o in range(-4, 5):
+            if abs(o) > w + 0.5:
+                continue
+            if rng.random() > 0.72 - t * 0.34:
+                continue
+            c.pixel(jx + o, jy, p["vent"] if t < 0.35 else p["vent_d"])
+
+    # --- спасательная капсула уходит от обломка -----------------------------
+    for i in range(24):
+        t = i / 23.0
+        tx = 146 - int(round(t * 22))
+        ty = 98 - int(round(t * 15))
+        if (tx + ty) % 2 == 0:
+            c.pixel(tx, ty, p["vent"] if t < 0.35 else p["vent_d"])
+    c.fill_rect(147, 99, 158, 105, p["edge"])
+    c.fill_rect(148, 100, 157, 104, p["steel_m"])
+    c.hline(148, 157, 100, p["steel_l"])
+    c.pixel(148, 100, p["edge"])
+    c.pixel(148, 104, p["edge"])
+    c.hline(149, 151, 102, p["cyan"])
+    c.pixel(157, 103, p["amber"])
+
+    # --- нижняя полоса под название игры: ступенчатое затемнение ------------
+    _title_shade_bottom(c, 112, c.h - 1, (1.0, 0.84, 0.68, 0.52, 0.40, 0.30))
+
+
+# ----------------------------------------------------------------------------
 # Иконки предметов 16x16 (силуэт держим в пределах 2..13, чтобы контур
 # не выходил на края и рамка холста осталась прозрачной)
 # ----------------------------------------------------------------------------
@@ -1728,6 +2092,14 @@ def main():
         path = os.path.join(SCENES_DIR, name + ".png")
         write_png(path, c, with_alpha=False)
         written.append((path, c.w, c.h))
+
+    # заглавный кадр главного меню — свой размер, отдельный проход
+    rng = random.Random(SEED + 4242)
+    title = Canvas(TITLE_W, TITLE_H, VOID)
+    scene_title_screen(title, rng)
+    title_path = os.path.join(SCENES_DIR, "title_screen.png")
+    write_png(title_path, title, with_alpha=False)
+    written.append((title_path, title.w, title.h))
 
     for name, fn in ITEMS:
         c = Canvas(ICON_W, ICON_H, (0, 0, 0, 0))

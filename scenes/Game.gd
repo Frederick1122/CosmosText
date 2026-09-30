@@ -12,8 +12,11 @@ const BUTTON_HEIGHT := 68
 const DRAG_THRESHOLD := 14.0
 ## Ниже этого запаса кислорода счётчик в HUD становится тревожным.
 const LOW_O2 := 60
+## Ширина столбца кнопок в главном меню (вьюпорт 1080).
+const MENU_COLUMN_WIDTH := 620.0
 
 var body: VBoxContainer
+var body_margin: MarginContainer
 var hud: VBoxContainer
 var content_scroll: ScrollContainer
 var hp_label: Label
@@ -119,7 +122,7 @@ func _build_static_layout() -> void:
 	root_vbox.add_child(content_scroll)
 
 	# Полоса прокрутки не должна наезжать на текст и кнопки.
-	var body_margin := MarginContainer.new()
+	body_margin = MarginContainer.new()
 	body_margin.name = "BodyMargin"
 	body_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body_margin.add_theme_constant_override("margin_right", 18)
@@ -482,6 +485,7 @@ func _render_current_screen() -> void:
 	_set_chrome_visible(GameState.current_screen != GameState.Screen.MAIN_MENU)
 	_update_nav_buttons()
 	var story_before := _story_shown
+	_set_body_stretch(false)
 	_clear_body()
 	if settings_open:
 		_render_settings()
@@ -617,12 +621,92 @@ func _item_name(item_id: String) -> String:
 
 # --- Экраны ---------------------------------------------------------------------
 
+## Главное меню: заставка, название по центру и короткий столбец кнопок.
+## Тело экрана на этом экране растягивается на всю высоту, поэтому блок
+## держится по центру, а не липнет к верхней кромке.
 func _render_main_menu() -> void:
-	_add_title("CosmoTextGame")
-	_add_text("Текстовая survival-RPG на борту обломка «Персефона».")
-	_add_button("Новая игра", _start_new_game)
-	if FileAccess.file_exists(SaveManager.RUN_PATH):
-		_add_button("Продолжить", _continue_game, "quiet")
+	_set_body_stretch(true)
+	_add_spacer(1.0)
+
+	var art := UiKit.scene_art("title_screen", _body_width() * 0.92)
+	if art != null:
+		var art_row := CenterContainer.new()
+		art_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		art_row.add_child(art)
+		body.add_child(art_row)
+		_pulse(art)
+
+	var title := UiKit.text("CosmoTextGame", 58, UiKit.TITLE_COLOR)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_child(title)
+
+	var tagline := UiKit.text("Обломок «Персефона». Кислорода — на несколько решений.", 24, UiKit.ACCENT_COLOR)
+	tagline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_child(tagline)
+
+	var menu := _add_centered_column(MENU_COLUMN_WIDTH)
+	var has_run := FileAccess.file_exists(SaveManager.RUN_PATH)
+	if has_run:
+		menu.add_child(_menu_button("Продолжить", _continue_game, "default"))
+		menu.add_child(_menu_button("Новая игра", _start_new_game, "quiet"))
+	else:
+		menu.add_child(_menu_button("Новая игра", _start_new_game, "default"))
+	menu.add_child(_menu_button("Настройки", _toggle_settings, "quiet"))
+
+	var chronicle := "Забегов: %d · побед: %d · финалов открыто: %d из %d" % [
+		ChronicleSystem.runs_finished, ChronicleSystem.victories,
+		ChronicleSystem.endings_seen_count(), ChronicleSystem.endings_total()]
+	var stats := UiKit.text(chronicle, 20, UiKit.MUTED_COLOR)
+	stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_child(stats)
+
+	_add_spacer(1.0)
+	var version := UiKit.text("Версия %s" % str(ProjectSettings.get_setting("application/config/version", "0.1.0")), 18, UiKit.MUTED_COLOR)
+	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_child(version)
+
+
+## Столбец по центру экрана с ограниченной шириной — кнопки меню не должны
+## растягиваться на всю ширину планшета.
+func _add_centered_column(width: float) -> VBoxContainer:
+	var center := CenterContainer.new()
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(center)
+	var column := VBoxContainer.new()
+	column.custom_minimum_size = Vector2(minf(width, _body_width()), 0)
+	column.add_theme_constant_override("separation", 14)
+	center.add_child(column)
+	return column
+
+
+func _menu_button(text: String, callback: Callable, kind: String) -> Button:
+	var btn := UiKit.button(text, kind, BUTTON_HEIGHT + 12)
+	btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	btn.pressed.connect(callback)
+	return btn
+
+
+func _add_spacer(stretch: float) -> void:
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	spacer.size_flags_stretch_ratio = stretch
+	body.add_child(spacer)
+
+
+## На экранах-лентах тело растёт вниз, в меню — занимает всю высоту.
+func _set_body_stretch(stretch: bool) -> void:
+	var flags := Control.SIZE_EXPAND_FILL if stretch else Control.SIZE_SHRINK_BEGIN
+	body.size_flags_vertical = flags
+	body_margin.size_flags_vertical = flags
+
+
+## Медленное «дыхание» заставки: экран не выглядит статичной картинкой.
+func _pulse(node: CanvasItem) -> void:
+	if not SettingsSystem.animations:
+		return
+	var tween := node.create_tween().set_loops()
+	tween.tween_property(node, "modulate", Color(1.08, 1.08, 1.08, 1.0), 2.2).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(node, "modulate", Color(0.9, 0.9, 0.95, 1.0), 2.2).set_trans(Tween.TRANS_SINE)
 
 
 func _start_new_game() -> void:

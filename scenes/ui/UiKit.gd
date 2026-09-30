@@ -132,7 +132,7 @@ static func scene_art(image_name: String, available_width: float) -> TextureRect
 	rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	rect.stretch_mode = TextureRect.STRETCH_SCALE
-	rect.custom_minimum_size = Vector2(0, roundf(available_width * size.y / size.x))
+	rect.custom_minimum_size = Vector2(roundf(available_width), roundf(available_width * size.y / size.x))
 	rect.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return rect
 
