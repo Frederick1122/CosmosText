@@ -3,6 +3,7 @@ extends Control
 const UiKit = preload("res://scenes/ui/UiKit.gd")
 const SECTOR_MAP_VIEW_SCRIPT := preload("res://scenes/ui/SectorMapView.gd")
 const CHARACTER_PANEL_SCRIPT := preload("res://scenes/ui/CharacterPanel.gd")
+const WORKBENCH_PANEL_SCRIPT := preload("res://scenes/ui/WorkbenchPanel.gd")
 const COMBAT_VIEW_SCRIPT := preload("res://scenes/ui/CombatView.gd")
 
 const CONTENT_MARGIN := 36
@@ -36,6 +37,8 @@ var map_open: bool = false
 var journal_open: bool = false
 var character_open: bool = false
 var settings_open: bool = false
+## Верстак базы: оверлей с рецептами поверх экрана модуля.
+var workbench_open: bool = false
 var character_tab: String = "items"
 var journal_tab: String = "log"
 
@@ -324,7 +327,7 @@ func _is_story_screen() -> bool:
 
 
 func _any_overlay_open() -> bool:
-	return map_open or journal_open or character_open or settings_open
+	return map_open or journal_open or character_open or settings_open or workbench_open
 
 
 ## Плавное появление экрана целиком (карта, журнал, бой, смена сцены).
@@ -420,6 +423,7 @@ func _on_screen_changed(screen: int) -> void:
 	journal_open = false
 	character_open = false
 	settings_open = false
+	workbench_open = false
 	if screen != GameState.Screen.DEATH:
 		_death_message = ""
 	_map_message = ""
@@ -450,6 +454,7 @@ func _toggle_journal() -> void:
 		map_open = false
 		character_open = false
 		settings_open = false
+		workbench_open = false
 	_scroll_to_top()
 	_render_current_screen()
 
@@ -466,6 +471,7 @@ func _toggle_settings() -> void:
 		map_open = false
 		journal_open = false
 		character_open = false
+		workbench_open = false
 	_scroll_to_top()
 	_render_current_screen()
 
@@ -483,6 +489,7 @@ func _toggle_map() -> void:
 	journal_open = false
 	character_open = false
 	settings_open = false
+	workbench_open = false
 	if GameState.current_screen == GameState.Screen.LOCATION and not map_open:
 		GameState.leave_location()
 		return
@@ -505,18 +512,12 @@ func _toggle_character() -> void:
 	if character_open:
 		_close_character()
 		return
-	_open_character()
-
-
-## Кнопка «Персонаж» в HUD заперта, пока игрок не выбрался из капсулы, но
-## верстак базы открывает экран персонажа напрямую — иначе крафт в капсуле
-## молча не работает.
-func _open_character() -> void:
 	if journal_open:
 		NotificationSystem.mark_journal_seen()
 	character_open = true
 	map_open = false
 	journal_open = false
+	workbench_open = false
 	_scroll_to_top()
 	_render_current_screen()
 
@@ -549,6 +550,10 @@ func _render_current_screen() -> void:
 		return
 	if character_open:
 		_render_character()
+		_animate_body()
+		return
+	if workbench_open:
+		_render_workbench()
 		_animate_body()
 		return
 	if map_open:
@@ -918,7 +923,7 @@ func _render_location() -> void:
 func _render_base_section() -> void:
 	_add_section("База")
 	_add_button("Сохранить забег", _base_save, "quiet")
-	_add_button("Верстак: открыть крафт", _base_open_craft, "quiet")
+	_add_button("Верстак", _open_workbench, "quiet")
 	var droppable: Array = []
 	for entry in InventorySystem.get_slots():
 		var item_id: String = entry.get("id", "")
@@ -936,9 +941,17 @@ func _base_save() -> void:
 	LocationSystem.add_notice("Забег сохранён: точка возврата — этот модуль.")
 
 
-func _base_open_craft() -> void:
-	character_tab = "craft"
-	_open_character()
+func _open_workbench() -> void:
+	workbench_open = true
+	_scroll_to_top()
+	_render_current_screen()
+
+
+## Материалы и результат могли измениться — перепроверяем автособытия модуля.
+func _close_workbench() -> void:
+	workbench_open = false
+	_scroll_to_top()
+	GameState.refresh_location()
 
 
 func _make_base_store_callback(item_id: String) -> Callable:
@@ -977,6 +990,12 @@ func _render_character() -> void:
 	panel.tab = character_tab
 	panel.tab_changed.connect(_on_character_tab_changed)
 	panel.closed.connect(_close_character)
+	body.add_child(panel)
+
+
+func _render_workbench() -> void:
+	var panel: VBoxContainer = WORKBENCH_PANEL_SCRIPT.new()
+	panel.closed.connect(_close_workbench)
 	body.add_child(panel)
 
 

@@ -1,8 +1,8 @@
 extends VBoxContainer
 ## Экран персонажа — оверлей поверх текущего экрана (кнопка «Персонаж» в HUD).
-## Вкладки: «Предметы», «Снаряжение», «Навыки», «Крафт». Игровой логики не
-## содержит: вызывает InventorySystem / CharacterSystem / CraftingSystem и
-## перерисовывается после каждого действия.
+## Вкладки: «Предметы», «Снаряжение», «Навыки». Крафт — только на верстаке
+## базы (WorkbenchPanel). Игровой логики не содержит: вызывает
+## InventorySystem / CharacterSystem и перерисовывается после каждого действия.
 
 signal closed()
 signal tab_changed(tab: String)
@@ -14,7 +14,6 @@ const TABS := [
 	["items", "Предметы"],
 	["equipment", "Снаряжение"],
 	["skills", "Навыки"],
-	["craft", "Крафт"],
 ]
 const CATEGORY_TITLES := {
 	"quest": "сюжетный",
@@ -72,8 +71,6 @@ func _rebuild() -> void:
 			_build_equipment()
 		"skills":
 			_build_skills()
-		"craft":
-			_build_craft()
 		_:
 			_build_items()
 
@@ -311,66 +308,6 @@ func _learn(skill_id: String) -> void:
 		_act("Навык «%s» повышен до %d." % [CharacterSystem.get_skill_name(skill_id), CharacterSystem.get_skill_level(skill_id)])
 	else:
 		_act("Не хватает очков навыков.")
-
-
-# --- Крафт --------------------------------------------------------------------
-
-func _build_craft() -> void:
-	var recipes := CraftingSystem.get_recipes()
-	if recipes.is_empty():
-		add_child(UiKit.text("Рецептов пока нет."))
-		return
-	for recipe in recipes:
-		var recipe_id := str(recipe.get("id", ""))
-		var result: Dictionary = recipe.get("result", {})
-		var result_id := str(result.get("item", ""))
-		var result_count := int(result.get("count", 1))
-		var card := UiKit.card(self)
-		card.add_child(UiKit.text(str(recipe.get("name", _item_name(result_id))), 26, UiKit.TITLE_COLOR))
-		card.add_child(UiKit.text("Результат: %s%s" % [_item_name(result_id), " x%d" % result_count if result_count > 1 else ""], 21))
-		var stats_text := CharacterSystem.describe_stats(InventorySystem.get_item_stats(result_id))
-		if stats_text != "":
-			card.add_child(UiKit.text(stats_text, 21, UiKit.ACCENT_COLOR))
-
-		var parts := PackedStringArray()
-		for ing in recipe.get("ingredients", []):
-			var ing_id := str(ing.get("item", ""))
-			parts.append("%s ×%d (есть %d)" % [_item_name(ing_id), int(ing.get("count", 1)), InventorySystem.count_item(ing_id)])
-		var enough := CraftingSystem.has_ingredients(recipe_id)
-		card.add_child(UiKit.text("Материалы: " + ", ".join(parts), 21, UiKit.TEXT_COLOR if enough else UiKit.BAD_COLOR))
-
-		for req in recipe.get("requires", []):
-			if req is Dictionary:
-				var met := EffectResolver.check_requirement(req)
-				card.add_child(UiKit.text("Условие: %s%s" % [_describe_requirement(req), "" if met else " (не выполнено)"], 21, UiKit.TEXT_COLOR if met else UiKit.BAD_COLOR))
-
-		var btn := _action_button("Создать", _craft.bind(recipe_id))
-		btn.disabled = not CraftingSystem.can_craft(recipe_id)
-		card.add_child(btn)
-
-
-func _craft(recipe_id: String) -> void:
-	var error := CraftingSystem.craft(recipe_id)
-	if error != "":
-		_act(error)
-		return
-	var result_id := str(CraftingSystem.get_recipe(recipe_id).get("result", {}).get("item", ""))
-	_act("Создано: %s." % _item_name(result_id))
-
-
-func _describe_requirement(req: Dictionary) -> String:
-	match str(req.get("type", "")):
-		"skill_gte":
-			var skill_id := str(req.get("skill", ""))
-			return "навык «%s» не ниже %d" % [CharacterSystem.get_skill_name(skill_id), int(req.get("value", 1))]
-		"in_location":
-			return "находиться в модуле «%s»" % LocationSystem.get_location_title(str(req.get("location", "")))
-		"has_item":
-			return "нужен предмет «%s»" % _item_name(str(req.get("item", "")))
-		"stat_gte":
-			return "%s не ниже %s" % [str(req.get("stat", "")), str(req.get("value", ""))]
-		_:
-			return "особое условие"
 
 
 # --- Общее --------------------------------------------------------------------
