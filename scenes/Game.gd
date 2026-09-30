@@ -14,8 +14,6 @@ const BODY_GAP := 16
 const BUTTON_HEIGHT := 68
 ## Сдвиг пальца/мыши (px), после которого нажатие считается прокруткой.
 const DRAG_THRESHOLD := 14.0
-## Ниже этого запаса кислорода счётчик в HUD становится тревожным.
-const LOW_O2 := 60
 ## Ширина столбца кнопок в главном меню (вьюпорт 1080).
 const MENU_COLUMN_WIDTH := 620.0
 
@@ -215,6 +213,7 @@ func _make_nav_button(text: String, node_name: String, callback: Callable) -> Bu
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.clip_text = true
 	btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	btn.pressed.connect(SoundSystem.play.bind("ui_click"))
 	btn.pressed.connect(callback)
 	_style_nav_button(btn, false)
 	return btn
@@ -431,7 +430,7 @@ func _update_hud() -> void:
 	hp_label.text = "HP: %d/%d" % [ResourceSystem.hp, ResourceSystem.max_hp]
 	var o2i := int(ResourceSystem.o2)
 	o2_label.text = "O2: %d" % o2i
-	o2_label.add_theme_color_override("font_color", UiKit.BAD_COLOR if o2i <= LOW_O2 else Color("#eef3ff"))
+	o2_label.add_theme_color_override("font_color", UiKit.BAD_COLOR if o2i <= ResourceSystem.LOW_O2 else Color("#eef3ff"))
 	ammo_label.text = "Патроны: %d" % ResourceSystem.ammo
 	bag_label.text = "Сумка: %d/%d" % [InventorySystem.used_slots(), InventorySystem.max_slots]
 
@@ -491,12 +490,15 @@ func _toggle_map() -> void:
 	settings_open = false
 	workbench_open = false
 	if GameState.current_screen == GameState.Screen.LOCATION and not map_open:
+		SoundSystem.play("map_open")
 		GameState.leave_location()
 		return
 	if GameState.current_screen == GameState.Screen.SECTOR_MAP:
 		map_open = false
 	else:
 		map_open = not map_open
+	if map_open or GameState.current_screen == GameState.Screen.SECTOR_MAP:
+		SoundSystem.play("map_open")
 	_scroll_to_top()
 	_render_current_screen()
 
@@ -1261,7 +1263,7 @@ func _render_journal_archive() -> void:
 		card.add_child(UiKit.text(ArchiveSystem.get_text(str(id)), 22))
 
 
-## Настройки интерфейса: размер шрифта и плавные переходы.
+## Настройки интерфейса: размер шрифта, плавные переходы и звук.
 func _render_settings() -> void:
 	_add_title("Настройки")
 	_add_section("Размер шрифта")
@@ -1280,9 +1282,36 @@ func _render_settings() -> void:
 	anim_btn.name = "AnimationsToggle"
 	anim_btn.pressed.connect(func(): SettingsSystem.set_animations(not SettingsSystem.animations))
 	body.add_child(anim_btn)
-	_add_text("Размер шрифта меняет весь интерфейс сразу и сохраняется между запусками.")
+	_add_section("Звук")
+	var sound_btn := UiKit.button(
+		"Звук: включён" if SettingsSystem.sound_enabled else "Звук: выключен",
+		"tab_active" if SettingsSystem.sound_enabled else "quiet")
+	sound_btn.name = "SoundToggle"
+	sound_btn.pressed.connect(_toggle_sound)
+	body.add_child(sound_btn)
+	if SettingsSystem.sound_enabled:
+		for volume_id in SettingsSystem.SOUND_VOLUMES.keys():
+			var active: bool = str(volume_id) == SettingsSystem.sound_volume_id
+			var btn := UiKit.button(
+				"Громкость: %s%s" % [SettingsSystem.sound_volume_title(str(volume_id)), "  ✓" if active else ""],
+				"tab_active" if active else "quiet")
+			btn.name = "SoundVolume_%s" % volume_id
+			btn.pressed.connect(_select_sound_volume.bind(str(volume_id)))
+			body.add_child(btn)
+	_add_text("Настройки меняют интерфейс сразу и сохраняются между запусками.")
 	_add_button("Закрыть", _toggle_settings, "quiet")
 
 
 func _select_font_size(size_id: String) -> void:
 	SettingsSystem.set_font_size(size_id)
+
+
+## После смены громкости или включения звука — образец на новой громкости.
+func _select_sound_volume(volume_id: String) -> void:
+	SettingsSystem.set_sound_volume(volume_id)
+	SoundSystem.play("pickup")
+
+
+func _toggle_sound() -> void:
+	SettingsSystem.set_sound_enabled(not SettingsSystem.sound_enabled)
+	SoundSystem.play("pickup")

@@ -8,6 +8,7 @@ Godot 4.7 (GDScript) проект: текстовая survival-RPG для тел
 - Смоук-тест логики (после правок в `autoload/` или контенте среза): `<Godot 4.7 console exe> --headless --path . res://scenes/Main.tscn` → ожидается `SMOKE OK`. Локальный Godot: `D:\Repos\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64_console.exe`. Тест перезаписывает `run.json`/`checkpoint.json`/`meta.json` в `user://`: сохранить их до прогона и вернуть после.
 - UI проверяется через MCP-сервер `godot` (`run_project` → `screenshot` → `click`, см. docs/MCP.md) или руками по чек-листу в docs/DEVELOPMENT.md.
 - Пиксельный арт (после правок `assets/art`): `python tools/make_pixel_art.py`, затем импорт `<Godot 4.7 console exe> --headless --path . --import`.
+- Звуки (после правок таблицы `SOUNDS` в `tools/import_sounds.py`): `python tools/import_sounds.py "D:/Repos/400 Sounds Pack"`, затем тот же импорт Godot.
 
 ## Архитектура — правила
 
@@ -27,6 +28,7 @@ Godot 4.7 (GDScript) проект: текстовая survival-RPG для тел
 - Модуль-база — локация с `base: true`: чекпойнт, склад (stash локации) и верстак.
 - Бой — манёвры и дистанция в духе Neo Scavenger (`CombatSystem` + `scenes/ui/CombatView.gd`), ходы сторон разыгрываются одновременно.
 - Пиксельные картинки: `assets/art/scenes/<image>.png` подключаются полем `image` у ситуаций, локаций и событий; иконки `assets/art/items/<item_id>.png` — по id предмета. Рисует `tools/make_pixel_art.py`.
+- Звуки: `assets/sounds/<id>.wav`, играет `SoundSystem` (автозагрузка перед `GameState`) — по сигналам систем или `SoundSystem.play(id)` из UI; в `--headless` молчит. Включение и громкость — `SettingsSystem`.
 - GDScript: отступы табами.
 
 ## Документация

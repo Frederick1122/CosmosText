@@ -4,6 +4,12 @@ extends Node
 ## отдельным автозагрузом в tech-spec-v1.md — добавлен, чтобы не дублировать
 ## switch по типу эффекта в нескольких системах. Справочник типов — docs/CONTENT.md.
 
+## Изменение показано в ленте. kind: "hp" | "o2" | "ammo" | "item";
+## amount — фактическое изменение (со знаком). Слушает SoundSystem.
+signal change_reported(kind: String, amount: float)
+## Замок открыт подходящим ключом (узел карты или событие-ящик).
+signal lock_opened(lock_id: String)
+
 ## Изменения HP, кислорода, патронов и предметов сразу видны в ленте строкой
 ## в квадратных скобках (см. report_change).
 func apply_effect(effect: Dictionary) -> void:
@@ -11,15 +17,15 @@ func apply_effect(effect: Dictionary) -> void:
 		"hp_delta":
 			var hp_before := ResourceSystem.hp
 			ResourceSystem.apply_hp_delta(int(effect.get("value", 0)))
-			report_change(ResourceSystem.hp - hp_before, "HP")
+			report_change("hp", ResourceSystem.hp - hp_before, "HP")
 		"o2_delta":
 			var o2_before := ResourceSystem.o2
 			ResourceSystem.apply_o2_delta(float(effect.get("value", 0.0)))
-			report_change(ResourceSystem.o2 - o2_before, "O2")
+			report_change("o2", ResourceSystem.o2 - o2_before, "O2")
 		"ammo_delta":
 			var ammo_before := ResourceSystem.ammo
 			ResourceSystem.apply_ammo_delta(int(effect.get("value", 0)))
-			report_change(ResourceSystem.ammo - ammo_before, "Патроны")
+			report_change("ammo", ResourceSystem.ammo - ammo_before, "Патроны")
 		"item_add":
 			_add_item(str(effect.get("item", "")), int(effect.get("count", 1)))
 		"item_remove":
@@ -57,14 +63,16 @@ func apply_effects(effects: Array) -> void:
 			apply_effect(e)
 
 
-## Строка ленты вида «[−5 HP]» / «[+1 Аптечка]»: прибыль — kind "gain",
+## Строка ленты вида «[−5 HP]» / «[+1 Аптечка]»: прибыль — kind ленты "gain",
 ## убыль — "loss". Нулевое изменение (лечение при полном HP) не показывается.
-func report_change(amount: float, what: String) -> void:
+## kind — что изменилось ("hp" | "o2" | "ammo" | "item"), what — подпись.
+func report_change(kind: String, amount: float, what: String) -> void:
 	if is_zero_approx(amount):
 		return
 	var shown := maxi(1, roundi(absf(amount)))
 	var gained := amount > 0.0
 	NarrativeSystem.push("gain" if gained else "loss", "[%s%d %s]" % ["+" if gained else "−", shown, what])
+	change_reported.emit(kind, amount)
 
 
 func check_requirement(req: Dictionary) -> bool:
@@ -135,6 +143,7 @@ func open_lock(lock: Dictionary) -> String:
 	if key_item == "":
 		return ""
 	var key_name := str(InventorySystem.get_item_data(key_item).get("name", key_item))
+	lock_opened.emit(id)
 	if bool(lock.get("consume", false)):
 		_remove_item(key_item, 1)
 	return key_name
@@ -162,7 +171,7 @@ func _add_item(item_id: String, count: int) -> void:
 	while added < count and InventorySystem.add_item(item_id):
 		added += 1
 	var item_name := str(InventorySystem.get_item_data(item_id).get("name", item_id))
-	report_change(added, item_name)
+	report_change("item", added, item_name)
 	var left := count - added
 	if left <= 0:
 		return
@@ -182,7 +191,7 @@ func _remove_item(item_id: String, count: int) -> void:
 		elif not CharacterSystem.remove_equipped(item_id):
 			break
 		removed += 1
-	report_change(-removed, str(InventorySystem.get_item_data(item_id).get("name", item_id)))
+	report_change("item", -removed, str(InventorySystem.get_item_data(item_id).get("name", item_id)))
 
 
 func _as_array(value) -> Array:

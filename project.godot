@@ -37,6 +37,7 @@ CombatSystem="*res://autoload/CombatSystem.gd"
 JournalSystem="*res://autoload/JournalSystem.gd"
 EconomyManager="*res://autoload/EconomyManager.gd"
 SaveManager="*res://autoload/SaveManager.gd"
+SoundSystem="*res://autoload/SoundSystem.gd"
 GameState="*res://autoload/GameState.gd"
 
 [display]

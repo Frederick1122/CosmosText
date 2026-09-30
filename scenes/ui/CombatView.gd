@@ -8,7 +8,8 @@ extends VBoxContainer
 ## сколько, 0 — промах). По очереди записей карточка цели вздрагивает и
 ## вспыхивает, над портретом всплывает урон или «мимо», полоса HP стекает
 ## до нового значения; удар по игроку ещё и окрашивает экран красным.
-## Проигрываются только при включённых анимациях (SettingsSystem).
+## Картинка — только при включённых анимациях (SettingsSystem), звуки ударов
+## (SoundSystem) звучат в том же ритме всегда.
 
 signal move_selected(move_id: String, payload: Variant)
 ## «Продолжить» под итогом схватки (победа или побег).
@@ -37,6 +38,8 @@ const ENEMY_ACCENT := Color("#b86d79")
 const HP_TEXT := "%d/%d HP"
 
 var state: Dictionary = {}
+## Ход новый: его удары ещё не звучали и не показывались.
+var _fresh: bool = false
 var _animate: bool = false
 ## side ("player" | "enemy") -> { panel, portrait, bar, hp_label, hp, max_hp }
 var _sides: Dictionary = {}
@@ -48,15 +51,16 @@ func _init() -> void:
 	add_theme_constant_override("separation", 14)
 
 
-## animate — ход новый, его удары ещё не показаны.
-func setup(combat_state: Dictionary, animate: bool = false) -> void:
+## fresh — ход новый, его удары ещё не показаны.
+func setup(combat_state: Dictionary, fresh: bool = false) -> void:
 	state = combat_state.duplicate(true)
-	_animate = animate and SettingsSystem.animations
+	_fresh = fresh
+	_animate = fresh and SettingsSystem.animations
 	_rebuild()
-	if _animate:
-		_play_turn_fx()
-	elif str(state.get("outcome", "")) == "won":
+	if not _animate and str(state.get("outcome", "")) == "won":
 		_sides["enemy"]["panel"].modulate = _defeated_tint()
+	if _fresh:
+		_play_turn()
 
 
 func _rebuild() -> void:
@@ -322,9 +326,16 @@ func _fresh_fx() -> Array:
 
 ## Кадр ждём, чтобы раскладка закончилась: всплывающим числам нужны готовые
 ## позиции карточек, а встряске — их размер (центр вращения).
-func _play_turn_fx() -> void:
+func _play_turn() -> void:
 	var fx_list := _fresh_fx()
-	if fx_list.is_empty():
+	var won := str(state.get("outcome", "")) == "won"
+	var end_delay := FX_START + FX_STEP * float(fx_list.size())
+	for i in range(fx_list.size()):
+		for sound_id in _fx_sounds(fx_list[i]):
+			_play_sound(sound_id, FX_START + FX_STEP * float(i))
+	if won:
+		_play_sound("combat_won", end_delay)
+	if not _animate or fx_list.is_empty():
 		return
 	# Полосы HP начинают с того, что было до ударов, и стекают по одному удару.
 	var shown := {}
@@ -350,10 +361,33 @@ func _play_turn_fx() -> void:
 			_hit_fx(side, amount, str(fx.get("style", "melee")), delay, from, float(shown[side]))
 		else:
 			_miss_fx(side, delay)
-	if str(state.get("outcome", "")) == "won":
+	if won:
 		var tween := create_tween()
-		tween.tween_interval(FX_START + FX_STEP * float(fx_list.size()))
+		tween.tween_interval(end_delay)
 		tween.tween_property(_sides["enemy"]["panel"], "modulate", _defeated_tint(), 0.4)
+
+
+## Выстрел слышен всегда, дальше — чем кончился удар: промах, удар по игроку,
+## удар в упор по врагу (попадание пулей по врагу — один выстрел).
+func _fx_sounds(fx: Dictionary) -> Array:
+	var ids: Array = []
+	var ranged := str(fx.get("style", "")) == "ranged"
+	if ranged:
+		ids.append("shot")
+	if int(fx.get("amount", 0)) <= 0:
+		ids.append("miss")
+	elif str(fx.get("target", "")) == "player":
+		ids.append("hurt")
+	elif not ranged:
+		ids.append("hit")
+	return ids
+
+
+## Звук с задержкой; твин живёт с экраном боя и не звучит после ухода с него.
+func _play_sound(sound_id: String, delay: float) -> void:
+	var tween := create_tween()
+	tween.tween_interval(delay)
+	tween.tween_callback(SoundSystem.play.bind(sound_id))
 
 
 ## Позицию карточки раскладывает HBoxContainer, поэтому встряска — поворот и

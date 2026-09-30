@@ -9,6 +9,9 @@ signal floor_changed(floor_id: String)
 signal fog_changed()
 ## Узел отказал в проходе (заперт, нет ключа) — UI показывает текст на карте.
 signal node_blocked(node_id: String, message: String)
+## Игрок проехал на лифте на палубу floor_id (смена палубы при загрузке сектора
+## или сейва сюда не относится).
+signal elevator_used(floor_id: String)
 
 var current_sector_id: String = ""
 var sector_title: String = ""
@@ -362,6 +365,7 @@ func _move_by_elevator(node_id: String, node: Dictionary) -> void:
 	if not ResourceSystem.spend_o2("elevator", node_id):
 		return
 	set_current_floor(target_floor_id)
+	elevator_used.emit(target_floor_id)
 
 
 func _is_elevator_node(node: Dictionary) -> bool:

@@ -192,6 +192,8 @@ func _use_item(item_id: String) -> void:
 func _equip(item_id: String) -> void:
 	NotificationSystem.mark_item_seen(item_id)
 	var error := CharacterSystem.equip(item_id)
+	if error == "":
+		SoundSystem.play("equip")
 	_act(error if error != "" else "Надето: %s." % _item_name(item_id))
 
 func _interact(item_id: String, interaction_id: String) -> void:
@@ -273,6 +275,8 @@ func _select_slot(slot: String) -> void:
 func _unequip(slot: String) -> void:
 	var item_name := CharacterSystem.get_equipped_name(slot)
 	var error := CharacterSystem.unequip(slot)
+	if error == "":
+		SoundSystem.play("equip")
 	_act(error if error != "" else "Снято: %s." % item_name)
 
 

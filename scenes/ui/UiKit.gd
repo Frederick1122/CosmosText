@@ -44,8 +44,10 @@ static func section(value: String) -> Label:
 
 ## kind: "default" | "quiet" | "danger" | "exit" | "tab_active"
 ## "exit" — действие, которое уводит с локации или закрывает событие.
+## Любая кнопка щёлкает при нажатии (SoundSystem, настройка «Звук»).
 static func button(value: String, kind: String = "default", height: int = 68) -> Button:
 	var btn := Button.new()
+	btn.pressed.connect(SoundSystem.play.bind("ui_click"))
 	btn.text = value
 	btn.custom_minimum_size = Vector2(0, fs(height))
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL

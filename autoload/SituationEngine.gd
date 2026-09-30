@@ -116,7 +116,7 @@ func select_option(option_id: String) -> void:
 	if not ResourceSystem.spend_o2("choice"):
 		return
 	NarrativeSystem.push("choice", str(chosen.get("label", option_id)))
-	EffectResolver.report_change(-cost, "O2")
+	EffectResolver.report_change("o2", -cost, "O2")
 	NarrativeSystem.push("result", str(chosen.get("result", "")))
 	_pending_completes_event = bool(chosen.get("completes_event", true))
 	EffectResolver.apply_effects(chosen.get("effects", []))

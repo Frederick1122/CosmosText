@@ -100,7 +100,7 @@ func start_location_event(event_id: String) -> void:
 	# Событие заменяет описание модуля в общем текстовом буфере.
 	NarrativeSystem.clear()
 	NarrativeSystem.push("choice", str(ev.get("label", event_id)))
-	EffectResolver.report_change(-cost, "O2")
+	EffectResolver.report_change("o2", -cost, "O2")
 	if not lock.is_empty():
 		var key_name := EffectResolver.open_lock(lock)
 		if key_name != "":

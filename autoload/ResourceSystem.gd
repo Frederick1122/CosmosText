@@ -31,6 +31,8 @@ const DEFAULT_O2_COSTS := {
 	"combat_turn": 4.0,
 }
 const DEFAULT_UNSEALED_MULTIPLIER := 2.0
+## Ниже этого запаса кислорода HUD краснеет, а SoundSystem подаёт сигнал тревоги.
+const LOW_O2 := 60.0
 
 var hp: int = 100
 var max_hp: int = 100
