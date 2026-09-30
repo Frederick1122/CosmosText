@@ -9,9 +9,10 @@ const DEFAULT_GRID_COLUMNS := 7
 const DEFAULT_GRID_ROWS := 5
 const DEFAULT_CELL_SIZE := Vector2(118, 112)
 const DEFAULT_MODULE_SIZE := Vector2(74, 74)
-const MIN_MODULE_SIDE := 48.0
-const MAX_MODULE_SIDE := 84.0
-const LABEL_HEIGHT := 30.0
+const MIN_MODULE_SIDE := 56.0
+const MAX_MODULE_SIDE := 140.0
+## Потолок увеличения: карта из пары узлов не должна раздувать их на весь экран.
+const MAX_VIEW_SCALE := 2.2
 const MAP_PADDING := 28.0
 const FLOOR_RAIL_WIDTH := 104.0
 const FLOOR_RAIL_GAP := 16.0
@@ -43,7 +44,7 @@ var _view_span: Vector2 = DEFAULT_VIRTUAL_SIZE
 
 func _init() -> void:
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	mouse_filter = Control.MOUSE_FILTER_PASS
 
 
@@ -69,7 +70,7 @@ func setup(
 	_floors = _read_floors()
 	_active_floor_id = _valid_floor_or_default(_current_floor_id)
 	_recompute_view_bounds()
-	custom_minimum_size = Vector2(0, 360.0)
+	custom_minimum_size = Vector2(0, 480.0)
 	_rebuild()
 
 
@@ -149,7 +150,7 @@ func _build_node_controls() -> void:
 		btn.text = _node_icon_text(node)
 		btn.tooltip_text = _node_tooltip(node)
 		btn.disabled = _read_only or not _is_node_interactive(node)
-		btn.add_theme_font_size_override("font_size", UiKit.fs(25))
+		btn.add_theme_font_size_override("font_size", UiKit.fs(30))
 		_apply_node_style(btn, node)
 		var selected_id: String = str(node_id)
 		btn.pressed.connect(func() -> void: node_selected.emit(selected_id))
@@ -163,7 +164,7 @@ func _build_node_controls() -> void:
 		label.clip_text = true
 		label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		label.add_theme_font_size_override("font_size", UiKit.fs(16))
+		label.add_theme_font_size_override("font_size", UiKit.fs(20))
 		_apply_node_label_style(label, node)
 		add_child(label)
 
@@ -182,21 +183,8 @@ func _select_floor_filter(floor_id: String) -> void:
 
 
 func _layout_controls() -> void:
-	_fit_height()
 	_layout_floor_buttons()
 	_layout_node_controls()
-
-
-## Высота виджета подгоняется под пропорции видимой части карты: пустых
-## полей сверху и снизу быть не должно.
-func _fit_height() -> void:
-	var width := maxf(1.0, size.x) - MAP_PADDING * 2.0
-	if _floor_buttons.size() > 0:
-		width -= FLOOR_RAIL_WIDTH + FLOOR_RAIL_GAP
-	var desired := roundf(maxf(1.0, width) * _view_span.y / _view_span.x + MAP_PADDING * 2.0 + LABEL_HEIGHT)
-	desired = clampf(desired, 320.0, 1100.0)
-	if absf(custom_minimum_size.y - desired) > 2.0:
-		custom_minimum_size.y = desired
 
 
 func _layout_floor_buttons() -> void:
@@ -223,7 +211,8 @@ func _layout_floor_buttons() -> void:
 func _layout_node_controls() -> void:
 	var icon_size := _scaled_module_size()
 	var label_gap := 7.0
-	var label_width := clampf(_cell_size.x * _current_scale() - 6.0, icon_size.x + 26.0, 150.0)
+	var label_width := clampf(_cell_size.x * _current_scale() - 6.0, icon_size.x + 26.0, 260.0)
+	var label_height := _label_height()
 	for node_id in _node_controls.keys():
 		var controls: Dictionary = _node_controls[node_id]
 		var btn := controls.get("button", null) as Button
@@ -235,7 +224,7 @@ func _layout_node_controls() -> void:
 		btn.position = (center - icon_size * 0.5).round()
 		btn.size = icon_size.round()
 		label.position = Vector2(center.x - label_width * 0.5, center.y + icon_size.y * 0.5 + label_gap).round()
-		label.size = Vector2(label_width, LABEL_HEIGHT).round()
+		label.size = Vector2(label_width, label_height).round()
 
 
 func _draw_floor_rail() -> void:
@@ -260,21 +249,22 @@ func _draw_grid(rect: Rect2) -> void:
 			return
 		step = Vector2(raw_step, raw_step)
 
-	var first_col := int(floor(_view_origin.x / step.x))
-	var last_col := int(ceil((_view_origin.x + _view_span.x) / step.x))
+	var visible := _visible_virtual_rect(rect)
+	var first_col := int(floor(visible.position.x / step.x))
+	var last_col := int(ceil(visible.end.x / step.x))
 	for col in range(first_col, last_col + 1):
 		var x := _virtual_to_local(Vector2(float(col) * step.x, 0.0)).x
 		if x < rect.position.x or x > rect.end.x:
 			continue
-		draw_line(Vector2(x, rect.position.y), Vector2(x, rect.end.y), color, 1.0)
+		draw_line(Vector2(x, rect.position.y), Vector2(x, rect.end.y), color, 2.0)
 
-	var first_row := int(floor(_view_origin.y / step.y))
-	var last_row := int(ceil((_view_origin.y + _view_span.y) / step.y))
+	var first_row := int(floor(visible.position.y / step.y))
+	var last_row := int(ceil(visible.end.y / step.y))
 	for row in range(first_row, last_row + 1):
 		var y := _virtual_to_local(Vector2(0.0, float(row) * step.y)).y
 		if y < rect.position.y or y > rect.end.y:
 			continue
-		draw_line(Vector2(rect.position.x, y), Vector2(rect.end.x, y), color, 1.0)
+		draw_line(Vector2(rect.position.x, y), Vector2(rect.end.x, y), color, 2.0)
 
 
 func _draw_connections() -> void:
@@ -351,8 +341,8 @@ func _read_vec2(raw, fallback: Vector2) -> Vector2:
 	return fallback
 
 
-## Карта занимает всю доступную ширину: масштаб считается по ширине видимой
-## части сетки, а не по всему полю сектора — иначе половина экрана пустая.
+## Карта занимает всё доступное место виджета (рамка и сетка — во весь экран),
+## а занятые клетки палубы вписываются в неё целиком и стоят по центру.
 func _map_rect() -> Rect2:
 	var area := _content_rect()
 	if _floor_buttons.size() > 0:
@@ -362,11 +352,18 @@ func _map_rect() -> Rect2:
 		area.size.x -= reserved
 	area.size.x = maxf(1.0, area.size.x)
 	area.size.y = maxf(1.0, area.size.y)
+	return area
 
-	var scale := area.size.x / _view_span.x
-	var map_size: Vector2 = _view_span * scale
-	var offset_y := maxf(0.0, (area.size.y - map_size.y) * 0.5)
-	return Rect2(area.position + Vector2(0.0, offset_y), map_size)
+
+## Часть виртуальной сетки, которая попадает в рамку карты.
+func _visible_virtual_rect(rect: Rect2) -> Rect2:
+	var visible_span := rect.size / _current_scale()
+	var center := _view_origin + _view_span * 0.5
+	return Rect2(center - visible_span * 0.5, visible_span)
+
+
+func _label_height() -> float:
+	return roundf(float(UiKit.fs(20)) * 1.5)
 
 
 ## Прямоугольник занятых клеток текущей палубы (в виртуальных координатах).
@@ -416,12 +413,12 @@ func _floor_side() -> String:
 
 func _virtual_to_local(point: Vector2) -> Vector2:
 	var rect := _map_rect()
-	return rect.position + (point - _view_origin) * _current_scale()
+	return rect.get_center() + (point - (_view_origin + _view_span * 0.5)) * _current_scale()
 
 
 func _current_scale() -> float:
 	var rect := _map_rect()
-	return rect.size.x / _view_span.x
+	return minf(minf(rect.size.x / _view_span.x, rect.size.y / _view_span.y), MAX_VIEW_SCALE)
 
 
 func _node_center(node: Dictionary) -> Vector2:

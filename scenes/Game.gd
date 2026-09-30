@@ -6,6 +6,9 @@ const CHARACTER_PANEL_SCRIPT := preload("res://scenes/ui/CharacterPanel.gd")
 const COMBAT_VIEW_SCRIPT := preload("res://scenes/ui/CombatView.gd")
 
 const CONTENT_MARGIN := 36
+## Минимальный запас сверху под камеру/вырез, даже если система не сообщила
+## безопасную зону (иммерсивный режим, эмуляторы, десктоп).
+const SAFE_TOP_MIN := 56.0
 const BODY_GAP := 16
 const BUTTON_HEIGHT := 68
 ## Сдвиг пальца/мыши (px), после которого нажатие считается прокруткой.
@@ -16,6 +19,7 @@ const LOW_O2 := 60
 const MENU_COLUMN_WIDTH := 620.0
 
 var body: VBoxContainer
+var content_margin: MarginContainer
 var body_margin: MarginContainer
 var hud: VBoxContainer
 var content_scroll: ScrollContainer
@@ -48,11 +52,16 @@ var _ad_result_pending: bool = false
 var _death_message: String = ""
 ## Сколько записей ленты уже показано: новые проявляются анимацией.
 var _story_shown: int = 0
+## Боковые вырезы экрана (слева + справа) — сужают тело экрана.
+var _side_insets: float = 0.0
 
 
 func _ready() -> void:
 	_fill_parent(self)
 	_build_static_layout()
+	_apply_hud_fonts()
+	_apply_safe_area()
+	get_viewport().size_changed.connect(_apply_safe_area)
 	_connect_signals()
 	_render_current_screen()
 
@@ -64,30 +73,28 @@ func _build_static_layout() -> void:
 	add_child(background)
 	_fill_parent(background)
 
-	var margin := MarginContainer.new()
-	margin.name = "ContentMargin"
-	margin.add_theme_constant_override("margin_left", CONTENT_MARGIN)
-	margin.add_theme_constant_override("margin_top", CONTENT_MARGIN)
-	margin.add_theme_constant_override("margin_right", CONTENT_MARGIN)
-	margin.add_theme_constant_override("margin_bottom", CONTENT_MARGIN)
-	add_child(margin)
-	_fill_parent(margin)
+	content_margin = MarginContainer.new()
+	content_margin.name = "ContentMargin"
+	add_child(content_margin)
+	_fill_parent(content_margin)
 
 	var root_vbox := VBoxContainer.new()
 	root_vbox.name = "RootVBox"
 	root_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root_vbox.add_theme_constant_override("separation", 14)
-	margin.add_child(root_vbox)
+	content_margin.add_child(root_vbox)
 
 	hud = VBoxContainer.new()
 	hud.name = "Hud"
 	hud.add_theme_constant_override("separation", 10)
 	root_vbox.add_child(hud)
 
-	var stats_row := HBoxContainer.new()
+	# При крупном шрифте показатели не помещаются в одну строку — переносятся.
+	var stats_row := HFlowContainer.new()
 	stats_row.name = "HudStats"
-	stats_row.add_theme_constant_override("separation", 12)
+	stats_row.add_theme_constant_override("h_separation", 12)
+	stats_row.add_theme_constant_override("v_separation", 4)
 	hud.add_child(stats_row)
 	hp_label = _make_hud_label()
 	o2_label = _make_hud_label()
@@ -164,11 +171,35 @@ func _fill_parent(control: Control) -> void:
 	control.grow_vertical = Control.GROW_DIRECTION_BOTH
 
 
+## Поля экрана с учётом выреза камеры, скруглений и системных панелей.
+## DisplayServer отдаёт безопасную зону в пикселях экрана; переводим её в
+## координаты вьюпорта (stretch canvas_items) относительно окна игры.
+func _apply_safe_area() -> void:
+	var left := 0.0
+	var top := 0.0
+	var right := 0.0
+	var bottom := 0.0
+	var window_size := DisplayServer.window_get_size()
+	if window_size.x > 0 and window_size.y > 0:
+		var window_rect := Rect2i(DisplayServer.window_get_position(), window_size)
+		var safe := DisplayServer.get_display_safe_area().intersection(window_rect)
+		if safe.has_area():
+			var scale := get_viewport().get_visible_rect().size / Vector2(window_size)
+			left = float(safe.position.x - window_rect.position.x) * scale.x
+			top = float(safe.position.y - window_rect.position.y) * scale.y
+			right = float(window_rect.end.x - safe.end.x) * scale.x
+			bottom = float(window_rect.end.y - safe.end.y) * scale.y
+	_side_insets = left + right
+	content_margin.add_theme_constant_override("margin_left", CONTENT_MARGIN + roundi(left))
+	content_margin.add_theme_constant_override("margin_top", CONTENT_MARGIN + roundi(maxf(top, SAFE_TOP_MIN)))
+	content_margin.add_theme_constant_override("margin_right", CONTENT_MARGIN + roundi(right))
+	content_margin.add_theme_constant_override("margin_bottom", CONTENT_MARGIN + roundi(bottom))
+
+
 func _make_hud_label() -> Label:
 	var lbl := Label.new()
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_size_override("font_size", UiKit.fs(22))
 	lbl.add_theme_color_override("font_color", Color("#eef3ff"))
 	return lbl
 
@@ -177,14 +208,22 @@ func _make_nav_button(text: String, node_name: String, callback: Callable) -> Bu
 	var btn := Button.new()
 	btn.name = node_name
 	btn.text = text
-	btn.custom_minimum_size = Vector2(0, UiKit.fs(56))
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.add_theme_font_size_override("font_size", UiKit.fs(19))
 	btn.clip_text = true
 	btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	btn.pressed.connect(callback)
 	_style_nav_button(btn, false)
 	return btn
+
+
+## HUD строится один раз, поэтому размеры шрифта переприменяются при смене
+## настройки «Размер шрифта», а не только при создании.
+func _apply_hud_fonts() -> void:
+	for lbl in [hp_label, o2_label, ammo_label, bag_label]:
+		lbl.add_theme_font_size_override("font_size", UiKit.fs(22))
+	for btn in [map_button, character_button, journal_button, settings_button]:
+		btn.custom_minimum_size = Vector2(0, UiKit.fs(56))
+		btn.add_theme_font_size_override("font_size", UiKit.fs(19))
 
 
 ## Активная вкладка HUD (открытый экран или оверлей) подсвечивается.
@@ -356,6 +395,7 @@ func _on_combat_turn_resolved(_entry: Dictionary) -> void:
 
 
 func _on_settings_changed() -> void:
+	_apply_hud_fonts()
 	_render_current_screen()
 
 
@@ -602,7 +642,7 @@ func _add_scene_image(image_name: String) -> void:
 ## Ширина тела экрана: вьюпорт минус поля и полоса прокрутки.
 func _body_width() -> float:
 	var viewport_width := float(ProjectSettings.get_setting("display/window/size/viewport_width", 1080))
-	return maxf(64.0, viewport_width - CONTENT_MARGIN * 2.0 - 32.0)
+	return maxf(64.0, viewport_width - CONTENT_MARGIN * 2.0 - _side_insets - 32.0)
 
 
 func _add_button(text: String, callback: Callable, kind: String = "default") -> Button:
@@ -698,7 +738,7 @@ func _add_spacer(stretch: float) -> void:
 	body.add_child(spacer)
 
 
-## На экранах-лентах тело растёт вниз, в меню — занимает всю высоту.
+## На экранах-лентах тело растёт вниз, в меню и на карте — занимает всю высоту.
 func _set_body_stretch(stretch: bool) -> void:
 	var flags := Control.SIZE_EXPAND_FILL if stretch else Control.SIZE_SHRINK_BEGIN
 	body.size_flags_vertical = flags
@@ -723,6 +763,8 @@ func _continue_game() -> void:
 
 
 func _render_map(read_only: bool = false) -> void:
+	# Карта заполняет всю высоту тела экрана между заголовком и нижним HUD.
+	_set_body_stretch(true)
 	_add_title("Карта: " + MapSystem.get_sector_title())
 	if _map_message != "":
 		var msg := _add_text(_map_message)

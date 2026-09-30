@@ -9,8 +9,8 @@ const PATH := "user://settings.json"
 ## id → [подпись, множитель размера шрифта]
 const FONT_SIZES := {
 	"small": ["Маленький", 1.0],
-	"medium": ["Средний", 1.2],
-	"large": ["Крупный", 1.45],
+	"medium": ["Средний", 1.5],
+	"large": ["Крупный", 2.0],
 }
 const DEFAULT_FONT_SIZE := "medium"
 
