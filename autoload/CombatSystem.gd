@@ -14,9 +14,9 @@ extends Node
 ## docs/ARCHITECTURE.md.
 
 signal combat_started(enemy_id: String)
-## entry: { "text": String, "kind": "info"|"move"|"hit"|"damage"|"end" }
-signal turn_resolved(entry: Dictionary)
-signal combat_ended(result: String)  # "won" | "fled" | "died"
+## Схватка решена ("won" | "fled") и игрок нажал «Продолжить» (finish), либо
+## игрок погиб ("died") — тогда сразу: экран смерти выставляет EventBus.
+signal combat_ended(result: String)
 
 enum State { IDLE, PLAYER_TURN, RESOLVING, ENDED }
 
@@ -43,7 +43,16 @@ var state: int = State.IDLE
 var enemy_id: String = ""
 var enemy_hp: int = 0
 var enemy_data: Dictionary = {}
-var log: Array = []  # [{ text, kind }]
+## Журнал схватки: [{ text, kind, turn, fx }].
+##   kind — "info" | "move" | "hit" | "damage" | "end";
+##   turn — номер хода, в котором появилась запись (0 — начало боя);
+##   fx   — удары этой записи для эффектов экрана боя:
+##          [{ "target": "enemy"|"player", "amount": урон (0 — промах) }].
+var log: Array = []
+## Номер текущего хода: экран боя проигрывает эффекты только свежих записей.
+var turn: int = 0
+## Итог решённой схватки, ждущий «Продолжить»: "won" | "fled" ("" — нет).
+var outcome: String = ""
 ## Дистанция между игроком и противником в шагах.
 var range_steps: int = DEFAULT_START_RANGE
 var player_last_move: String = ""
@@ -101,6 +110,8 @@ func reset_for_new_run() -> void:
 	_enemy_defending = false
 	_enemy_distracted_turns = 0
 	_guaranteed_hit = false
+	turn = 0
+	outcome = ""
 	log.clear()
 	_used_specials.clear()
 
@@ -123,6 +134,8 @@ func start_combat(id: String, clear_node: String = "", on_win: Array = [], on_fl
 	_enemy_defending = false
 	_enemy_distracted_turns = 0
 	_guaranteed_hit = false
+	turn = 0
+	outcome = ""
 	_used_specials.clear()
 	log.clear()
 	state = State.PLAYER_TURN
@@ -147,6 +160,8 @@ func get_state() -> Dictionary:
 		"range": range_steps,
 		"max_range": MAX_RANGE,
 		"log": log.duplicate(true),
+		"turn": turn,
+		"outcome": outcome,
 		"moves": get_available_moves(),
 		"available_specials": _available_specials(),
 	}
@@ -187,6 +202,7 @@ func player_action(move_id: String, payload = null) -> void:
 		_log("Баллон пуст.", "damage")
 		_end_combat("died")
 		return
+	turn += 1
 	state = State.RESOLVING
 	player_last_move = move_id
 	_player_defending = move_id == "defend"
@@ -258,9 +274,9 @@ func _resolve_shot() -> void:
 	_consume_aim()
 	if _take_guaranteed_hit() or randf() <= minf(chance, MAX_HIT_CHANCE):
 		var dmg := maxi(1, RANGED_DAMAGE + int(CharacterSystem.get_stat("ranged_damage")))
-		_damage_enemy(dmg, "Попадание! Урон: %d." % dmg)
+		_damage_enemy(dmg, "Попадание! Урон: %d." % dmg, "ranged")
 	else:
-		_log("Выстрел уходит мимо.", "info")
+		_log("Выстрел уходит мимо.", "info", [_fx("enemy", 0, "ranged")])
 
 
 func _resolve_strike() -> void:
@@ -273,9 +289,10 @@ func _resolve_strike() -> void:
 	_consume_aim()
 	if _take_guaranteed_hit() or randf() <= minf(chance, MAX_HIT_CHANCE):
 		var dmg := maxi(1, MELEE_DAMAGE + int(CharacterSystem.get_stat("melee_damage")))
-		_damage_enemy(dmg, "Вы бьёте в упор. Урон: %d." % dmg)
+		_damage_enemy(dmg, "Вы бьёте в упор. Урон: %d." % dmg, "melee")
 	else:
-		_log("Вы промахиваетесь и открываетесь.", "info")
+		_log("Вы промахиваетесь и открываетесь. Урон: %d." % MELEE_MISS_PENALTY, "damage",
+			[_fx("enemy", 0, "melee"), _fx("player", MELEE_MISS_PENALTY, "melee")])
 		ResourceSystem.apply_hp_delta(-MELEE_MISS_PENALTY)
 		if ResourceSystem.hp <= 0:
 			_end_combat("died")
@@ -324,23 +341,26 @@ func _resolve_enemy_move(enemy_move: String, damage_multiplier: float = 1.0) -> 
 func _enemy_attack(damage_multiplier: float) -> void:
 	var name := str(enemy_data.get("name", "Противник"))
 	var atk: Dictionary = enemy_data.get("attack", {})
+	var style := "melee" if int(atk.get("range", MELEE_RANGE)) <= MELEE_RANGE else "ranged"
 	var chance := float(atk.get("hit_chance", 0.5))
 	if _player_defending:
 		chance -= DEFEND_HIT_PENALTY
 	if randf() > chance:
-		_log("%s промахивается." % name, "info")
+		_log("%s промахивается." % name, "info", [_fx("player", 0, style)])
 		return
 	var raw := int(randi_range(int(atk.get("min", 1)), int(atk.get("max", 5))) * damage_multiplier)
 	if _player_defending:
 		raw = int(raw * DEFEND_DAMAGE_MULTIPLIER)
 	var armor := int(CharacterSystem.get_stat("armor"))
 	var dmg: int = maxi(1, raw - armor)
-	ResourceSystem.apply_hp_delta(-dmg)
 	_player_aiming = false  # попадание сбивает прицел
+	# Запись в журнал — до урона: смертельный удар должен успеть в журнал
+	# раньше, чем EventBus переключит экран на смерть.
 	if armor > 0 and raw > dmg:
-		_log("%s попадает. Урон: %d (броня поглотила %d)." % [name, dmg, raw - dmg], "damage")
+		_log("%s попадает. Урон: %d (броня поглотила %d)." % [name, dmg, raw - dmg], "damage", [_fx("player", dmg, style)])
 	else:
-		_log("%s попадает. Урон: %d." % [name, dmg], "damage")
+		_log("%s попадает. Урон: %d." % [name, dmg], "damage", [_fx("player", dmg, style)])
+	ResourceSystem.apply_hp_delta(-dmg)
 	if ResourceSystem.hp <= 0:
 		_end_combat("died")
 
@@ -448,9 +468,9 @@ func _consume_aim() -> void:
 	_player_aiming = false
 
 
-func _damage_enemy(amount: int, text: String) -> void:
+func _damage_enemy(amount: int, text: String, style: String) -> void:
 	enemy_hp = max(0, enemy_hp - amount)
-	_log(text, "hit")
+	_log(text, "hit", [_fx("enemy", amount, style)])
 	if enemy_hp <= 0:
 		_end_combat("won")
 
@@ -502,19 +522,51 @@ func _available_specials() -> Array:
 	return result
 
 
+## Победа и побег не уводят с экрана боя сразу: игрок видит последний удар
+## и итог, а combat_ended уходит по «Продолжить» (finish). Смерть — сразу.
 func _end_combat(result: String) -> void:
 	state = State.ENDED
+	if result == "died":
+		outcome = ""
+		combat_ended.emit(result)
+		return
+	outcome = result
 	if result == "won":
 		_log("%s обезврежен." % str(enemy_data.get("name", "Противник")), "end")
-		for item_id in enemy_data.get("loot", []):
-			EffectResolver.apply_effect({"type": "item_add", "item": item_id})  # лишнее — на пол модуля
+
+
+## «Продолжить» под итогом схватки: только теперь бой заканчивается.
+func finish() -> void:
+	if state != State.ENDED or outcome == "":
+		return
+	var result := outcome
+	outcome = ""
 	combat_ended.emit(result)
 
 
-func _log(text: String, kind: String = "info") -> void:
-	var entry := {"text": text, "kind": kind}
-	log.append(entry)
-	turn_resolved.emit(entry)
+## Текст последнего удара по игроку ("" — игрока не задели) — для экрана смерти.
+func last_hit_on_player() -> String:
+	for i in range(log.size() - 1, -1, -1):
+		for fx in log[i].get("fx", []):
+			if str(fx.get("target", "")) == "player" and int(fx.get("amount", 0)) > 0:
+				return str(log[i].get("text", ""))
+	return ""
+
+
+## Трофеи побеждённого врага — эффекты item_add; применяет GameState.
+func loot_effects() -> Array:
+	var effects: Array = []
+	for item_id in enemy_data.get("loot", []):
+		effects.append({"type": "item_add", "item": str(item_id)})
+	return effects
+
+
+func _fx(target: String, amount: int, style: String) -> Dictionary:
+	return {"target": target, "amount": amount, "style": style}
+
+
+func _log(text: String, kind: String = "info", fx: Array = []) -> void:
+	log.append({"text": text, "kind": kind, "turn": turn, "fx": fx})
 
 
 func _load_res_json(path: String) -> Dictionary:

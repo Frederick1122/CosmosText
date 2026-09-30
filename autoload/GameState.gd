@@ -12,6 +12,8 @@ const MAX_AUTO_EVENTS_PER_STEP := 32
 
 var current_screen: int = Screen.MAIN_MENU
 var last_death_cause: String = ""
+## Смертельный удар в бою («Дрон попадает. Урон: 12.»); "" — погиб не от удара.
+var last_death_blow: String = ""
 var last_ending_id: String = ""
 var has_left_capsule: bool = false
 ## Событие локации считается выполненным только после завершающего выбора.
@@ -92,11 +94,13 @@ func start_location_event(event_id: String) -> void:
 		LocationSystem.add_notice(EffectResolver.lock_hint(lock))
 		_show_location()
 		return
+	var cost := ResourceSystem.get_o2_cost("action")
 	if not ResourceSystem.spend_o2("action"):
 		return
 	# Событие заменяет описание модуля в общем текстовом буфере.
 	NarrativeSystem.clear()
 	NarrativeSystem.push("choice", str(ev.get("label", event_id)))
+	EffectResolver.report_change(-cost, "O2")
 	if not lock.is_empty():
 		var key_name := EffectResolver.open_lock(lock)
 		if key_name != "":
@@ -233,7 +237,12 @@ func _on_combat_started(_enemy_id: String) -> void:
 func _on_combat_ended(result: String) -> void:
 	if result == "died":
 		return  # экран смерти выставит _on_player_died через EventBus
+	var stays_in_location := result == "won" and LocationSystem.is_active()
+	if stays_in_location:
+		# Лента модуля — до трофеев и on_win: их «[+1 …]» должны остаться под описанием.
+		LocationSystem.show_current_narrative()
 	if result == "won":
+		EffectResolver.apply_effects(CombatSystem.loot_effects())  # лишнее — на пол модуля
 		EffectResolver.apply_effects(CombatSystem.on_win_effects)
 	elif result == "fled":
 		EffectResolver.apply_effects(CombatSystem.on_flee_effects)
@@ -248,8 +257,7 @@ func _on_combat_ended(result: String) -> void:
 		_complete_active_location_event()
 	elif result == "fled":
 		_active_location_event_id = ""
-	if result == "won" and LocationSystem.is_active():
-		LocationSystem.show_current_narrative()
+	if stays_in_location:
 		_resume_location()  # победа — игрок остаётся в модуле
 	else:
 		NarrativeSystem.clear()
@@ -269,6 +277,8 @@ func _complete_active_location_event() -> void:
 
 func _on_player_died(cause: String) -> void:
 	last_death_cause = cause
+	last_death_blow = CombatSystem.last_hit_on_player() \
+		if cause == "hp" and current_screen == Screen.COMBAT else ""
 	_active_location_event_id = ""
 	_set_screen(Screen.DEATH)
 

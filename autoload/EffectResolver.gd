@@ -4,14 +4,22 @@ extends Node
 ## отдельным автозагрузом в tech-spec-v1.md — добавлен, чтобы не дублировать
 ## switch по типу эффекта в нескольких системах. Справочник типов — docs/CONTENT.md.
 
+## Изменения HP, кислорода, патронов и предметов сразу видны в ленте строкой
+## в квадратных скобках (см. report_change).
 func apply_effect(effect: Dictionary) -> void:
 	match effect.get("type", ""):
 		"hp_delta":
+			var hp_before := ResourceSystem.hp
 			ResourceSystem.apply_hp_delta(int(effect.get("value", 0)))
+			report_change(ResourceSystem.hp - hp_before, "HP")
 		"o2_delta":
+			var o2_before := ResourceSystem.o2
 			ResourceSystem.apply_o2_delta(float(effect.get("value", 0.0)))
+			report_change(ResourceSystem.o2 - o2_before, "O2")
 		"ammo_delta":
+			var ammo_before := ResourceSystem.ammo
 			ResourceSystem.apply_ammo_delta(int(effect.get("value", 0)))
+			report_change(ResourceSystem.ammo - ammo_before, "Патроны")
 		"item_add":
 			_add_item(str(effect.get("item", "")), int(effect.get("count", 1)))
 		"item_remove":
@@ -47,6 +55,16 @@ func apply_effects(effects: Array) -> void:
 	for e in effects:
 		if e is Dictionary:
 			apply_effect(e)
+
+
+## Строка ленты вида «[−5 HP]» / «[+1 Аптечка]»: прибыль — kind "gain",
+## убыль — "loss". Нулевое изменение (лечение при полном HP) не показывается.
+func report_change(amount: float, what: String) -> void:
+	if is_zero_approx(amount):
+		return
+	var shown := maxi(1, roundi(absf(amount)))
+	var gained := amount > 0.0
+	NarrativeSystem.push("gain" if gained else "loss", "[%s%d %s]" % ["+" if gained else "−", shown, what])
 
 
 func check_requirement(req: Dictionary) -> bool:
@@ -119,7 +137,6 @@ func open_lock(lock: Dictionary) -> String:
 	var key_name := str(InventorySystem.get_item_data(key_item).get("name", key_item))
 	if bool(lock.get("consume", false)):
 		_remove_item(key_item, 1)
-		return key_name
 	return key_name
 
 
@@ -144,10 +161,11 @@ func _add_item(item_id: String, count: int) -> void:
 	var added := 0
 	while added < count and InventorySystem.add_item(item_id):
 		added += 1
+	var item_name := str(InventorySystem.get_item_data(item_id).get("name", item_id))
+	report_change(added, item_name)
 	var left := count - added
 	if left <= 0:
 		return
-	var item_name := str(InventorySystem.get_item_data(item_id).get("name", item_id))
 	if LocationSystem.is_active():
 		LocationSystem.stash_add(item_id, left)
 		LocationSystem.add_notice("Не поместилось в сумку: %s ×%d — осталось лежать здесь." % [item_name, left])
@@ -157,11 +175,14 @@ func _add_item(item_id: String, count: int) -> void:
 
 ## Сначала из сумки, затем — надетый экземпляр.
 func _remove_item(item_id: String, count: int) -> void:
+	var removed := 0
 	for i in range(count):
 		if InventorySystem.has_item(item_id):
 			InventorySystem.remove_item(item_id)
 		elif not CharacterSystem.remove_equipped(item_id):
-			return
+			break
+		removed += 1
+	report_change(-removed, str(InventorySystem.get_item_data(item_id).get("name", item_id)))
 
 
 func _as_array(value) -> Array:

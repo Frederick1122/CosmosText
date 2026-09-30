@@ -127,6 +127,8 @@ func _ready() -> void:
 		"победа оставляет игрока в модуле (раундов: %d)" % rounds)
 	_expect(_node_state("cargo_bay") == "cleared" and SituationEngine.get_flag("drone_cargo_down") == true,
 		"узел пройден, on_win выставил флаг")
+	_expect(_notice_contains("[+1 Металлолом]"),
+		"трофей боя показан в ленте модуля строкой в скобках")
 	_expect(CharacterSystem.skill_points == 2, "on_win выдал очко навыка")
 	_expect(not _has_manual("force_shuttle_airlock"), "шлюз недоступен без трубы")
 
@@ -140,6 +142,14 @@ func _ready() -> void:
 	EffectResolver.apply_effect({"type": "item_add", "item": "ration_bar", "count": 2})
 	_expect(int(LocationSystem.get_stash().get("ration_bar", 0)) == 2 and not InventorySystem.has_item("ration_bar")
 		and _notice_contains("Не поместилось"), "полная сумка: лишнее осталось лежать в модуле")
+	var hp_before_hurt := ResourceSystem.hp
+	EffectResolver.apply_effect({"type": "hp_delta", "value": -5})
+	_expect(_narrative_kind_last("loss") == "[−5 HP]", "урон из эффекта показан в ленте: [−5 HP]")
+	var heal_room := ResourceSystem.max_hp - ResourceSystem.hp
+	EffectResolver.apply_effect({"type": "hp_delta", "value": heal_room + 50})
+	_expect(_narrative_kind_last("gain") == "[+%d HP]" % heal_room,
+		"лечение показывает фактический прирост, а не запрошенный")
+	ResourceSystem.apply_hp_delta(hp_before_hurt - ResourceSystem.hp)
 
 	_expect(CharacterSystem.equip("pipe_scrap") == "" and CharacterSystem.get_stat("melee_damage") == 6.0,
 		"труба надета в руки: +6 к ближнему бою")
@@ -505,12 +515,16 @@ func _ready() -> void:
 
 
 ## Простейшая боевая тактика для теста: стрелять, если есть патроны, иначе
-## сначала сблизиться, потом бить.
+## сначала сблизиться, потом бить. Решённая схватка держит экран боя до
+## «Продолжить» (CombatSystem.finish).
 func _fight() -> int:
 	var rounds := 0
 	while CombatSystem.state == CombatSystem.State.PLAYER_TURN and rounds < 40:
 		CombatSystem.player_action(_best_move())
 		rounds += 1
+	_expect(GameState.current_screen == Screen.COMBAT and CombatSystem.outcome == "won",
+		"победа не уводит с экрана боя до «Продолжить»")
+	CombatSystem.finish()
 	return rounds
 
 

@@ -57,6 +57,8 @@ var _death_message: String = ""
 var _story_shown: int = 0
 ## Боковые вырезы экрана (слева + справа) — сужают тело экрана.
 var _side_insets: float = 0.0
+## Последний ход боя, чьи эффекты ударов уже показаны (0 — ни одного).
+var _combat_fx_turn: int = 0
 
 
 func _ready() -> void:
@@ -163,7 +165,6 @@ func _connect_signals() -> void:
 	MapSystem.node_blocked.connect(_on_map_node_blocked)
 	MapSystem.floor_changed.connect(_on_map_floor_changed)
 	MapSystem.fog_changed.connect(_on_map_fog_changed)
-	CombatSystem.turn_resolved.connect(_on_combat_turn_resolved)
 	SettingsSystem.changed.connect(_on_settings_changed)
 	SituationEngine.option_resolved.connect(_on_situation_option_resolved)
 	NarrativeSystem.entries_added.connect(_on_story_entries_added)
@@ -392,11 +393,6 @@ func _on_map_floor_changed(_floor_id: String) -> void:
 		_render_current_screen()
 
 
-func _on_combat_turn_resolved(_entry: Dictionary) -> void:
-	if GameState.current_screen == GameState.Screen.COMBAT and not journal_open:
-		_render_combat()
-
-
 func _on_settings_changed() -> void:
 	_apply_hud_fonts()
 	_render_current_screen()
@@ -427,6 +423,7 @@ func _on_screen_changed(screen: int) -> void:
 	if screen != GameState.Screen.DEATH:
 		_death_message = ""
 	_map_message = ""
+	_combat_fx_turn = 0
 	_render_current_screen()
 
 
@@ -478,9 +475,12 @@ func _toggle_settings() -> void:
 
 ## Кнопка «Карта» в HUD заменяет прежнюю кнопку «Выйти на карту»: из модуля
 ## она выводит игрока наружу, из ситуации — открывает карту только для
-## просмотра, на самой карте — ничего не делает.
+## просмотра (повторное нажатие закрывает), на самой карте — только
+## закрывает открытый поверх неё журнал, персонажа или настройки.
 func _toggle_map() -> void:
 	if map_button.disabled:
+		return
+	if GameState.current_screen == GameState.Screen.SECTOR_MAP and not _any_overlay_open():
 		return
 	if journal_open:
 		NotificationSystem.mark_journal_seen()
@@ -633,6 +633,10 @@ func _add_title(text: String) -> Label:
 	return lbl
 
 
+## Ширина выставляется сразу: у переносимого Label без ширины минимальная
+## высота на первом проходе раскладки считается «по букве на строку».
+## Растянутое тело экрана (карта) успевало вырасти под эту высоту и не
+## сжималось обратно — карта съезжала вниз после перерисовки.
 func _add_text(text: String) -> Label:
 	var lbl := Label.new()
 	lbl.text = text
@@ -640,6 +644,7 @@ func _add_text(text: String) -> Label:
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lbl.add_theme_font_size_override("font_size", UiKit.fs(24))
 	lbl.add_theme_color_override("font_color", Color("#d7deee"))
+	lbl.size.x = _body_width()
 	body.add_child(lbl)
 	return lbl
 
@@ -869,6 +874,10 @@ func _story_nodes(entry: Dictionary) -> Array:
 			nodes.append(UiKit.text(text, 24, UiKit.TEXT_COLOR))
 		"notice":
 			nodes.append(UiKit.text(text, 22, UiKit.ACCENT_COLOR))
+		"gain":
+			nodes.append(UiKit.text(text, 22, UiKit.GOOD_COLOR))
+		"loss":
+			nodes.append(UiKit.text(text, 22, UiKit.BAD_COLOR))
 		"system":
 			nodes.append(UiKit.text(text, 22, UiKit.MUTED_COLOR))
 		_:
@@ -965,10 +974,12 @@ func _make_location_event_callback(event_id: String) -> Callable:
 	return func(): GameState.start_location_event(event_id)
 
 
+## «Использовано» пишется до эффекта, чтобы его «[+25 HP]» стояло ниже.
 func _make_location_item_callback(item_id: String) -> Callable:
 	return func():
-		if InventorySystem.use_item(item_id):
+		if InventorySystem.has_item(item_id):
 			LocationSystem.add_notice("Использовано: %s." % _item_name(item_id))
+			InventorySystem.use_item(item_id)
 		GameState.refresh_location()
 
 
@@ -1004,14 +1015,19 @@ func _on_character_tab_changed(new_tab: String) -> void:
 	_scroll_to_top()
 
 
+## Эффекты ударов проигрываются один раз на ход: повторная перерисовка того
+## же хода (смена настроек) их не повторяет.
 func _render_combat() -> void:
 	_clear_body()
 	var st := CombatSystem.get_state()
 	_add_title("Схватка: %s" % str(st.get("enemy_name", "")))
 	var view: VBoxContainer = COMBAT_VIEW_SCRIPT.new()
 	view.move_selected.connect(_combat_action)
+	view.finished.connect(CombatSystem.finish)
 	body.add_child(view)
-	view.setup(st)
+	var turn := int(st.get("turn", 0))
+	view.setup(st, turn > _combat_fx_turn)
+	_combat_fx_turn = turn
 
 
 func _combat_action(move_id: String, payload = null) -> void:
@@ -1020,18 +1036,102 @@ func _combat_action(move_id: String, payload = null) -> void:
 		_render_combat()
 
 
-func _render_death() -> void:
-	var cause := GameState.last_death_cause
-	var cause_text := "закончился кислород" if cause == "o2" else "здоровье упало до нуля"
-	_add_title("Вы погибли")
-	_add_text("Причина: %s." % cause_text)
-	if _death_message != "":
-		_add_text(_death_message)
-	_add_button("Начать заново", _death_restart)
+const DEATH_TEXTS := {
+	"o2": {
+		"image": "death_o2",
+		"cause": "Кислород закончился",
+		"epitaph": "Последний вдох ушёл в пустой баллон. Визор затянуло инеем, и шум в шлеме стих.",
+	},
+	"hp": {
+		"image": "death_hp",
+		"cause": "Раны оказались смертельными",
+		"epitaph": "Скафандр держал давление дольше, чем тело. Над тем, кто не дошёл, мигает аварийная лампа.",
+	},
+}
+## Сколько последних записей журнала показать в «Последних минутах».
+const DEATH_RECAP_ENTRIES := 3
+## Длинные тексты событий в сводке режутся — это напоминание, а не пересказ.
+const DEATH_RECAP_LENGTH := 80
+## Иллюстрация уже экрана: заголовок и кнопки должны помещаться без прокрутки.
+const DEATH_ART_SCALE := 0.8
 
-	if EconomyManager.can_use_rollback_today() and SaveManager.has_checkpoint():
+
+## Экран смерти: иллюстрация причины, крупный заголовок, эпитафия, смертельный
+## удар (если погиб в бою), выбор — откат или новый забег, ниже — последние
+## записи журнала и счётчики хроники. Блоки проявляются по очереди.
+func _render_death() -> void:
+	_set_body_stretch(true)
+	var texts: Dictionary = DEATH_TEXTS.get(GameState.last_death_cause, DEATH_TEXTS["hp"])
+	var blocks: Array = []
+	_add_spacer(1.0)
+
+	var art := UiKit.scene_art(str(texts["image"]), _body_width() * DEATH_ART_SCALE)
+	if art != null:
+		var art_row := CenterContainer.new()
+		art_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		art_row.add_child(art)
+		body.add_child(art_row)
+		blocks.append(art_row)
+	blocks.append(_add_centered_text("ВЫ ПОГИБЛИ", 58, UiKit.BAD_COLOR))
+	blocks.append(_add_centered_text(str(texts["cause"]), 28, UiKit.TITLE_COLOR))
+	blocks.append(_add_centered_text(str(texts["epitaph"]), 22, UiKit.MUTED_COLOR))
+	if GameState.last_death_blow != "":
+		blocks.append(_add_centered_text("Последний удар: %s" % GameState.last_death_blow, 22, UiKit.BAD_COLOR))
+
+	# Выбор — сразу под причиной, чтобы не прокручивать; сводка — ниже.
+	var menu := _add_centered_column(MENU_COLUMN_WIDTH)
+	var can_rollback := EconomyManager.can_use_rollback_today() and SaveManager.has_checkpoint()
+	if can_rollback:
 		var hint := "" if EconomyManager.has_full_access else " (реклама)"
-		_add_button("Вернуться к чекпойнту" + hint, _death_rollback, "quiet")
+		menu.add_child(_menu_button("Вернуться к чекпойнту" + hint, _death_rollback, "default"))
+	menu.add_child(_menu_button("Начать заново", _death_restart, "quiet" if can_rollback else "default"))
+	blocks.append(menu.get_parent())
+	if _death_message != "":
+		blocks.append(_add_centered_text(_death_message, 22, UiKit.EXIT_COLOR))
+
+	var recap := _death_recap()
+	if not recap.is_empty():
+		var card := UiKit.card(body)
+		card.add_child(UiKit.section("Последние минуты"))
+		for line in recap:
+			var lbl := UiKit.text(line, 21, UiKit.TEXT_COLOR)
+			lbl.size.x = _body_width() - 40.0  # см. _add_text: ширина до раскладки
+			card.add_child(lbl)
+		blocks.append(card.get_parent())
+
+	blocks.append(_add_centered_text("Забегов: %d · смертей: %d · записей в архиве: %d" % [
+		ChronicleSystem.runs_finished, ChronicleSystem.deaths, ArchiveSystem.get_unlocked().size()],
+		19, UiKit.MUTED_COLOR))
+	_add_spacer(1.0)
+
+	for i in range(blocks.size()):
+		_fade_in(blocks[i], 0.06 * float(i))
+
+
+## Строки «O2 120 · Бой: Дрон» — что было перед смертью, от старых к новым.
+func _death_recap() -> Array:
+	var entries := JournalSystem.get_entries()
+	var lines: Array = []
+	for i in range(entries.size() - 1, -1, -1):
+		var entry: Dictionary = entries[i]
+		if str(entry.get("kind", "")) == "death":
+			continue
+		var text := str(entry.get("text", ""))
+		if text.length() > DEATH_RECAP_LENGTH:
+			text = text.substr(0, DEATH_RECAP_LENGTH - 1).strip_edges() + "…"
+		lines.push_front("O2 %d · %s%s" % [int(entry.get("o2", 0)), text, _count_suffix(int(entry.get("count", 1)))])
+		if lines.size() >= DEATH_RECAP_ENTRIES:
+			break
+	return lines
+
+
+## Надпись по центру тела экрана; ширина — сразу, как в _add_text.
+func _add_centered_text(value: String, font_size: int, color: Color) -> Label:
+	var lbl := UiKit.text(value, font_size, color)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.size.x = _body_width()
+	body.add_child(lbl)
+	return lbl
 
 
 ## Победа: текст финала, итоги забега и хроники, выход в меню или новый забег.

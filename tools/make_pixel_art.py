@@ -1030,6 +1030,167 @@ def scene_base_bay(c, rng):
     c.noise_specks(rng, 56, 74, 120, 95, p["wood_d"], 14)
 
 
+def _suit_limb(c, pts, dark, lit):
+    """Конечность скафандра: тёмный жгут с узкой светлой кромкой сверху."""
+    _tendril(c, pts, dark)
+    _tendril(c, [(x, y - 1, max(0, r - 1)) for x, y, r in pts], lit)
+
+
+def scene_death_o2(c, rng):
+    """Смерть от удушья: тело в скафандре дрейфует в пустоте, визор затянут инеем,
+    оборванный фал уходит за край кадра, пустой баллон уплывает прочь."""
+    p = {
+        "void": VOID,
+        "neb_d": (14, 20, 34),
+        "neb": (22, 32, 52),
+        "wreck": (26, 31, 42),
+        "wreck_l": (40, 48, 62),
+        "frost": (206, 232, 244),
+        "frost_d": (126, 162, 186),
+        "tether": (150, 132, 106),
+        "amber": AMBER,
+        "red": RED,
+    }
+    c.fill(p["void"])
+    # холодная туманность по диагонали кадра
+    for y in range(96):
+        x0 = int(y * 1.4) - 30
+        c.dither_over(x0, y, x0 + 46, y, p["neb_d"], y % 2)
+        c.dither_over(x0 + 12, y, x0 + 30, y, p["neb"], (y + 1) % 2)
+    c.noise_specks(rng, 0, 0, 159, 95, STAR_DIM, 90)
+    c.noise_specks(rng, 0, 0, 159, 95, STAR, 40)
+    # далёкий обломок корабля с тусклым огнём
+    c.fill_rect(118, 12, 150, 17, p["wreck"])
+    c.fill_rect(126, 9, 140, 12, p["wreck"])
+    c.hline(118, 150, 12, p["wreck_l"])
+    for x in range(151, 157):
+        c.pixel(x, 13 + (x % 3), p["wreck"])
+    c.pixel(131, 14, p["amber"])
+    # оборванный фал: от пояса к левому краю, конец распушён
+    last = (80, 52)
+    for i in range(1, 15):
+        t = i / 14.0
+        x = int(80 - 78 * t)
+        y = int(52 + 26 * t - 18 * t * (1 - t) * 2)
+        c.line(last[0], last[1], x, y, p["tether"])
+        last = (x, y)
+    c.line(2, 78, 0, 82, p["tether"])
+    c.pixel(1, 76, p["tether"])
+    # руки и ноги безвольно раскинуты: тело медленно кувыркается
+    _suit_limb(c, ((70, 46, 3), (58, 38, 3), (50, 42, 2)), SUIT_D, SUIT)
+    _suit_limb(c, ((88, 44, 3), (98, 34, 3), (104, 26, 2)), SUIT_D, SUIT)
+    _suit_limb(c, ((84, 60, 4), (96, 70, 3), (106, 80, 3)), SUIT_D, SUIT)
+    _suit_limb(c, ((78, 62, 4), (82, 74, 3), (80, 86, 3)), SUIT_D, SUIT)
+    # перчатки и ботинки
+    c.circle(49, 43, 2, STEEL_D)
+    c.circle(105, 25, 2, STEEL_D)
+    c.fill_rect(104, 79, 109, 83, STEEL_D)
+    c.fill_rect(78, 85, 83, 89, STEEL_D)
+    # корпус скафандра с ранцем
+    c.ellipse(80, 52, 11, 12, SUIT_D)
+    c.ellipse(79, 51, 10, 11, SUIT)
+    c.ellipse(76, 47, 5, 5, SUIT_L)
+    c.fill_rect(86, 44, 92, 60, STEEL_D)
+    c.rect(86, 44, 92, 60, DARK)
+    c.pixel(89, 48, p["red"])
+    c.pixel(89, 52, RED_DIM)
+    # шлем: визор затянут инеем, лица не видно
+    c.circle(70, 36, 10, STEEL_D)
+    c.circle(69, 35, 9, STEEL)
+    c.ellipse(66, 31, 5, 4, STEEL_L)
+    c.ellipse(69, 37, 7, 5, DARK)
+    c.ellipse(69, 37, 6, 4, p["frost_d"])
+    c.dither_over(63, 33, 75, 41, p["frost"], 0)
+    c.line(64, 38, 70, 34, p["frost"])
+    c.line(68, 40, 73, 36, WHITE)
+    # кристаллы льда вокруг шлема
+    for (x, y) in ((58, 26), (61, 22), (77, 24), (81, 28), (56, 34), (66, 22)):
+        c.pixel(x, y, p["frost"])
+    c.noise_specks(rng, 52, 18, 88, 50, p["frost_d"], 14)
+    # пустой баллон уплывает, стрелка манометра на нуле
+    c.fill_rect(118, 58, 124, 72, STEEL_D)
+    c.fill_rect(119, 58, 123, 71, STEEL)
+    c.hline(119, 123, 58, STEEL_L)
+    c.fill_rect(120, 55, 122, 57, DARK)
+    c.circle(121, 64, 2, DARK)
+    c.pixel(120, 65, p["red"])
+    c.pixel(121, 64, p["red"])
+    for (x, y) in ((127, 61), (131, 59), (136, 57)):
+        c.pixel(x, y, STAR_DIM)
+
+
+def scene_death_hp(c, rng):
+    """Смерть от ран: в коридоре под аварийной лампой у стены осел выживший,
+    визор расколот, по палубе расползлось тёмное пятно, с кабеля сыплются искры."""
+    p = {
+        "d0": (38, 24, 30), "d1": (28, 18, 24), "d2": (20, 14, 19),
+        "f0": (40, 28, 32), "f1": (30, 21, 25), "f2": (21, 15, 19),
+        "w0": (48, 32, 38), "w1": (36, 24, 30), "w2": (26, 18, 23),
+        "far": (14, 10, 14),
+        "seam": (10, 7, 10),
+        "glow": (96, 26, 34),
+        "pipe": (62, 44, 50),
+        "amber": AMBER,
+        "red": RED,
+        "red_l": RED_LIT,
+    }
+    draw_room(c, (62, 20, 100, 70),
+              {"ceil": (p["d0"], p["d1"], p["d2"]),
+               "floor": (p["f0"], p["f1"], p["f2"]),
+               "left": (p["w0"], p["w1"], p["w2"]),
+               "right": (p["w0"], p["w1"], p["w2"]),
+               "far": p["far"]}, p["seam"])
+    # трубы вдоль стен
+    for t in (0, 1):
+        y_near = 26 + t * 26
+        y_far = 28 + t * 18
+        c.line(0, y_near, 62, y_far, p["pipe"])
+        c.line(159, y_near, 100, y_far, p["pipe"])
+    # аварийная лампа под потолком и её красный отсвет
+    c.dither_disc(81, 6, 14, p["glow"], 1)
+    c.fill_rect(74, 4, 88, 8, p["red"])
+    c.hline(75, 87, 5, p["red_l"])
+    c.fill_rect(72, 2, 90, 3, p["pipe"])
+    # оборванный кабель справа искрит
+    c.line(128, 0, 132, 20, p["seam"])
+    c.line(132, 20, 127, 30, p["seam"])
+    c.pixel(127, 31, WHITE)
+    for (x, y) in ((125, 33), (129, 34), (124, 37), (130, 38), (127, 41), (122, 40)):
+        c.pixel(x, y, p["amber"])
+    # тёмное пятно на палубе под телом
+    c.ellipse(64, 86, 30, 6, RED_DARK)
+    c.ellipse(60, 86, 18, 4, RED_DIM)
+    c.dither_over(34, 80, 96, 92, RED_DARK, 1)
+    # ноги вытянуты по палубе
+    _suit_limb(c, ((44, 78, 4), (62, 82, 4), (80, 84, 3)), SUIT_D, SUIT)
+    _suit_limb(c, ((40, 82, 4), (56, 88, 4), (72, 91, 3)), SUIT_D, SUIT)
+    c.fill_rect(79, 80, 85, 86, STEEL_D)
+    c.fill_rect(71, 88, 77, 93, STEEL_D)
+    # корпус привален к левой стене
+    c.ellipse(34, 68, 11, 14, SUIT_D)
+    c.ellipse(33, 67, 10, 13, SUIT)
+    c.ellipse(30, 62, 5, 6, SUIT_L)
+    c.specks_on(rng, 24, 56, 44, 80, SUIT, SUIT_D, 26)
+    # рука безвольно лежит на полу, другая прижата к боку
+    _suit_limb(c, ((42, 70, 3), (50, 76, 3), (56, 80, 2)), SUIT_D, SUIT)
+    c.circle(57, 81, 2, STEEL_D)
+    _suit_limb(c, ((26, 70, 3), (28, 78, 3)), SUIT_D, SUIT)
+    # шлем склонён на грудь, визор расколот
+    c.circle(36, 50, 9, STEEL_D)
+    c.circle(35, 49, 8, STEEL)
+    c.ellipse(32, 45, 4, 3, STEEL_L)
+    c.ellipse(38, 52, 6, 4, DARK)
+    c.ellipse(38, 52, 5, 3, GLASS_D)
+    c.line(35, 50, 41, 54, WHITE)
+    c.line(38, 52, 39, 49, GREY)
+    # потёки на стене и красный отсвет лампы по кромке шлема
+    c.vline(22, 58, 76, RED_DIM)
+    c.vline(23, 64, 80, RED_DARK)
+    for (x, y) in ((31, 42), (33, 41), (35, 41), (37, 41), (39, 42)):
+        c.pixel(x, y, p["red"])
+    c.noise_specks(rng, 0, 84, 159, 95, p["f2"], 30)
+
+
 SCENES = (
     ("capsule", scene_capsule),
     ("wreckage", scene_wreckage),
@@ -1041,6 +1202,9 @@ SCENES = (
     ("comms_sentry", scene_comms_sentry),
     ("antenna_mast", scene_antenna_mast),
     ("base_bay", scene_base_bay),
+    # экран смерти: своя картинка на каждую причину (GameState.last_death_cause)
+    ("death_o2", scene_death_o2),
+    ("death_hp", scene_death_hp),
 )
 
 

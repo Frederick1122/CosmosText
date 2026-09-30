@@ -7,6 +7,8 @@ const MUTED_COLOR := Color("#8a96ab")
 const TITLE_COLOR := Color("#f5f8ff")
 const ACCENT_COLOR := Color("#9fd3e6")
 const BAD_COLOR := Color("#f0b0b9")
+## Прибыль: «[+25 HP]», найденный предмет, попадание по врагу.
+const GOOD_COLOR := Color("#a7e3c4")
 ## Цвет завершающих действий: выход из модуля, конец события, финал забега.
 const EXIT_COLOR := Color("#e0b153")
 

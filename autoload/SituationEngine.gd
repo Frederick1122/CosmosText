@@ -101,8 +101,10 @@ func get_available_options() -> Array:
 ## Выбор стоит кислорода: если баллон кончился, вариант не применяется —
 ## экран смерти выставит GameState по EventBus.player_died.
 ##
-## Порядок: реплика игрока в ленту → эффекты → текст последствия. Дальше
-## ситуация ждёт «Продолжить» (confirm_continue), а не выкидывает игрока сразу.
+## Порядок: реплика игрока в ленту → цена выбора «[−2 O2]» → текст
+## последствия → эффекты (их изменения ресурсов и предметов — строками в
+## квадратных скобках). Дальше ситуация ждёт «Продолжить» (confirm_continue),
+## а не выкидывает игрока сразу.
 func select_option(option_id: String) -> void:
 	var chosen = _find_option(option_id)
 	if chosen == null:
@@ -110,13 +112,15 @@ func select_option(option_id: String) -> void:
 		return
 	if awaiting_continue:
 		return  # ждём «Продолжить» по предыдущему выбору
+	var cost := ResourceSystem.get_o2_cost("choice")
 	if not ResourceSystem.spend_o2("choice"):
 		return
 	NarrativeSystem.push("choice", str(chosen.get("label", option_id)))
+	EffectResolver.report_change(-cost, "O2")
+	NarrativeSystem.push("result", str(chosen.get("result", "")))
 	_pending_completes_event = bool(chosen.get("completes_event", true))
 	EffectResolver.apply_effects(chosen.get("effects", []))
 	option_selected.emit(option_id)
-	NarrativeSystem.push("result", str(chosen.get("result", "")))
 	if ResourceSystem.is_dead():
 		return
 	_pending_next = str(chosen.get("next", ""))
