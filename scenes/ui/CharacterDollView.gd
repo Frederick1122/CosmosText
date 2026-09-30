@@ -51,7 +51,7 @@ func setup(slots_info: Dictionary, selected: String) -> void:
 		btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		btn.custom_minimum_size = BUTTON_SIZE
 		btn.clip_text = true
-		btn.add_theme_font_size_override("font_size", 19)
+		btn.add_theme_font_size_override("font_size", UiKit.fs(19))
 		btn.pressed.connect(_on_slot_pressed.bind(slot))
 		add_child(btn)
 		_buttons[slot] = btn

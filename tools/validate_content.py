@@ -525,6 +525,8 @@ def main():
             opt_ctx = f"situations/{sid}#{opt.get('id', '?')}"
             check_requires(opt.get("requires", []), opt_ctx)
             check_effects(opt.get("effects", []), opt_ctx)
+            if not str(opt.get("result", "")).strip():
+                errors.append(f"{opt_ctx}: нет текста последствия (result) — игроку нечего показать перед «Продолжить»")
             nxt = opt.get("next", "")
             if nxt and not nxt.startswith("map:"):
                 referenced_situations.add(nxt)
@@ -604,7 +606,7 @@ def main():
         for special in enemy.get("special_actions", []):
             check_requires(special.get("requires", []), f"enemies/{eid}#{special.get('id', '?')}")
             eff_type = special.get("effect", {}).get("type")
-            if eff_type not in ("skip_enemy_turn_and_guarantee_hit",):
+            if eff_type not in ("distract",):
                 warnings.append(f"enemies/{eid}#{special.get('id', '?')}: неизвестный тип spec-эффекта '{eff_type}'")
         ai = enemy.get("ai", "brawler")
         if ai not in ENEMY_AI_TYPES:

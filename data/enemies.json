@@ -17,11 +17,11 @@
     "special_actions": [
       {
         "effect": {
-          "type": "skip_enemy_turn_and_guarantee_hit",
-          "value": 15
+          "type": "distract",
+          "value": 2
         },
         "id": "distract_datapad",
-        "label": "Использовать планшет как отвлекающий манёвр",
+        "label": "Бросить планшет в сторону — дрон уйдёт на звук",
         "requires": [
           {
             "item": "broken_datapad",
@@ -52,11 +52,11 @@
     "special_actions": [
       {
         "effect": {
-          "type": "skip_enemy_turn_and_guarantee_hit",
-          "value": 12
+          "type": "distract",
+          "value": 2
         },
         "id": "jam_optics",
-        "label": "Залепить оптику ветошью",
+        "label": "Залепить оптику турели ветошью",
         "requires": [
           {
             "item": "cloth_rags",

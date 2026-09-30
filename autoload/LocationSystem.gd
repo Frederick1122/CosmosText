@@ -23,11 +23,8 @@ signal stash_changed(location_id: String)
 
 var current_id: String = ""
 var current_node_id: String = ""
-## Тексты мгновенных событий, сработавших с последнего действия игрока.
-var notices: Array = []
-## Картинка последнего сработавшего события: висит над сообщениями до
-## следующего действия игрока (assets/art/scenes/<image>.png).
-var event_image: String = ""
+## Сообщения и тексты событий уходят в NarrativeSystem: экран модуля — это
+## лента, а не набор полей, которые надо очищать.
 
 var _locations: Dictionary = {}  # id -> data
 var _visits: Dictionary = {}  # location_id -> int
@@ -63,8 +60,6 @@ func _load_all_locations() -> void:
 func reset_for_new_run() -> void:
 	current_id = ""
 	current_node_id = ""
-	notices.clear()
-	event_image = ""
 	_visits.clear()
 	_done.clear()
 	_fired_this_visit.clear()
@@ -87,8 +82,9 @@ func enter(location_id: String, node_id: String = "") -> bool:
 	current_node_id = node_id
 	_visits[location_id] = int(_visits.get(location_id, 0)) + 1
 	_fired_this_visit.clear()
-	notices.clear()
-	event_image = ""
+	# Новый модуль — новая сцена в ленте: заголовок, иллюстрация и описание.
+	NarrativeSystem.push_scene(get_title(), get_image())
+	NarrativeSystem.push("text", get_description())
 	location_entered.emit(location_id)
 	return true
 
@@ -99,8 +95,6 @@ func leave() -> void:
 	var left_id := current_id
 	current_id = ""
 	current_node_id = ""
-	notices.clear()
-	event_image = ""
 	_fired_this_visit.clear()
 	location_left.emit(left_id)
 
@@ -191,20 +185,12 @@ func mark_started(ev: Dictionary) -> void:
 	var key := _event_key(ev)
 	_done[key] = int(_done.get(key, 0)) + 1
 	_fired_this_visit[key] = true
-	var image := str(ev.get("image", ""))
-	if image != "":
-		event_image = image  # иллюстрация события показывается над его текстом
 	event_started.emit(current_id, str(ev.get("id", "")))
 
 
+## Служебное сообщение игроку — уходит в ленту повествования.
 func add_notice(text: String) -> void:
-	if text != "":
-		notices.append(text)
-
-
-func clear_notices() -> void:
-	notices.clear()
-	event_image = ""
+	NarrativeSystem.push("notice", text)
 
 
 # --- Предметы на полу модуля ----------------------------------------------------

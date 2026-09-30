@@ -44,6 +44,8 @@ scenes/
   Main.tscn / Main.gd      смоук-тест логики без UI (SMOKE OK / FAIL)
 assets/art/scenes/*.png    иллюстрации сцен 160x96 (поле image в контенте)
 assets/art/items/*.png     иконки предметов 16x16 (по id предмета)
+assets/art/enemies/*.png   портреты врагов 64x64 для экрана боя (по id врага)
+assets/art/portraits/*.png портрет игрока 64x64
 tools/validate_content.py  офлайн-валидатор перекрёстных ссылок в JSON-контенте
 tools/make_pixel_art.py    генератор пиксель-арта (чистый Python, без зависимостей)
 addons/mcp_bridge/         плагин редактора: TCP-мост для Claude Code (порт 9500)

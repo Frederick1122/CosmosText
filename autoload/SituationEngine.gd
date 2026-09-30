@@ -8,12 +8,18 @@ signal option_selected(id: String)
 ## next: "" (сцена сама переключит экран, например start_combat),
 ##       "map:<sector_id>" (открыть карту сектора) или id следующей ситуации.
 signal situation_ended(id: String, next: String)
+## Вариант применён, показан его результат — UI рисует кнопку «Продолжить».
+signal option_resolved(id: String)
 
 var current_id: String = ""
 var flags: Dictionary = {}
+## Ситуация не обрывается на выборе: сначала показывается текст последствия и
+## кнопка «Продолжить», и только потом игрок покидает сцену.
+var awaiting_continue: bool = false
 
 var _situations: Dictionary = {}  # id -> data
 var _current_data: Dictionary = {}
+var _pending_next: String = ""
 
 
 func _ready() -> void:
@@ -45,6 +51,8 @@ func reset_for_new_run() -> void:
 	flags.clear()
 	current_id = ""
 	_current_data = {}
+	awaiting_continue = false
+	_pending_next = ""
 
 
 func set_flag(flag: String, value) -> void:
@@ -62,6 +70,9 @@ func load_situation(id: String) -> bool:
 		return false
 	_current_data = _situations[id]
 	current_id = id
+	awaiting_continue = false
+	_pending_next = ""
+	NarrativeSystem.push("text", get_current_text(), get_current_image())
 	situation_started.emit(id)
 	return true
 
@@ -85,19 +96,37 @@ func get_available_options() -> Array:
 
 ## Выбор стоит кислорода: если баллон кончился, вариант не применяется —
 ## экран смерти выставит GameState по EventBus.player_died.
+##
+## Порядок: реплика игрока в ленту → эффекты → текст последствия. Дальше
+## ситуация ждёт «Продолжить» (confirm_continue), а не выкидывает игрока сразу.
 func select_option(option_id: String) -> void:
 	var chosen = _find_option(option_id)
 	if chosen == null:
 		push_error("SituationEngine: опция '%s' не найдена в '%s'" % [option_id, current_id])
 		return
+	if awaiting_continue:
+		return  # ждём «Продолжить» по предыдущему выбору
 	if not ResourceSystem.spend_o2("choice"):
 		return
+	NarrativeSystem.push("choice", str(chosen.get("label", option_id)))
 	EffectResolver.apply_effects(chosen.get("effects", []))
 	option_selected.emit(option_id)
+	NarrativeSystem.push("result", str(chosen.get("result", "")))
 	if ResourceSystem.is_dead():
 		return
+	_pending_next = str(chosen.get("next", ""))
+	if CombatSystem.state == CombatSystem.State.PLAYER_TURN:
+		return  # бой уже начался: итог покажет экран боя
+	awaiting_continue = true
+	option_resolved.emit(option_id)
+
+
+## Нажатие «Продолжить»: только теперь ситуация заканчивается.
+func confirm_continue() -> void:
 	var ended_id := current_id
-	var next_id: String = chosen.get("next", "")
+	var next_id := _pending_next
+	awaiting_continue = false
+	_pending_next = ""
 	situation_ended.emit(ended_id, next_id)
 
 

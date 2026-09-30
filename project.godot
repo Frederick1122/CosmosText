@@ -19,6 +19,8 @@ config/icon="res://assets/icon.png"
 [autoload]
 
 McpBridgeGame="*res://mcp_bridge_game.gd"
+SettingsSystem="*res://autoload/SettingsSystem.gd"
+NarrativeSystem="*res://autoload/NarrativeSystem.gd"
 EventBus="*res://autoload/EventBus.gd"
 EffectResolver="*res://autoload/EffectResolver.gd"
 ResourceSystem="*res://autoload/ResourceSystem.gd"
@@ -42,6 +44,7 @@ GameState="*res://autoload/GameState.gd"
 window/size/viewport_width=1080
 window/size/viewport_height=1920
 window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
 window/handheld/orientation=1
 
 [editor_plugins]

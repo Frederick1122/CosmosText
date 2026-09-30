@@ -12,6 +12,14 @@ const EXIT_COLOR := Color("#e0b153")
 
 const SCENE_ART_DIR := "res://assets/art/scenes/"
 const ITEM_ART_DIR := "res://assets/art/items/"
+const ENEMY_ART_DIR := "res://assets/art/enemies/"
+const PORTRAIT_ART_DIR := "res://assets/art/portraits/"
+
+
+## Размер шрифта с учётом настройки «Размер шрифта» (SettingsSystem).
+## Все размеры в UI задаются через fs(), иначе настройка их не догонит.
+static func fs(size: int) -> int:
+	return maxi(8, int(round(float(size) * SettingsSystem.font_scale())))
 
 
 static func text(value: String, font_size: int = 24, color: Color = TEXT_COLOR) -> Label:
@@ -19,7 +27,7 @@ static func text(value: String, font_size: int = 24, color: Color = TEXT_COLOR) 
 	lbl.text = value
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	lbl.add_theme_font_size_override("font_size", font_size)
+	lbl.add_theme_font_size_override("font_size", fs(font_size))
 	lbl.add_theme_color_override("font_color", color)
 	return lbl
 
@@ -37,10 +45,11 @@ static func section(value: String) -> Label:
 static func button(value: String, kind: String = "default", height: int = 68) -> Button:
 	var btn := Button.new()
 	btn.text = value
-	btn.custom_minimum_size = Vector2(0, height)
+	btn.custom_minimum_size = Vector2(0, fs(height))
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	btn.add_theme_font_size_override("font_size", 23)
+	btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	btn.add_theme_font_size_override("font_size", fs(23))
 	match kind:
 		"danger":
 			style_button(btn, Color("#5b2530"), Color("#7e3443"), Color("#3b1c24"), Color("#b86d79"))
@@ -135,6 +144,22 @@ static func item_icon(item_id: String, side: int = 48) -> TextureRect:
 		return null
 	var rect := TextureRect.new()
 	rect.name = "ItemIcon"
+	rect.texture = texture
+	rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	rect.custom_minimum_size = Vector2(side, side)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return rect
+
+
+## Портрет для экрана боя: игрок (`portraits/`) или враг (`enemies/`).
+static func portrait(name: String, is_enemy: bool, side: int = 96) -> TextureRect:
+	var texture := _load_texture(ENEMY_ART_DIR if is_enemy else PORTRAIT_ART_DIR, name)
+	if texture == null:
+		return null
+	var rect := TextureRect.new()
+	rect.name = "Portrait"
 	rect.texture = texture
 	rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE

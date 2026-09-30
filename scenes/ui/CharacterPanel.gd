@@ -59,7 +59,7 @@ func _rebuild() -> void:
 		var btn := UiKit.button(label, "tab_active" if entry[0] == tab else "quiet", 58)
 		btn.name = "Tab_%s" % entry[0]
 		btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
-		btn.add_theme_font_size_override("font_size", 20)
+		btn.add_theme_font_size_override("font_size", UiKit.fs(20))
 		btn.pressed.connect(_select_tab.bind(entry[0]))
 		tabs.add_child(btn)
 	add_child(tabs)
@@ -392,7 +392,7 @@ func _act(text: String) -> void:
 func _action_button(text: String, callback: Callable, kind: String = "default") -> Button:
 	var btn := UiKit.button(text, kind, 56)
 	btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	btn.add_theme_font_size_override("font_size", 20)
+	btn.add_theme_font_size_override("font_size", UiKit.fs(20))
 	if callback.is_valid():
 		btn.pressed.connect(callback)
 	return btn

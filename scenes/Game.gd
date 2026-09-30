@@ -23,10 +23,12 @@ var bag_label: Label
 var map_button: Button
 var character_button: Button
 var journal_button: Button
+var settings_button: Button
 var section_separator: HSeparator
 var map_open: bool = false
 var journal_open: bool = false
 var character_open: bool = false
+var settings_open: bool = false
 var character_tab: String = "items"
 var journal_tab: String = "log"
 
@@ -41,6 +43,8 @@ var _map_message: String = ""
 var _ad_result_pending: bool = false
 ## Текст под причиной смерти (например, реклама не досмотрена).
 var _death_message: String = ""
+## Сколько записей ленты уже показано: новые проявляются анимацией.
+var _story_shown: int = 0
 
 
 func _ready() -> void:
@@ -97,7 +101,8 @@ func _build_static_layout() -> void:
 	map_button = _make_nav_button("Карта", "MapButton", _toggle_map)
 	character_button = _make_nav_button("Персонаж", "CharacterButton", _toggle_character)
 	journal_button = _make_nav_button("Журнал", "JournalButton", _toggle_journal)
-	for btn in [map_button, character_button, journal_button]:
+	settings_button = _make_nav_button("Настройки", "SettingsButton", _toggle_settings)
+	for btn in [map_button, character_button, journal_button, settings_button]:
 		nav_row.add_child(btn)
 
 	section_separator = HSeparator.new()
@@ -113,11 +118,18 @@ func _build_static_layout() -> void:
 	_style_scrollbar(content_scroll.get_v_scroll_bar())
 	root_vbox.add_child(content_scroll)
 
+	# Полоса прокрутки не должна наезжать на текст и кнопки.
+	var body_margin := MarginContainer.new()
+	body_margin.name = "BodyMargin"
+	body_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body_margin.add_theme_constant_override("margin_right", 18)
+	content_scroll.add_child(body_margin)
+
 	body = VBoxContainer.new()
 	body.name = "ScreenBody"
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", BODY_GAP)
-	content_scroll.add_child(body)
+	body_margin.add_child(body)
 
 
 func _connect_signals() -> void:
@@ -134,6 +146,9 @@ func _connect_signals() -> void:
 	MapSystem.floor_changed.connect(_on_map_floor_changed)
 	MapSystem.fog_changed.connect(_on_map_fog_changed)
 	CombatSystem.turn_resolved.connect(_on_combat_turn_resolved)
+	SettingsSystem.changed.connect(_on_settings_changed)
+	SituationEngine.option_resolved.connect(_on_situation_option_resolved)
+	NarrativeSystem.entries_added.connect(_on_story_entries_added)
 
 func _fill_parent(control: Control) -> void:
 	control.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -145,7 +160,7 @@ func _make_hud_label() -> Label:
 	var lbl := Label.new()
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_size_override("font_size", 22)
+	lbl.add_theme_font_size_override("font_size", UiKit.fs(22))
 	lbl.add_theme_color_override("font_color", Color("#eef3ff"))
 	return lbl
 
@@ -154,9 +169,11 @@ func _make_nav_button(text: String, node_name: String, callback: Callable) -> Bu
 	var btn := Button.new()
 	btn.name = node_name
 	btn.text = text
-	btn.custom_minimum_size = Vector2(0, 56)
+	btn.custom_minimum_size = Vector2(0, UiKit.fs(56))
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.add_theme_font_size_override("font_size", 21)
+	btn.add_theme_font_size_override("font_size", UiKit.fs(19))
+	btn.clip_text = true
+	btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	btn.pressed.connect(callback)
 	_style_nav_button(btn, false)
 	return btn
@@ -237,6 +254,52 @@ func _scroll_to_top() -> void:
 	content_scroll.scroll_vertical = 0
 
 
+## Лента растёт вниз, поэтому после перерисовки показываем её конец —
+## новые реплики и кнопки действий.
+func _scroll_to_bottom() -> void:
+	await get_tree().process_frame
+	if not is_instance_valid(content_scroll):
+		return
+	var bar := content_scroll.get_v_scroll_bar()
+	var target := int(maxf(0.0, bar.max_value - bar.page))
+	if SettingsSystem.animations:
+		var tween := create_tween()
+		tween.tween_property(content_scroll, "scroll_vertical", target, 0.22) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	else:
+		content_scroll.scroll_vertical = target
+
+
+## Экраны с лентой: модуль и ситуация.
+func _is_story_screen() -> bool:
+	return GameState.current_screen == GameState.Screen.LOCATION \
+		or GameState.current_screen == GameState.Screen.SITUATION
+
+
+func _any_overlay_open() -> bool:
+	return map_open or journal_open or character_open or settings_open
+
+
+## Плавное появление экрана целиком (карта, журнал, бой, смена сцены).
+func _animate_body() -> void:
+	if not SettingsSystem.animations:
+		body.modulate.a = 1.0
+		return
+	body.modulate.a = 0.0
+	var tween := create_tween()
+	tween.tween_property(body, "modulate:a", 1.0, 0.16).set_trans(Tween.TRANS_SINE)
+
+
+## Плавное появление одной новой записи ленты.
+func _fade_in(node: CanvasItem, delay: float) -> void:
+	if not SettingsSystem.animations:
+		return
+	node.modulate.a = 0.0
+	var tween := create_tween()
+	tween.tween_interval(minf(delay, 0.3))
+	tween.tween_property(node, "modulate:a", 1.0, 0.2).set_trans(Tween.TRANS_SINE)
+
+
 # --- Реакция на системы ---------------------------------------------------------
 
 func _on_resource_changed(_value) -> void:
@@ -284,6 +347,22 @@ func _on_combat_turn_resolved(_entry: Dictionary) -> void:
 		_render_combat()
 
 
+func _on_settings_changed() -> void:
+	_render_current_screen()
+
+
+## Выбор применён и его последствие уже в ленте — показываем «Продолжить».
+func _on_situation_option_resolved(_option_id: String) -> void:
+	if GameState.current_screen == GameState.Screen.SITUATION:
+		_render_current_screen()
+
+
+## Лента пополнилась, пока игрок на повествовательном экране — дорисовываем.
+func _on_story_entries_added(_count: int) -> void:
+	if _is_story_screen() and not _any_overlay_open():
+		_render_current_screen()
+
+
 func _on_screen_changed(screen: int) -> void:
 	if character_open:
 		NotificationSystem.mark_character_seen()
@@ -292,10 +371,10 @@ func _on_screen_changed(screen: int) -> void:
 	map_open = false
 	journal_open = false
 	character_open = false
+	settings_open = false
 	if screen != GameState.Screen.DEATH:
 		_death_message = ""
 	_map_message = ""
-	_scroll_to_top()
 	_render_current_screen()
 
 
@@ -322,10 +401,30 @@ func _toggle_journal() -> void:
 		journal_open = true
 		map_open = false
 		character_open = false
+		settings_open = false
 	_scroll_to_top()
 	_render_current_screen()
 
 
+func _toggle_settings() -> void:
+	if settings_open:
+		settings_open = false
+	else:
+		if journal_open:
+			NotificationSystem.mark_journal_seen()
+		if character_open:
+			NotificationSystem.mark_character_seen()
+		settings_open = true
+		map_open = false
+		journal_open = false
+		character_open = false
+	_scroll_to_top()
+	_render_current_screen()
+
+
+## Кнопка «Карта» в HUD заменяет прежнюю кнопку «Выйти на карту»: из модуля
+## она выводит игрока наружу, из ситуации — открывает карту только для
+## просмотра, на самой карте — ничего не делает.
 func _toggle_map() -> void:
 	if map_button.disabled:
 		return
@@ -335,6 +434,10 @@ func _toggle_map() -> void:
 		NotificationSystem.mark_character_seen()
 	journal_open = false
 	character_open = false
+	settings_open = false
+	if GameState.current_screen == GameState.Screen.LOCATION and not map_open:
+		GameState.leave_location()
+		return
 	if GameState.current_screen == GameState.Screen.SECTOR_MAP:
 		map_open = false
 	else:
@@ -378,16 +481,28 @@ func _render_current_screen() -> void:
 	_update_hud()
 	_set_chrome_visible(GameState.current_screen != GameState.Screen.MAIN_MENU)
 	_update_nav_buttons()
+	var story_before := _story_shown
 	_clear_body()
+	if settings_open:
+		_render_settings()
+		_animate_body()
+		return
 	if journal_open:
 		_render_journal()
+		_animate_body()
 		return
 	if character_open:
 		_render_character()
+		_animate_body()
 		return
 	if map_open:
 		_render_map(true)
+		_animate_body()
 		return
+	if not _is_story_screen():
+		_story_shown = 0
+	elif story_before > NarrativeSystem.size():
+		_story_shown = 0
 	match GameState.current_screen:
 		GameState.Screen.MAIN_MENU:
 			_render_main_menu()
@@ -422,18 +537,22 @@ func _update_nav_buttons() -> void:
 		or GameState.current_screen == GameState.Screen.VICTORY
 		or GameState.current_screen == GameState.Screen.DEATH
 	)
-	map_button.disabled = blocked or not GameState.has_left_capsule
+	# Карта заменяет кнопку выхода из модуля, поэтому её не запираем вступлением.
+	map_button.disabled = blocked
 	character_button.disabled = blocked or not GameState.has_left_capsule
 	journal_button.disabled = blocked
+	settings_button.disabled = GameState.current_screen == GameState.Screen.COMBAT
 	_set_nav_label(map_button, "Карта", false)
 	_set_nav_label(character_button, "Персонаж", NotificationSystem.has_character_alert())
 	_set_nav_label(journal_button, "Журнал", NotificationSystem.has_new_lore())
-	var map_active := not journal_open and not character_open and (
+	_set_nav_label(settings_button, "Настройки", false)
+	var map_active := not journal_open and not character_open and not settings_open and (
 		map_open or GameState.current_screen == GameState.Screen.SECTOR_MAP
 	)
 	_style_nav_button(map_button, map_active)
 	_style_nav_button(character_button, character_open)
 	_style_nav_button(journal_button, journal_open)
+	_style_nav_button(settings_button, settings_open)
 
 
 func _set_nav_label(btn: Button, base: String, alert: bool) -> void:
@@ -448,7 +567,7 @@ func _clear_body() -> void:
 
 func _add_title(text: String) -> Label:
 	var lbl := _add_text(text)
-	lbl.add_theme_font_size_override("font_size", 34)
+	lbl.add_theme_font_size_override("font_size", UiKit.fs(34))
 	lbl.add_theme_color_override("font_color", Color("#f5f8ff"))
 	return lbl
 
@@ -458,7 +577,7 @@ func _add_text(text: String) -> Label:
 	lbl.text = text
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	lbl.add_theme_font_size_override("font_size", 24)
+	lbl.add_theme_font_size_override("font_size", UiKit.fs(24))
 	lbl.add_theme_color_override("font_color", Color("#d7deee"))
 	body.add_child(lbl)
 	return lbl
@@ -474,7 +593,7 @@ func _add_scene_image(image_name: String) -> void:
 ## Ширина тела экрана: вьюпорт минус поля и полоса прокрутки.
 func _body_width() -> float:
 	var viewport_width := float(ProjectSettings.get_setting("display/window/size/viewport_width", 1080))
-	return maxf(64.0, viewport_width - CONTENT_MARGIN * 2.0 - 14.0)
+	return maxf(64.0, viewport_width - CONTENT_MARGIN * 2.0 - 32.0)
 
 
 func _add_button(text: String, callback: Callable, kind: String = "default") -> Button:
@@ -550,17 +669,18 @@ func _on_map_node_selected(node_id: String) -> void:
 	MapSystem.select_node(node_id)
 
 
+## Экран ситуации и экран модуля — это одна и та же лента повествования,
+## меняется только набор действий под ней.
 func _render_situation() -> void:
-	_add_scene_image(SituationEngine.get_current_image())
-	var text := SituationEngine.get_current_text()
-	_add_text(text if text != "" else "Ситуация не загружена.")
-
+	_render_story()
+	if SituationEngine.awaiting_continue:
+		_add_button("Продолжить", _continue_situation, "exit")
+		return
 	var options := SituationEngine.get_available_options()
 	if options.is_empty():
 		# Некуда выбирать — единственная кнопка закрывает ситуацию.
-		_add_button("Продолжить", func(): GameState.finish_situation(), "exit")
+		_add_button("Продолжить", _continue_situation, "exit")
 		return
-
 	for opt in options:
 		var opt_id: String = opt.get("id", "")
 		# Завершающие варианты (выход на карту, конец события, финал) выделены цветом.
@@ -568,23 +688,57 @@ func _render_situation() -> void:
 		_add_button(str(opt.get("label", opt_id)), _make_option_callback(opt_id), kind)
 
 
+func _continue_situation() -> void:
+	GameState.finish_situation()
+
+
+## Лента: старые записи остаются на месте, новые проявляются и подматываются.
+func _render_story() -> void:
+	var entries := NarrativeSystem.get_entries()
+	var fresh_from := _story_shown if _story_shown <= entries.size() else 0
+	for i in range(entries.size()):
+		var entry: Dictionary = entries[i]
+		for node in _story_nodes(entry):
+			body.add_child(node)
+			if i >= fresh_from:
+				_fade_in(node, 0.05 * float(i - fresh_from))
+	_story_shown = entries.size()
+	_scroll_to_bottom()
+
+
+## Узлы одной записи ленты: картинка (если есть) и текст в своём стиле.
+func _story_nodes(entry: Dictionary) -> Array:
+	var nodes: Array = []
+	var image := str(entry.get("image", ""))
+	if image != "":
+		var art := UiKit.scene_art(image, _body_width())
+		if art != null:
+			nodes.append(art)
+	var text := str(entry.get("text", ""))
+	if text == "":
+		return nodes
+	match str(entry.get("kind", "text")):
+		"scene":
+			nodes.append(UiKit.text(text, 32, UiKit.TITLE_COLOR))
+		"choice":
+			nodes.append(UiKit.text("— " + text, 24, UiKit.EXIT_COLOR))
+		"result":
+			nodes.append(UiKit.text(text, 24, UiKit.TEXT_COLOR))
+		"notice":
+			nodes.append(UiKit.text(text, 22, UiKit.ACCENT_COLOR))
+		"system":
+			nodes.append(UiKit.text(text, 22, UiKit.MUTED_COLOR))
+		_:
+			nodes.append(UiKit.text(text, 24, UiKit.TEXT_COLOR))
+	return nodes
+
+
 func _make_option_callback(opt_id: String) -> Callable:
 	return func(): SituationEngine.select_option(opt_id)
 
 
 func _render_location() -> void:
-	_add_title(LocationSystem.get_title())
-	# Иллюстрация сработавшего события важнее общей картинки модуля.
-	var location_image := LocationSystem.event_image
-	if location_image == "":
-		location_image = LocationSystem.get_image()
-	_add_scene_image(location_image)
-	var description := LocationSystem.get_description()
-	if description != "":
-		_add_text(description)
-	for notice in LocationSystem.notices:
-		var lbl := _add_text(str(notice))
-		lbl.add_theme_color_override("font_color", UiKit.ACCENT_COLOR)
+	_render_story()
 
 	var events := LocationSystem.get_manual_events()
 	if not events.is_empty():
@@ -597,7 +751,6 @@ func _render_location() -> void:
 				var locked_btn := UiKit.button(
 					"%s — %s" % [label, EffectResolver.lock_hint(LocationSystem.get_event_lock(ev))],
 					"quiet", BUTTON_HEIGHT + 28)
-				locked_btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 				locked_btn.disabled = true
 				body.add_child(locked_btn)
 			else:
@@ -622,8 +775,6 @@ func _render_location() -> void:
 		for item_id in usable:
 			_add_button("Использовать: " + _item_name(item_id), _make_location_item_callback(item_id), "quiet")
 
-	_add_button("Выйти на карту", _leave_location, "exit")
-
 
 ## Модуль-база: ручное сохранение, верстак и разгрузка сумки на склад.
 func _render_base_section() -> void:
@@ -643,10 +794,8 @@ func _render_base_section() -> void:
 
 
 func _base_save() -> void:
-	LocationSystem.clear_notices()
 	SaveManager.write_checkpoint()
 	LocationSystem.add_notice("Забег сохранён: точка возврата — этот модуль.")
-	_render_current_screen()
 
 
 func _base_open_craft() -> void:
@@ -656,7 +805,6 @@ func _base_open_craft() -> void:
 
 func _make_base_store_callback(item_id: String) -> Callable:
 	return func():
-		LocationSystem.clear_notices()
 		if InventorySystem.drop_item(item_id):
 			LocationSystem.add_notice("На складе: %s." % _item_name(item_id))
 		_render_current_screen()
@@ -668,7 +816,6 @@ func _make_location_event_callback(event_id: String) -> Callable:
 
 func _make_location_item_callback(item_id: String) -> Callable:
 	return func():
-		LocationSystem.clear_notices()
 		if InventorySystem.use_item(item_id):
 			LocationSystem.add_notice("Использовано: %s." % _item_name(item_id))
 		GameState.refresh_location()
@@ -676,7 +823,6 @@ func _make_location_item_callback(item_id: String) -> Callable:
 
 func _make_stash_take_callback(item_id: String) -> Callable:
 	return func():
-		LocationSystem.clear_notices()
 		var total := int(LocationSystem.get_stash().get(item_id, 0))
 		var taken := LocationSystem.stash_take(item_id)
 		if taken == 0:
@@ -686,10 +832,6 @@ func _make_stash_take_callback(item_id: String) -> Callable:
 		else:
 			LocationSystem.add_notice("Взято: %s%s." % [_item_name(item_id), _count_suffix(taken)])
 		GameState.refresh_location()
-
-
-func _leave_location() -> void:
-	GameState.leave_location()
 
 
 func _render_character() -> void:
@@ -815,7 +957,7 @@ func _render_journal() -> void:
 		var btn := UiKit.button(label, "tab_active" if tab_id == journal_tab else "quiet", 58)
 		btn.name = "JournalTab_%s" % tab_id
 		btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
-		btn.add_theme_font_size_override("font_size", 20)
+		btn.add_theme_font_size_override("font_size", UiKit.fs(20))
 		btn.pressed.connect(_select_journal_tab.bind(tab_id))
 		tabs.add_child(btn)
 	body.add_child(tabs)
@@ -845,7 +987,7 @@ func _render_journal_log() -> void:
 		var count := int(entry.get("count", 1))
 		var line := "O2 %d · %s%s" % [int(entry.get("o2", 0)), str(entry.get("text", "")), _count_suffix(count)]
 		var lbl := _add_text(line)
-		lbl.add_theme_font_size_override("font_size", 22)
+		lbl.add_theme_font_size_override("font_size", UiKit.fs(22))
 		lbl.add_theme_color_override("font_color", JOURNAL_COLORS.get(str(entry.get("kind", "")), UiKit.TEXT_COLOR))
 
 
@@ -860,3 +1002,30 @@ func _render_journal_archive() -> void:
 		var card := UiKit.card(body)
 		card.add_child(UiKit.text(ArchiveSystem.get_title(str(id)), 26, UiKit.TITLE_COLOR))
 		card.add_child(UiKit.text(ArchiveSystem.get_text(str(id)), 22))
+
+
+## Настройки интерфейса: размер шрифта и плавные переходы.
+func _render_settings() -> void:
+	_add_title("Настройки")
+	_add_section("Размер шрифта")
+	for size_id in SettingsSystem.FONT_SIZES.keys():
+		var active: bool = str(size_id) == SettingsSystem.font_size_id
+		var btn := UiKit.button(
+			SettingsSystem.font_size_title(str(size_id)) + ("  ✓" if active else ""),
+			"tab_active" if active else "quiet")
+		btn.name = "FontSize_%s" % size_id
+		btn.pressed.connect(_select_font_size.bind(str(size_id)))
+		body.add_child(btn)
+	_add_section("Плавные переходы")
+	var anim_btn := UiKit.button(
+		"Анимации: включены" if SettingsSystem.animations else "Анимации: выключены",
+		"tab_active" if SettingsSystem.animations else "quiet")
+	anim_btn.name = "AnimationsToggle"
+	anim_btn.pressed.connect(func(): SettingsSystem.set_animations(not SettingsSystem.animations))
+	body.add_child(anim_btn)
+	_add_text("Размер шрифта меняет весь интерфейс сразу и сохраняется между запусками.")
+	_add_button("Закрыть", _toggle_settings, "quiet")
+
+
+func _select_font_size(size_id: String) -> void:
+	SettingsSystem.set_font_size(size_id)

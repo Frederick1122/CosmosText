@@ -77,11 +77,11 @@ func start_location_event(event_id: String) -> void:
 		return
 	var ev := LocationSystem.find_event(event_id)
 	var lock := LocationSystem.get_event_lock(ev)
-	LocationSystem.clear_notices()
 	if not lock.is_empty() and not EffectResolver.can_open_lock(lock):
 		LocationSystem.add_notice(EffectResolver.lock_hint(lock))
 		_show_location()
 		return
+	NarrativeSystem.push("choice", str(ev.get("label", event_id)))
 	if not ResourceSystem.spend_o2("action"):
 		return
 	if not lock.is_empty():
@@ -99,9 +99,10 @@ func refresh_location() -> void:
 	_resume_location()
 
 
-## Ситуация без доступных опций — игрок нажал «Продолжить».
+## Игрок нажал «Продолжить» под результатом выбора (или под ситуацией без
+## вариантов) — только теперь ситуация заканчивается.
 func finish_situation() -> void:
-	_on_situation_ended(SituationEngine.current_id, "")
+	SituationEngine.confirm_continue()
 
 
 ## Победное завершение забега (эффект end_run). Забег закончен: run.json и
@@ -153,8 +154,9 @@ func _resume_location() -> void:
 ## (ситуация, бой или смерть).
 func _run_event(ev: Dictionary) -> bool:
 	LocationSystem.mark_started(ev)
+	# Сначала текст события, потом его последствия: лента должна читаться сверху вниз.
+	NarrativeSystem.push("text", str(ev.get("text", "")), str(ev.get("image", "")))
 	EffectResolver.apply_effects(ev.get("effects", []))
-	LocationSystem.add_notice(str(ev.get("text", "")))
 	if ResourceSystem.is_dead() or CombatSystem.state == CombatSystem.State.PLAYER_TURN:
 		return true
 	var situation_id := str(ev.get("situation", ""))

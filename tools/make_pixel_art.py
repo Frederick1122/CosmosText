@@ -8,6 +8,8 @@
 Пишет:
   assets/art/scenes/<name>.png  — 160x96, RGB (цветовой тип 2), без альфы;
   assets/art/items/<item_id>.png — 16x16, RGBA (цветовой тип 6), фон прозрачный.
+  assets/art/portraits/player.png — 64x64, RGBA, портрет игрока для боя;
+  assets/art/enemies/<enemy_id>.png — 64x64, RGBA, портреты противников.
 Все файлы перезаписываются, список записанного печатается в stdout.
 """
 
@@ -19,10 +21,13 @@ import zlib
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCENES_DIR = os.path.join(ROOT, "assets", "art", "scenes")
 ITEMS_DIR = os.path.join(ROOT, "assets", "art", "items")
+PORTRAITS_DIR = os.path.join(ROOT, "assets", "art", "portraits")
+ENEMIES_DIR = os.path.join(ROOT, "assets", "art", "enemies")
 
 SEED = 20260929
 SCENE_W, SCENE_H = 160, 96
 ICON_W, ICON_H = 16, 16
+PORTRAIT_W, PORTRAIT_H = 64, 64
 
 
 # ----------------------------------------------------------------------------
@@ -1389,6 +1394,308 @@ ITEMS = (
 
 
 # ----------------------------------------------------------------------------
+# Портреты боя 64x64 (силуэт держим в пределах 4..59, чтобы тёмный контур
+# лёг внутри холста и рамка осталась прозрачной)
+# ----------------------------------------------------------------------------
+
+SUIT_L = (158, 146, 122)
+SUIT = (116, 106, 88)
+SUIT_D = (72, 66, 56)
+GLASS_LIT = (196, 236, 246)
+GLASS = (28, 58, 72)
+GLASS_D = (16, 34, 44)
+GLASS_M = (104, 162, 182)
+FACE_L = (152, 138, 122)
+FACE = (120, 108, 96)
+FACE_D = (68, 60, 58)
+RED_DIM = (104, 28, 36)
+RED_DARK = (58, 16, 24)
+FLESH_L = (232, 220, 210)
+FLESH = (198, 176, 172)
+FLESH_M = (162, 132, 134)
+FLESH_D = (118, 90, 98)
+FLESH_LIT = (206, 104, 104)
+VEIN = (58, 32, 46)
+VEIN_D = (34, 18, 28)
+
+
+def _blob(c, pts, col):
+    """Цепочка кругов по опорным точкам (x, y, r) — для органических форм."""
+    for x, y, r in pts:
+        c.circle(x, y, r, col)
+
+
+def _tendril(c, pts, col):
+    """Жгут: круги с плавно убывающим радиусом вдоль ломаной (x, y, r)."""
+    for i in range(len(pts) - 1):
+        x0, y0, r0 = pts[i]
+        x1, y1, r1 = pts[i + 1]
+        steps = max(abs(x1 - x0), abs(y1 - y0), 1)
+        for s in range(steps + 1):
+            t = s / float(steps)
+            c.circle(int(round(x0 + (x1 - x0) * t)),
+                     int(round(y0 + (y1 - y0) * t)),
+                     int(round(r0 + (r1 - r0) * t)), col)
+
+
+def portrait_player(c, rng):
+    """Выживший по пояс: потрёпанный лётный скафандр, шлем с треснувшим визором."""
+    # рукава и наплечники
+    c.fill_rect(10, 46, 21, 59, SUIT)
+    c.fill_rect(43, 46, 54, 59, SUIT_D)
+    c.ellipse(16, 45, 7, 5, SUIT)
+    c.ellipse(48, 45, 7, 5, SUIT_D)
+    c.ellipse(14, 45, 3, 2, SUIT_L)
+    # корпус: грудь расширяется книзу, правая сторона в тени
+    for y in range(40, 60):
+        hw = 8 + (y - 40) * 6 // 19
+        c.hline(32 - hw, 35, y, SUIT)
+        c.hline(36, 32 + hw, y, SUIT_D)
+    c.vline(21, 47, 59, SUIT_D)
+    c.vline(43, 47, 59, DARK)
+    # манжеты и ремни подвесной системы
+    c.fill_rect(10, 56, 21, 58, STEEL_D)
+    c.fill_rect(43, 56, 54, 58, STEEL_D)
+    c.hline(10, 21, 56, STEEL)
+    c.hline(43, 54, 56, DARK)
+    c.line(27, 41, 30, 59, SUIT_D)
+    c.line(37, 41, 34, 59, SUIT)
+    c.fill_rect(29, 47, 35, 53, STEEL_D)
+    c.rect(29, 47, 35, 53, STEEL)
+    c.hline(30, 34, 50, DARK)
+    c.pixel(31, 49, AMBER)
+    c.pixel(33, 51, CYAN_D)
+    # прорехи, подпалины и пыль на ткани
+    c.specks_on(rng, 10, 40, 35, 59, SUIT, SUIT_D, 34)
+    c.specks_on(rng, 36, 40, 54, 59, SUIT_D, DARK, 20)
+    c.specks_on(rng, 10, 44, 30, 55, SUIT, SUIT_L, 12)
+    # фланец гермошлема
+    c.fill_rect(25, 35, 39, 41, STEEL_D)
+    c.hline(25, 39, 35, STEEL)
+    c.hline(25, 39, 39, DARK)
+    c.pixel(27, 37, CYAN_D)
+    c.pixel(37, 37, CYAN_D)
+    # купол шлема: тень, основной тон, верхний блик
+    c.ellipse(32, 21, 13, 14, STEEL_D)
+    c.ellipse(31, 20, 12, 13, STEEL)
+    c.ellipse(28, 15, 8, 7, STEEL_L)
+    c.specks_on(rng, 20, 8, 44, 20, STEEL_L, STEEL, 12)
+    c.specks_on(rng, 20, 8, 45, 34, STEEL, STEEL_D, 16)
+    # боковые крепления, полоса пилота и антенна
+    c.fill_rect(20, 20, 23, 28, STEEL_D)
+    c.fill_rect(41, 20, 44, 28, STEEL_D)
+    c.hline(20, 23, 24, STEEL)
+    c.hline(41, 44, 24, DARK)
+    c.hline(23, 31, 11, GOLD_D)
+    c.hline(23, 31, 12, AMBER)
+    c.hline(24, 30, 13, GOLD_D)
+    c.vline(42, 6, 13, STEEL_D)
+    c.pixel(42, 5, CYAN_L)
+    # визор
+    c.ellipse(32, 24, 10, 7, DARK)
+    c.ellipse(32, 24, 9, 6, GLASS_D)
+    c.ellipse(32, 25, 8, 5, GLASS)
+    # лицо за стеклом
+    c.ellipse(33, 28, 4, 3, FACE_D)
+    c.ellipse(33, 27, 3, 2, FACE)
+    c.pixel(35, 26, FACE_L)
+    c.pixel(31, 27, DARK)
+    c.pixel(35, 27, DARK)
+    c.hline(32, 34, 30, FACE_D)
+    # отражение в стекле: сплошной косой блик
+    for i in range(7):
+        c.vline(25 + i, 26 - i, 28 - i, GLASS_LIT)
+    for i in range(5):
+        c.pixel(27 + i, 30 - i, GLASS_M)
+    # звезда трещины от удара в стекло
+    c.pixel(37, 22, WHITE)
+    c.pixel(38, 22, WHITE)
+    c.line(37, 22, 33, 19, WHITE)
+    c.line(38, 22, 40, 26, WHITE)
+    c.line(37, 22, 39, 18, GREY)
+    c.line(37, 23, 30, 29, GREY)
+    c.pixel(35, 20, GREY)
+
+
+def portrait_drone_cargo(c, rng):
+    """Сервисный дрон: овальный корпус, красный окуляр, искрящий манипулятор."""
+    # корпус
+    c.ellipse(29, 30, 21, 17, STEEL_D)
+    c.ellipse(28, 29, 20, 16, STEEL)
+    c.ellipse(23, 22, 12, 7, STEEL_L)
+    # обшивка: шов, заклёпки, рёбра жёсткости
+    c.hline(15, 41, 40, DARK)
+    c.hline(15, 41, 41, STEEL_D)
+    for x in range(16, 42, 6):
+        c.pixel(x, 38, STEEL_L)
+    c.line(13, 27, 18, 19, STEEL_D)
+    c.line(44, 27, 39, 19, STEEL_D)
+    c.specks_on(rng, 10, 16, 46, 44, STEEL, STEEL_D, 28)
+    c.specks_on(rng, 13, 16, 34, 27, STEEL_L, STEEL, 12)
+    # окуляр: гнездо, линза, блик
+    c.circle(27, 28, 10, STEEL_D)
+    c.circle(27, 28, 9, DARK)
+    c.circle(27, 28, 7, RED_DARK)
+    c.circle(27, 28, 5, RED_DIM)
+    c.circle(27, 28, 3, RED)
+    c.circle(26, 27, 1, RED_LIT)
+    c.pixel(27, 17, STEEL_L)
+    c.pixel(17, 28, STEEL_L)
+    c.pixel(37, 28, STEEL_L)
+    c.pixel(27, 39, STEEL_L)
+    # антенна с маячком
+    c.vline(18, 10, 16, STEEL_D)
+    c.pixel(18, 9, AMBER)
+    c.pixel(19, 13, STEEL)
+    # маневровые сопла и выхлоп
+    c.fill_rect(16, 42, 22, 49, STEEL_D)
+    c.fill_rect(17, 42, 19, 49, STEEL)
+    c.fill_rect(34, 42, 40, 49, STEEL_D)
+    c.fill_rect(35, 42, 37, 49, STEEL)
+    c.hline(16, 22, 49, DARK)
+    c.hline(34, 40, 49, DARK)
+    c.fill_rect(17, 50, 21, 52, GOLD_D)
+    c.fill_rect(35, 50, 39, 52, GOLD_D)
+    c.fill_rect(18, 53, 20, 54, RUST_D)
+    c.fill_rect(36, 53, 38, 54, RUST_D)
+    # манипулятор: тяга, локоть, предплечье
+    for dy, col in ((-1, STEEL_L), (0, STEEL), (1, STEEL_D)):
+        c.line(44, 32 + dy, 53, 39 + dy, col)
+    for dx, col in ((-1, STEEL_L), (0, STEEL), (1, STEEL_D)):
+        c.line(53 + dx, 39, 57 + dx, 30, col)
+    c.circle(53, 39, 2, STEEL_D)
+    c.pixel(52, 38, STEEL_L)
+    # клешня и разряд между жвалами
+    c.line(56, 28, 52, 24, STEEL)
+    c.line(57, 28, 53, 23, STEEL_D)
+    c.line(58, 28, 58, 22, STEEL)
+    c.line(59, 28, 59, 23, STEEL_D)
+    c.line(54, 22, 56, 19, AMBER)
+    c.line(56, 19, 58, 21, GOLD_L)
+    c.pixel(55, 17, WHITE)
+    c.pixel(57, 25, GOLD_L)
+    c.pixel(54, 26, AMBER)
+
+
+def portrait_station_sentry(c, rng):
+    """Потолочная турель охраны: подвес, спаренный ствол, красная линза."""
+    # потолочная плита
+    c.fill_rect(9, 4, 54, 9, STEEL_D)
+    c.fill_rect(9, 4, 54, 5, STEEL)
+    c.hline(9, 54, 9, DARK)
+    c.pixel(12, 6, STEEL_L)
+    c.pixel(51, 6, STEEL_L)
+    c.pixel(31, 6, STEEL_L)
+    # подвес: две тяги и поворотный узел
+    c.fill_rect(22, 9, 26, 16, STEEL_D)
+    c.fill_rect(38, 9, 42, 16, STEEL_D)
+    c.vline(23, 9, 16, STEEL)
+    c.vline(39, 9, 16, STEEL)
+    c.fill_rect(20, 16, 44, 21, STEEL_D)
+    c.fill_rect(20, 16, 44, 17, STEEL)
+    c.hline(20, 44, 21, DARK)
+    c.ellipse(32, 19, 5, 3, STEEL)
+    c.pixel(30, 18, STEEL_L)
+    # корпус турели
+    c.ellipse(32, 31, 17, 11, STEEL_D)
+    c.ellipse(31, 30, 16, 10, STEEL)
+    c.ellipse(24, 25, 8, 3, STEEL_L)
+    c.hline(17, 46, 37, DARK)
+    c.specks_on(rng, 16, 22, 48, 40, STEEL, STEEL_D, 22)
+    # короб подачи слева и кабель к потолку
+    c.fill_rect(8, 26, 16, 36, STEEL_D)
+    c.rect(8, 26, 16, 36, DARK)
+    c.hline(9, 15, 29, STEEL)
+    c.hline(9, 15, 33, AMBER)
+    c.line(11, 26, 13, 16, STEEL_D)
+    c.line(12, 26, 14, 16, DARK)
+    c.line(13, 16, 16, 10, STEEL_D)
+    c.line(14, 16, 17, 10, DARK)
+    # окно выброса гильз справа
+    c.fill_rect(45, 28, 50, 34, STEEL_D)
+    c.rect(45, 28, 50, 34, DARK)
+    c.pixel(47, 31, AMBER)
+    # линза сканера
+    c.circle(32, 30, 7, STEEL_D)
+    c.circle(32, 30, 6, DARK)
+    c.circle(32, 30, 5, RED_DARK)
+    c.circle(32, 30, 4, RED_DIM)
+    c.circle(32, 30, 2, RED)
+    c.pixel(31, 29, RED_LIT)
+    # спаренный ствол, отведённый вниз-влево
+    c.fill_rect(24, 36, 38, 42, STEEL_D)
+    c.hline(24, 38, 36, STEEL)
+    c.hline(24, 38, 42, DARK)
+    for off, col in ((-2, STEEL), (-1, STEEL_L), (0, STEEL_D), (1, DARK)):
+        c.line(27 + off, 40, 15 + off, 54, col)
+        c.line(34 + off, 40, 22 + off, 54, col)
+    c.fill_rect(19, 46, 28, 48, STEEL_D)
+    c.hline(19, 28, 46, STEEL)
+    c.fill_rect(12, 51, 17, 56, STEEL_D)
+    c.fill_rect(19, 51, 24, 56, STEEL_D)
+    c.hline(12, 17, 51, STEEL)
+    c.hline(19, 24, 51, STEEL)
+    c.fill_rect(13, 53, 15, 55, DARK)
+    c.fill_rect(20, 53, 22, 55, DARK)
+
+
+def portrait_strain_l7(c, rng):
+    """Штамм Л-7: бледная биомасса с жгутами живой ткани и тёмными прожилками."""
+    # тело: сросшиеся доли, тёмный ободок и основной тон
+    _blob(c, ((28, 36, 17), (40, 40, 12), (22, 44, 12), (24, 22, 10), (42, 25, 9)), FLESH_D)
+    _blob(c, ((26, 34, 15), (38, 38, 10), (20, 42, 10), (22, 20, 8), (40, 23, 7)), FLESH)
+    _blob(c, ((23, 28, 8), (20, 18, 4), (37, 20, 4)), FLESH_L)
+    _blob(c, ((33, 44, 5), (31, 26, 4), (30, 50, 4)), FLESH_M)
+    # тёмные прожилки с ветвлением
+    c.line(20, 26, 27, 36, VEIN)
+    c.line(21, 26, 28, 36, VEIN)
+    c.line(27, 36, 23, 50, VEIN)
+    c.line(28, 36, 38, 43, VEIN)
+    c.line(38, 43, 45, 38, VEIN)
+    c.line(27, 36, 32, 24, VEIN)
+    c.line(32, 24, 39, 20, VEIN)
+    c.line(27, 36, 16, 40, VEIN)
+    c.line(23, 50, 26, 52, VEIN)
+    c.line(38, 43, 41, 50, VEIN)
+    c.line(32, 24, 30, 16, VEIN)
+    c.line(16, 40, 14, 46, VEIN)
+    c.line(45, 38, 47, 31, VEIN)
+    c.line(28, 36, 34, 33, VEIN)
+    # вскрытая полость и мелкие провалы в ткани
+    c.ellipse(29, 41, 5, 3, VEIN)
+    c.ellipse(29, 41, 4, 2, VEIN_D)
+    c.pixel(27, 40, FLESH_LIT)
+    c.pixel(31, 41, FLESH_LIT)
+    c.ellipse(22, 27, 3, 2, VEIN)
+    c.pixel(22, 27, FLESH_LIT)
+    c.ellipse(41, 33, 2, 2, VEIN)
+    # жгуты живой ткани
+    _tendril(c, ((14, 30, 3), (8, 27, 2), (5, 21, 2), (5, 15, 1)), FLESH_D)
+    _tendril(c, ((14, 30, 2), (8, 27, 1), (5, 21, 1)), FLESH)
+    _tendril(c, ((48, 33, 3), (54, 34, 2), (58, 30, 2), (58, 24, 1)), FLESH_D)
+    _tendril(c, ((48, 33, 2), (54, 34, 1), (58, 30, 1)), FLESH)
+    _tendril(c, ((22, 51, 3), (18, 56, 2), (13, 58, 1)), FLESH_D)
+    _tendril(c, ((40, 48, 2), (46, 51, 2), (50, 56, 1)), FLESH_D)
+    _tendril(c, ((44, 20, 2), (50, 14, 1)), FLESH_D)
+    _tendril(c, ((30, 19, 2), (33, 12, 1)), FLESH_D)
+    _tendril(c, ((17, 47, 2), (11, 49, 1)), FLESH_D)
+    _tendril(c, ((45, 43, 2), (52, 45, 1)), FLESH_D)
+    # неровная фактура биомассы
+    c.specks_on(rng, 12, 14, 52, 54, FLESH, FLESH_L, 44)
+    c.specks_on(rng, 12, 14, 52, 54, FLESH, FLESH_M, 30)
+    c.specks_on(rng, 12, 14, 52, 54, FLESH_L, FLESH, 14)
+    c.specks_on(rng, 12, 30, 52, 56, FLESH_D, VEIN, 18)
+
+
+PORTRAITS = (
+    (PORTRAITS_DIR, "player", portrait_player),
+    (ENEMIES_DIR, "drone_cargo", portrait_drone_cargo),
+    (ENEMIES_DIR, "station_sentry", portrait_station_sentry),
+    (ENEMIES_DIR, "strain_l7", portrait_strain_l7),
+)
+
+
+# ----------------------------------------------------------------------------
 # Мелкая математика без импорта math (нужны только синус/косинус по кругу)
 # ----------------------------------------------------------------------------
 
@@ -1410,6 +1717,8 @@ def _cos(a):
 def main():
     os.makedirs(SCENES_DIR, exist_ok=True)
     os.makedirs(ITEMS_DIR, exist_ok=True)
+    os.makedirs(PORTRAITS_DIR, exist_ok=True)
+    os.makedirs(ENEMIES_DIR, exist_ok=True)
     written = []
 
     for i, (name, fn) in enumerate(SCENES):
@@ -1425,6 +1734,15 @@ def main():
         fn(c)
         c.outline_alpha(OUTLINE)
         path = os.path.join(ITEMS_DIR, name + ".png")
+        write_png(path, c, with_alpha=True)
+        written.append((path, c.w, c.h))
+
+    for i, (directory, name, fn) in enumerate(PORTRAITS):
+        rng = random.Random(SEED + 7000 + i * 37)
+        c = Canvas(PORTRAIT_W, PORTRAIT_H, (0, 0, 0, 0))
+        fn(c, rng)
+        c.outline_alpha(OUTLINE)
+        path = os.path.join(directory, name + ".png")
         write_png(path, c, with_alpha=True)
         written.append((path, c.w, c.h))
 

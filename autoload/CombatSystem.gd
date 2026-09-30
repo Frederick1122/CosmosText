@@ -61,6 +61,10 @@ var _used_specials: Dictionary = {}
 var _player_aiming: bool = false
 var _player_defending: bool = false
 var _enemy_defending: bool = false
+## Сколько ходов противник потерял цель (спецдействие-отвлечение).
+var _enemy_distracted_turns: int = 0
+## Следующая атака игрока попадает без броска — противник его не видит.
+var _guaranteed_hit: bool = false
 
 const MOVE_TITLES := {
 	"approach": "Сблизиться",
@@ -73,6 +77,7 @@ const MOVE_TITLES := {
 	"use_item": "Использовать предмет",
 	"special": "Спецдействие",
 	"hold": "Выжидать",
+	"distracted": "Потерял цель",
 }
 
 
@@ -94,6 +99,8 @@ func reset_for_new_run() -> void:
 	_player_aiming = false
 	_player_defending = false
 	_enemy_defending = false
+	_enemy_distracted_turns = 0
+	_guaranteed_hit = false
 	log.clear()
 	_used_specials.clear()
 
@@ -114,6 +121,8 @@ func start_combat(id: String, clear_node: String = "", on_win: Array = [], on_fl
 	_player_aiming = false
 	_player_defending = false
 	_enemy_defending = false
+	_enemy_distracted_turns = 0
+	_guaranteed_hit = false
 	_used_specials.clear()
 	log.clear()
 	state = State.PLAYER_TURN
@@ -247,7 +256,7 @@ func _resolve_shot() -> void:
 	if _enemy_defending:
 		chance -= DEFEND_HIT_PENALTY
 	_consume_aim()
-	if randf() <= minf(chance, MAX_HIT_CHANCE):
+	if _take_guaranteed_hit() or randf() <= minf(chance, MAX_HIT_CHANCE):
 		var dmg := maxi(1, RANGED_DAMAGE + int(CharacterSystem.get_stat("ranged_damage")))
 		_damage_enemy(dmg, "Попадание! Урон: %d." % dmg)
 	else:
@@ -262,7 +271,7 @@ func _resolve_strike() -> void:
 	if _enemy_defending:
 		chance -= DEFEND_HIT_PENALTY
 	_consume_aim()
-	if randf() <= minf(chance, MAX_HIT_CHANCE):
+	if _take_guaranteed_hit() or randf() <= minf(chance, MAX_HIT_CHANCE):
 		var dmg := maxi(1, MELEE_DAMAGE + int(CharacterSystem.get_stat("melee_damage")))
 		_damage_enemy(dmg, "Вы бьёте в упор. Урон: %d." % dmg)
 	else:
@@ -270,6 +279,14 @@ func _resolve_strike() -> void:
 		ResourceSystem.apply_hp_delta(-MELEE_MISS_PENALTY)
 		if ResourceSystem.hp <= 0:
 			_end_combat("died")
+
+
+## Отвлечённый противник не видит цели: следующий удар проходит наверняка.
+func _take_guaranteed_hit() -> bool:
+	if not _guaranteed_hit:
+		return false
+	_guaranteed_hit = false
+	return true
 
 
 func _resolve_flee(enemy_move: String) -> void:
@@ -296,6 +313,8 @@ func _resolve_enemy_move(enemy_move: String, damage_multiplier: float = 1.0) -> 
 			_log("%s отходит (%d)." % [name, range_steps], "move")
 		"defend":
 			_log("%s уходит в глухую оборону." % name, "move")
+		"distracted":
+			_log("%s шарит по отсеку: цель потеряна." % name, "move")
 		"attack":
 			_enemy_attack(damage_multiplier)
 		_:
@@ -337,14 +356,18 @@ func _resolve_special(payload) -> void:
 		state = State.PLAYER_TURN
 		return
 	_used_specials[sid] = true
-	enemy_last_move = "hold"
+	enemy_last_move = "distracted"
 	var effect: Dictionary = special.get("effect", {})
 	match effect.get("type", ""):
-		"skip_enemy_turn_and_guarantee_hit":
-			var dmg := int(effect.get("value", 15))
-			_damage_enemy(dmg, "%s — противник теряет цель. Урон: %d." % [str(special.get("label", "Спецдействие")), dmg])
-			if state != State.ENDED:
-				state = State.PLAYER_TURN
+		"distract":
+			# Отвлечение не наносит урона: противник теряет цель на несколько
+			# ходов, а первый удар по нему проходит наверняка.
+			_enemy_distracted_turns = maxi(1, int(effect.get("value", 1))) - 1
+			_guaranteed_hit = true
+			_log("%s. %s теряет цель." % [
+				str(special.get("label", "Отвлекающий манёвр")),
+				str(enemy_data.get("name", "Противник"))], "move")
+			state = State.PLAYER_TURN
 		_:
 			push_warning("CombatSystem: неизвестный тип спецэффекта '%s'" % effect.get("type", ""))
 			state = State.PLAYER_TURN
@@ -368,6 +391,9 @@ func _apply_movement(player_move: String, enemy_move: String) -> void:
 
 
 func _choose_enemy_move() -> String:
+	if _enemy_distracted_turns > 0:
+		_enemy_distracted_turns -= 1
+		return "distracted"
 	var reach := int(enemy_data.get("attack", {}).get("range", MELEE_RANGE))
 	var preferred := int(enemy_data.get("preferred_range", reach))
 	match str(enemy_data.get("ai", "brawler")):
@@ -431,6 +457,8 @@ func _damage_enemy(amount: int, text: String) -> void:
 
 func _player_conditions() -> Array:
 	var result: Array = []
+	if _guaranteed_hit:
+		result.append("Верный удар")
 	if _player_aiming:
 		result.append("На прицеле")
 	if _player_defending:
@@ -444,6 +472,8 @@ func _player_conditions() -> Array:
 
 func _enemy_conditions() -> Array:
 	var result: Array = []
+	if _enemy_distracted_turns > 0 or enemy_last_move == "distracted":
+		result.append("Потерял цель")
 	if _enemy_defending:
 		result.append("В защите")
 	if enemy_hp * 4 <= int(enemy_data.get("hp", 1)):

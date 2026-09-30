@@ -52,6 +52,7 @@ func start_new_run() -> void:
 	LocationSystem.reset_for_new_run()
 	CombatSystem.reset_for_new_run()
 	JournalSystem.reset_for_new_run()
+	NarrativeSystem.reset_for_new_run()
 	EconomyManager.reset_for_new_run()
 	NotificationSystem.reset_for_new_run()
 	_delete_file(RUN_PATH)
@@ -67,6 +68,7 @@ func save_run() -> void:
 		"locations": LocationSystem.to_save_data(),
 		"map": MapSystem.to_save_data(),
 		"journal": JournalSystem.to_save_data(),
+		"narrative": NarrativeSystem.to_save_data(),
 		"game_state": GameState.to_save_data(),
 		"notifications": NotificationSystem.to_save_data(),
 		"economy_run": EconomyManager.to_run_save_data(),
@@ -111,6 +113,8 @@ func load_run(fallback_sector_id: String = "wreck_01") -> bool:
 	JournalSystem.load_save_data(journal_data if journal_data is Array else [])
 	GameState.load_save_data(data.get("game_state", {}))
 	NotificationSystem.load_save_data(data.get("notifications", {}))
+	var narrative_data = data.get("narrative", [])
+	NarrativeSystem.load_save_data(narrative_data if narrative_data is Array else [])
 	EconomyManager.load_run_save_data(data.get("economy_run", {}))
 	return true
 

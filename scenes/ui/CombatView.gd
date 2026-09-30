@@ -46,7 +46,8 @@ func _rebuild() -> void:
 		str(state.get("player_weapon", "")),
 		str(state.get("player_last_move", "")),
 		state.get("player_conditions", []),
-		Color("#5ea9c9")
+		Color("#5ea9c9"),
+		UiKit.portrait("player", false, 128)
 	))
 	row.add_child(_side_card(
 		str(state.get("enemy_name", "Противник")),
@@ -55,7 +56,8 @@ func _rebuild() -> void:
 		str(state.get("enemy_weapon", "")),
 		str(state.get("enemy_last_move", "")),
 		state.get("enemy_conditions", []),
-		Color("#b86d79")
+		Color("#b86d79"),
+		UiKit.portrait(str(state.get("enemy_id", "")), true, 128)
 	))
 	add_child(row)
 
@@ -71,7 +73,7 @@ func _rebuild() -> void:
 ## Карточка участника: полоса здоровья, оружие, последний манёвр, состояния.
 func _side_card(
 	title: String, hp: int, max_hp: int, weapon: String, last_move: String,
-	conditions: Array, accent: Color
+	conditions: Array, accent: Color, portrait: TextureRect = null
 ) -> Control:
 	var panel := PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -82,6 +84,9 @@ func _side_card(
 	panel.add_child(box)
 
 	box.add_child(UiKit.text(title, 24, UiKit.TITLE_COLOR))
+	if portrait != null:
+		portrait.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		box.add_child(portrait)
 	box.add_child(_hp_bar(hp, max_hp, accent))
 	box.add_child(UiKit.text("%d/%d HP" % [hp, max_hp], 20))
 	if weapon != "":
@@ -154,7 +159,7 @@ func _build_moves() -> void:
 		var btn := UiKit.button(label, kind, 72)
 		btn.name = "CombatMove_%s" % move_id
 		btn.disabled = not enabled
-		btn.add_theme_font_size_override("font_size", 20)
+		btn.add_theme_font_size_override("font_size", UiKit.fs(20))
 		btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.pressed.connect(func() -> void: move_selected.emit(move_id, null))
@@ -164,7 +169,7 @@ func _build_moves() -> void:
 		var sid := str(special.get("id", ""))
 		var btn := UiKit.button(str(special.get("label", sid)), "default", 72)
 		btn.name = "CombatSpecial_%s" % sid
-		btn.add_theme_font_size_override("font_size", 20)
+		btn.add_theme_font_size_override("font_size", UiKit.fs(20))
 		btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		btn.pressed.connect(func() -> void: move_selected.emit("special", sid))
 		add_child(btn)
