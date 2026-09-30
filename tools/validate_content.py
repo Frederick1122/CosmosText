@@ -328,6 +328,11 @@ def main():
                     if floor_id and floor_ids and floor_id not in floor_ids:
                         errors.append(f"sectors/{secid}.{node_id}.map.floor ссылается на неизвестную палубу '{floor_id}'")
 
+                    if "hidden_until_open" in node_map and not isinstance(node_map["hidden_until_open"], bool):
+                        errors.append(
+                            f"sectors/{secid}.{node_id}.map.hidden_until_open должен быть bool"
+                        )
+
                     if "cell" in node_map:
                         cell = read_cell(node_map.get("cell", {}), f"sectors/{secid}.{node_id}.map.cell")
                         if cell:
@@ -527,6 +532,8 @@ def main():
             check_effects(opt.get("effects", []), opt_ctx)
             if not str(opt.get("result", "")).strip():
                 errors.append(f"{opt_ctx}: нет текста последствия (result) — игроку нечего показать перед «Продолжить»")
+            if "completes_event" in opt and not isinstance(opt["completes_event"], bool):
+                errors.append(f"{opt_ctx}: completes_event должен быть bool")
             nxt = opt.get("next", "")
             if nxt and not nxt.startswith("map:"):
                 referenced_situations.add(nxt)

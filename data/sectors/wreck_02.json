@@ -44,7 +44,7 @@
 				"label": "Антенна",
 				"note": "Выход к мачте заварен",
 				"order": 60.0,
-				"visible_when_locked": true
+				"hidden_until_open": true
 			},
 			"sealed": false,
 			"state": "locked",
@@ -166,7 +166,7 @@
 				"label": "Медблок",
 				"note": "Дверь на карантинном замке",
 				"order": 25.0,
-				"visible_when_locked": true
+				"hidden_until_open": true
 			},
 			"sealed": true,
 			"state": "locked",

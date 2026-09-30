@@ -7,7 +7,8 @@ signal situation_started(id: String)
 signal option_selected(id: String)
 ## next: "" (сцена сама переключит экран, например start_combat),
 ##       "map:<sector_id>" (открыть карту сектора) или id следующей ситуации.
-signal situation_ended(id: String, next: String)
+## completes_event: false у варианта-отказа оставляет событие доступным.
+signal situation_ended(id: String, next: String, completes_event: bool)
 ## Вариант применён, показан его результат — UI рисует кнопку «Продолжить».
 signal option_resolved(id: String)
 
@@ -20,6 +21,7 @@ var awaiting_continue: bool = false
 var _situations: Dictionary = {}  # id -> data
 var _current_data: Dictionary = {}
 var _pending_next: String = ""
+var _pending_completes_event: bool = true
 
 
 func _ready() -> void:
@@ -53,6 +55,7 @@ func reset_for_new_run() -> void:
 	_current_data = {}
 	awaiting_continue = false
 	_pending_next = ""
+	_pending_completes_event = true
 
 
 func set_flag(flag: String, value) -> void:
@@ -72,6 +75,7 @@ func load_situation(id: String) -> bool:
 	current_id = id
 	awaiting_continue = false
 	_pending_next = ""
+	_pending_completes_event = true
 	NarrativeSystem.push("text", get_current_text(), get_current_image())
 	situation_started.emit(id)
 	return true
@@ -109,6 +113,7 @@ func select_option(option_id: String) -> void:
 	if not ResourceSystem.spend_o2("choice"):
 		return
 	NarrativeSystem.push("choice", str(chosen.get("label", option_id)))
+	_pending_completes_event = bool(chosen.get("completes_event", true))
 	EffectResolver.apply_effects(chosen.get("effects", []))
 	option_selected.emit(option_id)
 	NarrativeSystem.push("result", str(chosen.get("result", "")))
@@ -125,9 +130,14 @@ func select_option(option_id: String) -> void:
 func confirm_continue() -> void:
 	var ended_id := current_id
 	var next_id := _pending_next
+	var completes_event := _pending_completes_event
 	awaiting_continue = false
 	_pending_next = ""
-	situation_ended.emit(ended_id, next_id)
+	_pending_completes_event = true
+	situation_ended.emit(ended_id, next_id, completes_event)
+
+func pending_choice_completes_event() -> bool:
+	return _pending_completes_event
 
 
 func get_option_label(option_id: String) -> String:

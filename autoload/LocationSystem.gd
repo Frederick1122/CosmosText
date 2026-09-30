@@ -7,7 +7,7 @@ extends Node
 ##   start: "auto"   — стартует само при входе/возврате в локацию, если
 ##                     выполнены triggers (не чаще раза за визит);
 ##          "manual" — пункт меню модуля, игрок запускает его сам.
-##   repeatable: false — одноразовое (после запуска больше не доступно),
+##   repeatable: false — исчезает только после успешного завершения,
 ##               true  — повторяемое.
 ##   Тело: situation (ситуация с выбором) и/или text + effects (мгновенно).
 ##
@@ -23,12 +23,12 @@ signal stash_changed(location_id: String)
 
 var current_id: String = ""
 var current_node_id: String = ""
-## Сообщения и тексты событий уходят в NarrativeSystem: экран модуля — это
-## лента, а не набор полей, которые надо очищать.
+## На экране хранится только текущий контекст: при входе описание модуля
+## заменяет завершённое событие в общем буфере NarrativeSystem.
 
 var _locations: Dictionary = {}  # id -> data
 var _visits: Dictionary = {}  # location_id -> int
-var _done: Dictionary = {}  # "location_id/event_id" -> сколько раз запускалось
+var _done: Dictionary = {}  # "location_id/event_id" -> сколько раз завершено
 var _fired_this_visit: Dictionary = {}  # event_key -> true
 var _stash: Dictionary = {}  # location_id -> { item_id: count }
 
@@ -82,11 +82,17 @@ func enter(location_id: String, node_id: String = "") -> bool:
 	current_node_id = node_id
 	_visits[location_id] = int(_visits.get(location_id, 0)) + 1
 	_fired_this_visit.clear()
-	# Новый модуль — новая сцена в ленте: заголовок, иллюстрация и описание.
-	NarrativeSystem.push_scene(get_title(), get_image())
-	NarrativeSystem.push("text", get_description())
+	show_current_narrative()
 	location_entered.emit(location_id)
 	return true
+
+## Заново показывает текущий модуль после завершения события.
+func show_current_narrative() -> void:
+	NarrativeSystem.clear()
+	if not is_active():
+		return
+	NarrativeSystem.push_scene(get_title(), get_image())
+	NarrativeSystem.push("text", get_description())
 
 
 func leave() -> void:
@@ -183,9 +189,15 @@ func is_event_locked(ev: Dictionary) -> bool:
 
 func mark_started(ev: Dictionary) -> void:
 	var key := _event_key(ev)
-	_done[key] = int(_done.get(key, 0)) + 1
 	_fired_this_visit[key] = true
 	event_started.emit(current_id, str(ev.get("id", "")))
+
+
+func mark_completed(event_id: String) -> void:
+	if event_id == "":
+		return
+	var key := "%s/%s" % [current_id, event_id]
+	_done[key] = int(_done.get(key, 0)) + 1
 
 
 ## Служебное сообщение игроку — уходит в ленту повествования.

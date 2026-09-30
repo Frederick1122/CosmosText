@@ -753,8 +753,8 @@ func _on_map_node_selected(node_id: String) -> void:
 	MapSystem.select_node(node_id)
 
 
-## Экран ситуации и экран модуля — это одна и та же лента повествования,
-## меняется только набор действий под ней.
+## Экран модуля и ситуация используют общий буфер, но при переходе старый
+## контекст очищается: описание локации не остаётся под событием.
 func _render_situation() -> void:
 	_render_story()
 	if SituationEngine.awaiting_continue:
@@ -776,7 +776,7 @@ func _continue_situation() -> void:
 	GameState.finish_situation()
 
 
-## Лента: старые записи остаются на месте, новые проявляются и подматываются.
+## Текущий контекст: новые записи проявляются и подматываются вниз.
 func _render_story() -> void:
 	var entries := NarrativeSystem.get_entries()
 	var fresh_from := _story_shown if _story_shown <= entries.size() else 0

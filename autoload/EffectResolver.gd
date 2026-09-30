@@ -23,7 +23,9 @@ func apply_effect(effect: Dictionary) -> void:
 		"reveal_map":
 			MapSystem.reveal_map()
 		"open_map_node":
-			MapSystem.unlock_node(effect.get("node", ""))
+			var location_name := MapSystem.unlock_node(str(effect.get("node", "")))
+			if location_name != "":
+				NarrativeSystem.push("notice", "[Открыта новая локация \"%s\"]" % location_name)
 		"lock_map_node":
 			MapSystem.set_node_state(effect.get("node", ""), effect.get("state", "dangerous"))
 		"skill_points_add":

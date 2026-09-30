@@ -14,6 +14,9 @@ var current_screen: int = Screen.MAIN_MENU
 var last_death_cause: String = ""
 var last_ending_id: String = ""
 var has_left_capsule: bool = false
+## Событие локации считается выполненным только после завершающего выбора.
+var _active_location_event_id: String = ""
+var _active_event_completes_on_win: bool = true
 
 func _ready() -> void:
 	EventBus.player_died.connect(_on_player_died)
@@ -24,6 +27,8 @@ func _ready() -> void:
 
 func start_new_game(sector_id: String = "", opening_situation_id: String = "") -> void:
 	has_left_capsule = false
+	_active_location_event_id = ""
+	_active_event_completes_on_win = true
 	if sector_id == "":
 		sector_id = SaveManager.get_start_sector_id()
 	if opening_situation_id == "":
@@ -40,6 +45,8 @@ func start_new_game(sector_id: String = "", opening_situation_id: String = "") -
 		_set_screen(Screen.SECTOR_MAP)
 
 func continue_game(sector_id: String = "") -> void:
+	_active_location_event_id = ""
+	_active_event_completes_on_win = true
 	if sector_id == "":
 		sector_id = SaveManager.get_start_sector_id()
 	if SaveManager.load_run(sector_id):
@@ -57,6 +64,8 @@ func enter_situation(situation_id: String) -> void:
 
 
 func enter_location(location_id: String, node_id: String = "") -> void:
+	_active_location_event_id = ""
+	_active_event_completes_on_win = true
 	if not LocationSystem.enter(location_id, node_id):
 		return
 	_resume_location()
@@ -65,6 +74,8 @@ func enter_location(location_id: String, node_id: String = "") -> void:
 func leave_location() -> void:
 	var was_in_location := LocationSystem.is_active()
 	LocationSystem.leave()
+	_active_location_event_id = ""
+	NarrativeSystem.clear()
 	if was_in_location:
 		has_left_capsule = true
 	_set_screen(Screen.SECTOR_MAP)
@@ -81,14 +92,16 @@ func start_location_event(event_id: String) -> void:
 		LocationSystem.add_notice(EffectResolver.lock_hint(lock))
 		_show_location()
 		return
-	NarrativeSystem.push("choice", str(ev.get("label", event_id)))
 	if not ResourceSystem.spend_o2("action"):
 		return
+	# Событие заменяет описание модуля в общем текстовом буфере.
+	NarrativeSystem.clear()
+	NarrativeSystem.push("choice", str(ev.get("label", event_id)))
 	if not lock.is_empty():
 		var key_name := EffectResolver.open_lock(lock)
 		if key_name != "":
 			LocationSystem.add_notice("Открыто ключом: %s." % key_name)
-	if _run_event(ev):
+	if _run_event(ev, false):
 		return
 	_resume_location()
 
@@ -152,8 +165,12 @@ func _resume_location() -> void:
 
 ## Возвращает true, если событие увело игрока с экрана локации
 ## (ситуация, бой или смерть).
-func _run_event(ev: Dictionary) -> bool:
+func _run_event(ev: Dictionary, clear_narrative: bool = true) -> bool:
 	LocationSystem.mark_started(ev)
+	_active_location_event_id = str(ev.get("id", ""))
+	_active_event_completes_on_win = true
+	if clear_narrative:
+		NarrativeSystem.clear()
 	# Сначала текст события, потом его последствия: лента должна читаться сверху вниз.
 	NarrativeSystem.push("text", str(ev.get("text", "")), str(ev.get("image", "")))
 	EffectResolver.apply_effects(ev.get("effects", []))
@@ -163,6 +180,7 @@ func _run_event(ev: Dictionary) -> bool:
 	if situation_id != "":
 		enter_situation(situation_id)
 		return current_screen == Screen.SITUATION
+	_complete_active_location_event()
 	return false
 
 
@@ -173,13 +191,20 @@ func _show_location() -> void:
 	_set_screen(Screen.LOCATION)
 
 
-func _on_situation_ended(_id: String, next: String) -> void:
+func _on_situation_ended(_id: String, next: String, completes_event: bool) -> void:
 	if current_screen == Screen.DEATH or current_screen == Screen.VICTORY:
 		return  # забег уже завершён эффектом end_run или смертью
 	if CombatSystem.state == CombatSystem.State.PLAYER_TURN:
 		return  # эффект start_combat уже переключил экран на бой
+	if next == "" or next.begins_with("map:"):
+		if completes_event:
+			_complete_active_location_event()
+		else:
+			_active_location_event_id = ""
+	NarrativeSystem.clear()
 	if next == "":
 		if LocationSystem.is_active():
+			LocationSystem.show_current_narrative()
 			_resume_location()
 		else:
 			_set_screen(Screen.SECTOR_MAP)
@@ -200,6 +225,8 @@ func _on_situation_ended(_id: String, next: String) -> void:
 
 
 func _on_combat_started(_enemy_id: String) -> void:
+	if current_screen == Screen.SITUATION and _active_location_event_id != "":
+		_active_event_completes_on_win = SituationEngine.pending_choice_completes_event()
 	_set_screen(Screen.COMBAT)
 
 
@@ -217,18 +244,32 @@ func _on_combat_ended(result: String) -> void:
 			MapSystem.mark_cleared(CombatSystem.clear_node_id)
 		elif result == "fled":
 			MapSystem.set_node_state(CombatSystem.clear_node_id, "dangerous")
+	if result == "won" and _active_event_completes_on_win:
+		_complete_active_location_event()
+	elif result == "fled":
+		_active_location_event_id = ""
 	if result == "won" and LocationSystem.is_active():
+		LocationSystem.show_current_narrative()
 		_resume_location()  # победа — игрок остаётся в модуле
 	else:
+		NarrativeSystem.clear()
 		LocationSystem.leave()  # побег — выход на карту
 		has_left_capsule = true
 		_set_screen(Screen.SECTOR_MAP)
+
+func _complete_active_location_event() -> void:
+	if _active_location_event_id == "":
+		return
+	LocationSystem.mark_completed(_active_location_event_id)
+	_active_location_event_id = ""
+	_active_event_completes_on_win = true
 
 
 
 
 func _on_player_died(cause: String) -> void:
 	last_death_cause = cause
+	_active_location_event_id = ""
 	_set_screen(Screen.DEATH)
 
 

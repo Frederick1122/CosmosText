@@ -33,14 +33,20 @@ func _ready() -> void:
 	_expect(SituationEngine.awaiting_continue and GameState.current_screen == Screen.SITUATION
 		and _narrative_kind_last("result") != "", "после выбора показан результат и ждём «Продолжить»")
 	GameState.finish_situation()
-	_expect(SituationEngine.current_id == "sit_1_2_wreckage",
-		"второе автособытие сработало по триггеру event_done")
+	_expect(SituationEngine.current_id == "sit_1_2_wreckage"
+		and _narrative_count("result") == 0 and _narrative_count("text") == 1,
+		"следующее событие очистило текст предыдущего")
 	_choose("B")
 	_expect(GameState.current_screen == Screen.LOCATION and LocationSystem.current_id == "hub",
 		"после вступления игрок на экране локации hub")
+	_expect(_narrative_count("scene") == 1 and _narrative_count("text") == 1
+		and _narrative_count("choice") == 0 and _narrative_count("result") == 0,
+		"после «Продолжить» событие заменено описанием локации")
 	_expect(not GameState.has_left_capsule, "экран персонажа заблокирован внутри капсулы")
 	_expect(MapSystem.is_node_explored("hub") and MapSystem.is_node_fog_visible("lift_01_to_02")
 		and not MapSystem.is_node_fog_visible("cargo_bay"), "туман скрывает дальние отсеки")
+	_expect(not MapSystem.is_node_fog_visible("copilot_body"),
+		"неоткрытая действием локация полностью скрыта")
 	_expect(InventorySystem.has_item("broken_datapad"), "планшет в инвентаре")
 	_expect(FileAccess.file_exists(SaveManager.CHECKPOINT_PATH), "в хабе записан чекпойнт")
 
@@ -52,14 +58,21 @@ func _ready() -> void:
 
 	GameState.start_location_event("inspect_capsule")
 	GameState.start_location_event("inspect_capsule")
-	_expect(_has_manual("inspect_capsule") and _narrative_count("text") >= 3,
-		"повторяемое ручное событие остаётся доступным, его текст лёг в ленту")
+	_expect(_has_manual("inspect_capsule") and _narrative_count("scene") == 0
+		and _narrative_count("choice") == 1 and _narrative_count("text") == 1,
+		"новое событие очистило описание модуля и предыдущее событие")
 	_expect(_has_manual("follow_signal"), "после вступления доступен сигнал скафандра")
 
 	# --- База: склад, верстак, ручной чекпойнт ---
 	_expect(LocationSystem.is_base(), "капсула помечена как модуль-база")
 	_expect(LocationSystem.get_image() == "base_bay" and ResourceLoader.exists("res://assets/art/scenes/base_bay.png"),
 		"у базы есть пиксельная иллюстрация")
+	var o2_before_decline := ResourceSystem.o2
+	GameState.start_location_event("search_supply_kit")
+	_choose("C")
+	_expect(_has_manual("search_supply_kit") and not LocationSystem.is_event_done("search_supply_kit"),
+		"отложенный аварийный набор остаётся доступным")
+	ResourceSystem.apply_o2_delta(o2_before_decline - ResourceSystem.o2)
 	GameState.start_location_event("search_supply_kit")
 	_choose("A")
 	_expect(InventorySystem.has_item("ration_bar") and InventorySystem.has_item("improvised_bandage"),
@@ -148,8 +161,13 @@ func _ready() -> void:
 		and InventorySystem.has_item("pipe_scrap"), "труба снята в сумку")
 	CharacterSystem.equip("pipe_scrap")
 
+	_expect(not MapSystem.is_node_fog_visible("alien_shuttle"),
+		"не найденный шаттл скрыт даже рядом с грузовым отсеком")
 	GameState.start_location_event("force_shuttle_airlock")
-	_expect(_node_state("alien_shuttle") == "available", "ручное событие открыло закрытый шлюз")
+	_expect(_node_state("alien_shuttle") == "available"
+		and MapSystem.is_node_fog_visible("alien_shuttle")
+		and _notice_contains("[Открыта новая локация \"Чужой шаттл\"]"),
+		"действие показало шаттл и выделило открытие")
 
 	GameState.leave_location()
 	MapSystem.select_node("cargo_bay")
@@ -223,7 +241,10 @@ func _ready() -> void:
 	MapSystem.select_node("lift_02_to_01")
 	MapSystem.select_node("hub")
 	GameState.start_location_event("follow_signal")
-	_expect(_node_state("copilot_body") == "available", "событие в хабе открыло узел пилота")
+	_expect(_node_state("copilot_body") == "available"
+		and MapSystem.is_node_fog_visible("copilot_body")
+		and _notice_contains("[Открыта новая локация \"Тело второго пилота\"]"),
+		"событие показало узел пилота и выделило открытие")
 	GameState.leave_location()
 	MapSystem.select_node("copilot_body")
 	_expect(LocationSystem.current_id == "copilot_body" and _notice_contains("Метка скафандра"),
@@ -418,8 +439,13 @@ func _ready() -> void:
 	GameState.start_location_event("emergency_bottle")
 	_expect(ResourceSystem.o2 >= o2_in_hall + 90.0 - ResourceSystem.get_o2_cost("action"),
 		"аварийный баллон пополнил кислород в зале связи")
+	_expect(not MapSystem.is_node_fog_visible("antenna_mast"),
+		"мачта скрыта до ремонта консоли")
 	GameState.start_location_event("patch_console")
-	_expect(_node_state("antenna_mast") == "available", "консоль наведения открыла мачту")
+	_expect(_node_state("antenna_mast") == "available"
+		and MapSystem.is_node_fog_visible("antenna_mast")
+		and _notice_contains("[Открыта новая локация \"Мачта дальней связи\"]"),
+		"консоль показала мачту и выделила открытие")
 	GameState.leave_location()
 	MapSystem.select_node("antenna_mast")
 	GameState.start_location_event("align_dish")

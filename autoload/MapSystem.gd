@@ -164,8 +164,17 @@ func can_unlock_node(node_id: String) -> bool:
 	return not lock.is_empty() and EffectResolver.can_open_lock(lock)
 
 
-func unlock_node(node_id: String) -> void:
+## Открывает узел и возвращает его название. Пустая строка означает, что
+## узел не существовал или уже был открыт.
+func unlock_node(node_id: String) -> String:
+	if not nodes.has(node_id) or not (nodes[node_id] is Dictionary):
+		push_warning("MapSystem: неизвестный узел '%s'" % node_id)
+		return ""
+	if str(nodes[node_id].get("state", "locked")) != "locked":
+		return ""
+	var title := str(nodes[node_id].get("title", node_id))
 	set_node_state(node_id, "available")
+	return title
 
 
 func set_node_state(node_id: String, state: String) -> void:
@@ -286,9 +295,18 @@ func get_explored_floor_ids() -> Array:
 func is_node_fog_visible(node_id: String) -> bool:
 	if not nodes.has(node_id) or not (nodes[node_id] is Dictionary):
 		return false
+	var node: Dictionary = nodes[node_id]
+	var node_map := _node_map(node)
+	# Секретные отсеки не выдаёт ни соседство, ни найденная схема:
+	# их впервые показывает только действие с open_map_node.
+	if (
+		bool(node_map.get("hidden_until_open", false))
+		and str(node.get("state", "locked")) == "locked"
+		and not is_node_explored(node_id)
+	):
+		return false
 	if map_revealed or is_node_explored(node_id):
 		return true
-	var node: Dictionary = nodes[node_id]
 	if not get_explored_floor_ids().has(_node_floor_id(node)):
 		return false
 	for explored_id in _explored_nodes.keys():

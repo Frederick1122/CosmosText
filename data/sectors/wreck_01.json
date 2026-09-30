@@ -49,7 +49,7 @@
 				"label": "Шаттл",
 				"note": "Сигнал нестабилен",
 				"order": 70.0,
-				"visible_when_locked": true
+				"hidden_until_open": true
 			},
 			"sealed": true,
 			"state": "locked",
@@ -116,7 +116,7 @@
 				"label": "Пилот",
 				"note": "Метка скафандра едва отвечает",
 				"order": 30.0,
-				"visible_when_locked": true
+				"hidden_until_open": true
 			},
 			"sealed": true,
 			"state": "locked",
@@ -240,7 +240,7 @@
 				"label": "Реактор",
 				"note": "За гермодверью, нужен допуск экипажа",
 				"order": 90.0,
-				"visible_when_locked": true
+				"hidden_until_open": true
 			},
 			"sealed": true,
 			"state": "locked",

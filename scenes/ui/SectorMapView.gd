@@ -541,6 +541,9 @@ func _is_elevator_node(node: Dictionary) -> bool:
 
 
 func _is_unknown_room(node: Dictionary) -> bool:
+	var cfg := _node_map(node)
+	if bool(cfg.get("hidden_until_open", false)) and str(node.get("state", "locked")) != "locked":
+		return false
 	return not bool(node.get("explored", true)) and str(node.get("id", "")) != _hub_node_id and not _is_elevator_node(node)
 
 
