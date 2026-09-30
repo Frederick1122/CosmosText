@@ -505,6 +505,13 @@ func _toggle_character() -> void:
 	if character_open:
 		_close_character()
 		return
+	_open_character()
+
+
+## Кнопка «Персонаж» в HUD заперта, пока игрок не выбрался из капсулы, но
+## верстак базы открывает экран персонажа напрямую — иначе крафт в капсуле
+## молча не работает.
+func _open_character() -> void:
 	if journal_open:
 		NotificationSystem.mark_journal_seen()
 	character_open = true
@@ -931,7 +938,7 @@ func _base_save() -> void:
 
 func _base_open_craft() -> void:
 	character_tab = "craft"
-	_toggle_character()
+	_open_character()
 
 
 func _make_base_store_callback(item_id: String) -> Callable:
