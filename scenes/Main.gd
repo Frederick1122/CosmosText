@@ -59,8 +59,9 @@ func _ready() -> void:
 	_expect(not InventorySystem.has_item("broken_datapad") and _has_manual("take_datapad"),
 		"оставленный планшет лежит у соседней капсулы")
 	GameState.start_location_event("take_datapad")
-	_expect(InventorySystem.has_item("broken_datapad") and not _has_manual("take_datapad"),
-		"планшет попадает в сумку только после отдельного подбора")
+	_expect(InventorySystem.has_item("broken_datapad") and not _has_manual("take_datapad")
+		and _narrative_image_last("backdrop") == "cryo_bay",
+		"планшет попадает в сумку, а событие без картинки сохраняет иллюстрацию отсека")
 	_expect(FileAccess.file_exists(SaveManager.CHECKPOINT_PATH), "в хабе записан чекпойнт")
 
 	_expect(InventorySystem.get_interactions("broken_datapad").size() == 1, "у планшета есть взаимодействие «Прочитать»")
@@ -186,8 +187,9 @@ func _ready() -> void:
 		"победа оставляет игрока в модуле (раундов: %d)" % rounds)
 	_expect(_node_state("cargo_bay") == "cleared" and SituationEngine.get_flag("drone_cargo_down") == true,
 		"узел пройден, on_win выставил флаг")
-	_expect(QuestSystem.is_step_done("escape_persephone", "cargo_drone") and _notice_contains("[✓ Пробиться через грузовой отсек"),
-		"победа над дроном засчитала шаг цели и показала его в ленте")
+	_expect(QuestSystem.is_step_done("escape_persephone", "cargo_drone")
+		and _narrative_kind_last("goal").contains("[✓ Пробиться через грузовой отсек"),
+		"победа над дроном засчитала шаг и показала отдельное обновление цели")
 	_expect(_notice_contains("[+1 Металлолом]"),
 		"трофей боя показан в ленте модуля строкой в скобках")
 	_expect(int(CombatSystem.reward.get("xp", 0)) == 25 and int(CombatSystem.reward.get("level_before", 0)) == xp_level_before_fight
@@ -281,6 +283,8 @@ func _ready() -> void:
 	ExplorationSystem.reveal("open_rigger_locker")
 	_expect(_has_manual("open_rigger_locker") and LocationSystem.is_event_locked(LocationSystem.find_event("open_rigger_locker")),
 		"рундук такелажника виден в меню, но заперт")
+	_expect(CodexSystem.is_unlocked("sea_chest") and CodexSystem.is_unlocked("rigger"),
+		"упоминание рундука такелажника открыло объяснения обоих терминов")
 	GameState.start_location_event("open_rigger_locker")
 	_expect(not LocationSystem.is_event_done("open_rigger_locker") and _notice_contains("Заперто"),
 		"попытка вскрыть рундук без ключа только сообщает о замке")
@@ -805,6 +809,15 @@ func _narrative_kind_last(kind: String) -> String:
 	for i in range(entries.size() - 1, -1, -1):
 		if str(entries[i].get("kind", "")) == kind:
 			return str(entries[i].get("text", ""))
+	return ""
+
+
+## Картинка последней записи ленты указанного типа.
+func _narrative_image_last(kind: String) -> String:
+	var entries := NarrativeSystem.get_entries()
+	for i in range(entries.size() - 1, -1, -1):
+		if str(entries[i].get("kind", "")) == kind:
+			return str(entries[i].get("image", ""))
 	return ""
 
 

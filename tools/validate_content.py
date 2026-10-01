@@ -657,6 +657,8 @@ def main():
                 errors.append(f"{ev_ctx}: у ручного события нужен label (текст пункта меню)")
             if "repeatable" in ev and not isinstance(ev["repeatable"], bool):
                 errors.append(f"{ev_ctx}: repeatable должен быть true/false")
+            if "clear_image" in ev and not isinstance(ev["clear_image"], bool):
+                errors.append(f"{ev_ctx}.clear_image: должно быть true/false")
             if "discover" in ev:
                 if not isinstance(ev["discover"], bool):
                     errors.append(f"{ev_ctx}.discover: должно быть true/false")

@@ -358,6 +358,8 @@ func _build_event_fields(event: Dictionary) -> void:
 	_option("Запуск", EVENT_STARTS, str(event.get("start", "manual")), func(value): _set_sub_value(event, "start", value))
 	_line("Кнопка", str(event.get("label", "")), func(value): _set_sub_value(event, "label", value))
 	_bool("Повторяемое", bool(event.get("repeatable", false)), func(value): _set_sub_value(event, "repeatable", value))
+	_line("Иллюстрация", str(event.get("image", "")), func(value): _set_sub_value(event, "image", value))
+	_bool("Очистить иллюстрацию", bool(event.get("clear_image", false)), func(value): _set_sub_value(event, "clear_image", value))
 	_line("Ситуация", str(event.get("situation", "")), func(value): _set_sub_value(event, "situation", value))
 	_text("Сообщение", str(event.get("text", "")), func(value): _set_sub_value(event, "text", value))
 	_requirements_editor("Условия запуска", event.get("triggers", []), func(value): _set_sub_value(event, "triggers", value))
@@ -469,7 +471,7 @@ func _default_array_entry(key: String, index: int) -> Dictionary:
 		"options":
 			return {"id": String.chr(65 + index), "label": "Новый вариант", "requires": [], "effects": [], "next": ""}
 		"events":
-			return {"id": "new_event_%d" % (index + 1), "start": "manual", "label": "Новое событие", "repeatable": false, "triggers": [], "effects": [], "text": "", "situation": ""}
+			return {"id": "new_event_%d" % (index + 1), "start": "manual", "label": "Новое событие", "repeatable": false, "clear_image": false, "triggers": [], "effects": [], "text": "", "image": "", "situation": ""}
 	return {"id": "new_entry_%d" % (index + 1)}
 
 

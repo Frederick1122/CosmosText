@@ -13,6 +13,8 @@ const GOOD_COLOR := Color("#a7e3c4")
 const EXIT_COLOR := Color("#e0b153")
 ## Выделение понятий, у которых есть запись в справочнике.
 const CODEX_COLOR := Color("#d7a8ff")
+## Обновления целей в ленте и хронике.
+const GOAL_COLOR := Color("#c6b6ff")
 
 const SCENE_ART_DIR := "res://assets/art/scenes/"
 const ITEM_ART_DIR := "res://assets/art/items/"
@@ -38,7 +40,9 @@ static func text(value: String, font_size: int = 24, color: Color = TEXT_COLOR) 
 
 ## Текст с цветными упоминаниями из CodexSystem. RichTextLabel нужен только
 ## там, где в одной строке смешиваются обычный текст и понятия справочника.
-static func codex_text(value: String, font_size: int = 24, color: Color = TEXT_COLOR) -> RichTextLabel:
+## italic выделяет служебные записи, не превращая текст в BBCode.
+static func codex_text(value: String, font_size: int = 24, color: Color = TEXT_COLOR,
+		italic: bool = false) -> RichTextLabel:
 	var lbl := RichTextLabel.new()
 	lbl.bbcode_enabled = false
 	lbl.fit_content = true
@@ -47,9 +51,14 @@ static func codex_text(value: String, font_size: int = 24, color: Color = TEXT_C
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lbl.add_theme_font_size_override("normal_font_size", fs(font_size))
+	lbl.add_theme_font_size_override("italics_font_size", fs(font_size))
+	if italic:
+		lbl.push_italics()
 	for segment in CodexSystem.highlighted_segments(value):
 		lbl.push_color(CODEX_COLOR if bool(segment.get("highlighted", false)) else color)
 		lbl.add_text(str(segment.get("text", "")))
+		lbl.pop()
+	if italic:
 		lbl.pop()
 	return lbl
 
@@ -147,7 +156,6 @@ static func slider(min_value: float, max_value: float, step: float, value: float
 	var knob := _circle_texture(fs(40), Color("#d6f2ff"))
 	s.add_theme_icon_override("grabber", knob)
 	s.add_theme_icon_override("grabber_highlight", knob)
-	s.add_theme_icon_override("tick", _circle_texture(10, Color("#8a96ab")))
 	return s
 
 

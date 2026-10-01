@@ -61,7 +61,7 @@ func refresh() -> void:
 				continue
 			_started[quest_id] = true
 			any = true
-			NarrativeSystem.push("notice", "[Новая цель: %s]" % title)
+			NarrativeSystem.push("goal", "[Новая цель: %s]" % title)
 			JournalSystem.add("goal", "Новая цель: %s" % title)
 		var all_done := true
 		for step in quest.get("steps", []):
@@ -71,14 +71,14 @@ func refresh() -> void:
 			if EffectResolver.check_requirements(step.get("done", [])):
 				_steps_done[key] = true
 				any = true
-				NarrativeSystem.push("gain", "[✓ %s]" % str(step.get("text", "")))
+				NarrativeSystem.push("goal", "[✓ %s]" % str(step.get("text", "")))
 			else:
 				all_done = false
 		var finished := EffectResolver.check_requirements(quest["done"]) if quest.has("done") else all_done
 		if finished:
 			_completed[quest_id] = true
 			any = true
-			NarrativeSystem.push("gain", "[Цель выполнена: %s]" % title)
+			NarrativeSystem.push("goal", "[Цель выполнена: %s]" % title)
 			JournalSystem.add("goal", "Цель выполнена: %s" % title)
 	if any:
 		NotificationSystem.mark_goals_new()

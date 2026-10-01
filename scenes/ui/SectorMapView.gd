@@ -7,10 +7,14 @@ extends Control
 ## под ключ, пусто, враг, лифт, не исследовано. Подпись, которая не влезает,
 ## едет бегущей строкой (MarqueeLabel). Видны только палубы, где игрок был.
 ##
-## Камера: по умолчанию палуба вписана целиком (zoom 1). Её можно двигать
-## перетаскиванием, приближать колесом, щипком или кнопками «＋/－», а «◎»
-## возвращает к игроку. В пути (focus_player) камера приближается к игроку и
-## ведёт его от отсека к отсеку.
+## Камера: по умолчанию палуба вписана целиком (zoom 1). Палец (или зажатая
+## мышь) двигает её, два пальца приближают щипком вокруг точки между ними;
+## колесо, жест тачпада и кнопки «＋/－» тоже приближают, «◎» возвращает к
+## игроку. Касание, ставшее жестом, не нажимает отсек под пальцем. В пути
+## (focus_player) камера приближается к игроку и ведёт его от отсека к отсеку.
+##
+## Карта только для просмотра (read_only, открыта из ситуации) — серая, с
+## надписью «ЗАБЛОКИРОВАНО»; двигать и приближать её можно, нажимать отсеки — нет.
 
 signal node_selected(node_id: String)
 
@@ -37,6 +41,18 @@ const CAMERA_TIME := 0.35
 const DRAG_THRESHOLD := 10.0
 const TOKEN_SIDE := 54.0
 const ROUTE_COLOR := Color("#ffd166")
+
+const LOCKED_WATERMARK := "ЗАБЛОКИРОВАНО"
+## Материал наследуют все CanvasItem карты: он обесцвечивает итоговый COLOR
+## каждого примитива/текста и не читает screen texture (она нестабильна во
+## время анимации появления родителя).
+const GRAYSCALE_SHADER := """
+shader_type canvas_item;
+void fragment() {
+	float gray = dot(COLOR.rgb, vec3(0.299, 0.587, 0.114));
+	COLOR.rgb = vec3(gray * 0.82);
+}
+"""
 
 ## Статус узла → заливка, рамка, значок, цвет подписи и строка легенды.
 const STATUS_STYLE := {
@@ -124,10 +140,19 @@ var _token_virtual: Vector2 = Vector2.ZERO
 var _token_floor: String = ""
 var _token_tween: Tween
 var _zoom_buttons: Array = []
-var _drag_armed: bool = false
-var _dragging: bool = false
+## Касания: индекс пальца → точка в координатах карты (мышь — индекс 0).
+var _pointers: Dictionary = {}
+## Текущее касание стало перетаскиванием или щипком: отсек под пальцем не жмётся.
+var _gesture_moved: bool = false
 var _drag_origin: Vector2 = Vector2.ZERO
 var _drag_cam_origin: Vector2 = Vector2.ZERO
+var _pinch_distance: float = 0.0
+var _pinch_zoom: float = 1.0
+## Точка карты (виртуальные координаты) под серединой щипка.
+var _pinch_anchor: Vector2 = Vector2.ZERO
+## Все визуальные элементы карты внутри группы: в read_only они наследуют серый материал.
+var _visual_group: Node2D
+var _lock_label: Label
 
 
 func _init() -> void:
@@ -270,20 +295,56 @@ func _rebuild() -> void:
 	_node_controls.clear()
 	_floor_buttons.clear()
 	_zoom_buttons.clear()
+	_visual_group = Node2D.new()
+	_visual_group.name = "MapVisuals"
+	add_child(_visual_group)
 	_canvas = Control.new()
 	_canvas.name = "MapCanvas"
 	_canvas.clip_contents = true
 	_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_canvas.draw.connect(_draw_canvas)
-	add_child(_canvas)
+	_visual_group.add_child(_canvas)
 	_build_node_controls()
 	_build_floor_buttons()
 	_build_zoom_buttons()
 	_token = PlayerToken.new()
 	_token.name = "PlayerToken"
 	_canvas.add_child(_token)
+	_build_lock_overlay()
 	_layout_controls()
 	_redraw()
+
+
+## Обесцвечивание группы и надпись поверх карты только для просмотра.
+func _build_lock_overlay() -> void:
+	_lock_label = null
+	if not _read_only:
+		return
+	var shader := Shader.new()
+	shader.code = GRAYSCALE_SHADER
+	var gray_material := ShaderMaterial.new()
+	gray_material.shader = shader
+	_visual_group.material = gray_material
+	_inherit_visual_material(_visual_group)
+	_lock_label = Label.new()
+	_lock_label.name = "MapLockWatermark"
+	_lock_label.text = LOCKED_WATERMARK
+	_lock_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_lock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_lock_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_lock_label.add_theme_font_size_override("font_size", UiKit.fs(44))
+	_lock_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.42))
+	_lock_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.5))
+	_lock_label.add_theme_constant_override("outline_size", 6)
+	_lock_label.rotation = deg_to_rad(-18.0)
+	add_child(_lock_label)
+
+
+func _inherit_visual_material(node: Node) -> void:
+	for child in node.get_children():
+		if child is CanvasItem:
+			(child as CanvasItem).use_parent_material = true
+		_inherit_visual_material(child)
 
 
 func _build_floor_buttons() -> void:
@@ -298,8 +359,8 @@ func _build_floor_buttons() -> void:
 		btn.add_theme_font_size_override("font_size", UiKit.fs(20))
 		_apply_floor_style(btn, floor_id)
 		btn.pressed.connect(SoundSystem.play.bind("ui_click"))
-		btn.pressed.connect(_select_floor_filter.bind(floor_id))
-		add_child(btn)
+		btn.pressed.connect(_on_tap.bind(_select_floor_filter.bind(floor_id)))
+		_visual_group.add_child(btn)
 		_floor_buttons[floor_id] = btn
 
 
@@ -310,8 +371,8 @@ func _build_zoom_buttons() -> void:
 		btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		btn.custom_minimum_size = Vector2(UiKit.fs(52), UiKit.fs(52))
 		btn.add_theme_font_size_override("font_size", UiKit.fs(24))
-		btn.pressed.connect(entry[2])
-		add_child(btn)
+		btn.pressed.connect(_on_tap.bind(entry[2]))
+		_visual_group.add_child(btn)
 		_zoom_buttons.append(btn)
 
 
@@ -327,7 +388,7 @@ func _build_node_controls() -> void:
 		btn.disabled = _read_only or not _is_node_targetable(node)
 		btn.add_theme_font_size_override("font_size", UiKit.fs(28))
 		_apply_node_style(btn, node)
-		btn.pressed.connect(func() -> void: node_selected.emit(str(node_id)))
+		btn.pressed.connect(_on_tap.bind(func() -> void: node_selected.emit(str(node_id))))
 		_canvas.add_child(btn)
 
 		var label: Control = MARQUEE_SCRIPT.new()
@@ -357,40 +418,122 @@ func _select_floor_filter(floor_id: String) -> void:
 
 # --- Камера и ввод ----------------------------------------------------------------
 
+## Нажатие кнопки на карте срабатывает, только если палец не двигал карту.
+func _on_tap(action: Callable) -> void:
+	if not _gesture_moved:
+		action.call()
+
+
+## Колесо мыши и жест тачпада. Перетаскивание и щипок — в _input.
 func _gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
+	if event is InputEventMouseButton and event.pressed:
 		match event.button_index:
-			MOUSE_BUTTON_LEFT:
-				if event.pressed:
-					_drag_armed = true
-					_dragging = false
-					_drag_origin = event.position
-					_drag_cam_origin = _cam
-				else:
-					_drag_armed = false
-					_dragging = false
 			MOUSE_BUTTON_WHEEL_UP:
-				if event.pressed:
-					_zoom_in()
-					accept_event()
+				_zoom_in()
+				accept_event()
 			MOUSE_BUTTON_WHEEL_DOWN:
-				if event.pressed:
-					_zoom_out()
-					accept_event()
-	elif event is InputEventMouseMotion and _drag_armed:
-		var delta: Vector2 = event.position - _drag_origin
-		if not _dragging and delta.length() >= DRAG_THRESHOLD:
-			_dragging = true
-			_follow_player = false
-		if _dragging:
-			_cam = _drag_cam_origin - delta / _current_scale()
-			_clamp_camera()
-			_layout_controls()
-			_redraw()
-			accept_event()
+				_zoom_out()
+				accept_event()
 	elif event is InputEventMagnifyGesture:
 		_set_zoom(_zoom * event.factor, false)
 		accept_event()
+
+
+## Пальцы ловятся до GUI: касание, начатое на кнопке отсека, тоже двигает
+## карту. Мышь, эмулированная из касания, пропускается — палец уже учтён.
+func _input(event: InputEvent) -> void:
+	if not is_visible_in_tree():
+		return
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			_pointer_down(event.index, event.position)
+		else:
+			_pointer_up(event.index)
+	elif event is InputEventScreenDrag:
+		_pointer_move(event.index, event.position)
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT \
+			and event.device != InputEvent.DEVICE_ID_EMULATION:
+		if event.pressed:
+			_pointer_down(0, event.position)
+		else:
+			_pointer_up(0)
+	elif event is InputEventMouseMotion and event.device != InputEvent.DEVICE_ID_EMULATION:
+		_pointer_move(0, event.position)
+
+
+func _pointer_down(index: int, global_point: Vector2) -> void:
+	if not get_global_rect().has_point(global_point):
+		return
+	if _pointers.is_empty():
+		_gesture_moved = false
+	_pointers[index] = _to_local_point(global_point)
+	if _pointers.size() == 1:
+		_begin_pan()
+	elif _pointers.size() == 2:
+		_begin_pinch()
+
+
+func _pointer_move(index: int, global_point: Vector2) -> void:
+	if not _pointers.has(index):
+		return
+	_pointers[index] = _to_local_point(global_point)
+	if _pointers.size() >= 2:
+		_update_pinch()
+		get_viewport().set_input_as_handled()
+		return
+	var delta: Vector2 = _pointers[index] - _drag_origin
+	if not _gesture_moved and delta.length() >= DRAG_THRESHOLD:
+		_start_gesture()
+	if _gesture_moved:
+		_apply_camera(_drag_cam_origin - delta / _current_scale(), _zoom)
+		get_viewport().set_input_as_handled()
+
+
+## Отпущенный палец; после щипка оставшийся палец продолжает двигать карту.
+func _pointer_up(index: int) -> void:
+	if not _pointers.has(index):
+		return
+	_pointers.erase(index)
+	if _pointers.size() == 1:
+		_begin_pan()
+	elif _pointers.size() >= 2:
+		_begin_pinch()
+
+
+func _begin_pan() -> void:
+	_drag_origin = _pointers.values()[0]
+	_drag_cam_origin = _cam
+
+
+func _begin_pinch() -> void:
+	_start_gesture()
+	var points: Array = _pointers.values()
+	var a: Vector2 = points[0]
+	var b: Vector2 = points[1]
+	_pinch_distance = maxf(1.0, a.distance_to(b))
+	_pinch_zoom = _zoom
+	_pinch_anchor = _cam + ((a + b) * 0.5 - _map_rect().get_center()) / _current_scale()
+
+
+## Точка карты, бывшая под серединой пальцев, остаётся под ней при масштабе.
+func _update_pinch() -> void:
+	var points: Array = _pointers.values()
+	var a: Vector2 = points[0]
+	var b: Vector2 = points[1]
+	var zoom := clampf(_pinch_zoom * a.distance_to(b) / _pinch_distance, 1.0, ZOOM_MAX)
+	var view_scale := _fit_scale() * zoom
+	_apply_camera(_pinch_anchor - ((a + b) * 0.5 - _map_rect().get_center()) / view_scale, zoom)
+
+
+func _start_gesture() -> void:
+	_gesture_moved = true
+	_follow_player = false
+	if _camera_tween != null:
+		_camera_tween.kill()
+
+
+func _to_local_point(global_point: Vector2) -> Vector2:
+	return get_global_transform().affine_inverse() * global_point
 
 
 func _zoom_in() -> void:
@@ -470,6 +613,16 @@ func _layout_controls() -> void:
 	_layout_node_controls()
 	_layout_zoom_buttons()
 	_layout_token()
+	_layout_lock_overlay()
+
+
+func _layout_lock_overlay() -> void:
+	if _lock_label == null:
+		return
+	var rect := _map_rect()
+	_lock_label.size = Vector2(rect.size.x * 1.1, float(UiKit.fs(44)) * 1.6)
+	_lock_label.pivot_offset = _lock_label.size * 0.5
+	_lock_label.position = (rect.get_center() - _lock_label.size * 0.5).round()
 
 
 func _layout_floor_buttons() -> void:

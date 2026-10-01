@@ -6,6 +6,8 @@ extends Node
 signal screen_changed(screen: int)
 ## Такт исследования: номер, всего тактов, уже потрачено O2.
 signal exploration_progressed(step: int, total: int, o2_spent: float)
+## Поиск закончен (или прерван): плашку прогресса можно убирать.
+signal exploration_finished
 
 enum Screen { MAIN_MENU, SECTOR_MAP, SITUATION, COMBAT, DEATH, LOCATION, VICTORY }
 
@@ -21,6 +23,8 @@ var last_ending_id: String = ""
 ## Событие локации считается выполненным только после завершающего выбора.
 var _active_location_event_id: String = ""
 var _active_event_completes_on_win: bool = true
+## Явный clear_image текущего события действует на всю цепочку его ситуаций.
+var _active_event_clears_image: bool = false
 var _exploring: bool = false
 var _exploration_progress: Dictionary = {}
 
@@ -34,6 +38,7 @@ func _ready() -> void:
 func start_new_game(sector_id: String = "", opening_situation_id: String = "") -> void:
 	_active_location_event_id = ""
 	_active_event_completes_on_win = true
+	_active_event_clears_image = false
 	_exploring = false
 	_exploration_progress.clear()
 	if sector_id == "":
@@ -54,6 +59,7 @@ func start_new_game(sector_id: String = "", opening_situation_id: String = "") -
 func continue_game(sector_id: String = "") -> void:
 	_active_location_event_id = ""
 	_active_event_completes_on_win = true
+	_active_event_clears_image = false
 	if sector_id == "":
 		sector_id = SaveManager.get_start_sector_id()
 	if SaveManager.load_run(sector_id):
@@ -73,6 +79,7 @@ func enter_situation(situation_id: String) -> void:
 func enter_location(location_id: String, node_id: String = "") -> void:
 	_active_location_event_id = ""
 	_active_event_completes_on_win = true
+	_active_event_clears_image = false
 	if not LocationSystem.enter(location_id, node_id):
 		return
 	_resume_location()
@@ -82,6 +89,7 @@ func enter_location(location_id: String, node_id: String = "") -> void:
 func leave_location() -> void:
 	LocationSystem.leave()
 	_active_location_event_id = ""
+	_active_event_clears_image = false
 	NarrativeSystem.clear()
 	MapSystem.cancel_travel()
 	_set_screen(Screen.SECTOR_MAP)
@@ -103,6 +111,7 @@ func start_location_event(event_id: String) -> void:
 		return
 	# Событие заменяет описание модуля в общем текстовом буфере.
 	NarrativeSystem.clear()
+	_push_location_backdrop(ev)
 	NarrativeSystem.push("choice", str(ev.get("label", event_id)))
 	EffectResolver.report_change("o2", -cost, "O2")
 	if not lock.is_empty():
@@ -130,6 +139,7 @@ func explore_location() -> void:
 	_exploring = true
 	_exploration_progress = {"step": 0, "total": total, "o2_spent": spent}
 	NarrativeSystem.clear()
+	_push_location_backdrop()
 	NarrativeSystem.push("choice", "Исследовать отсек")
 	exploration_progressed.emit(0, total, spent)
 	for step in range(1, total + 1):
@@ -137,23 +147,26 @@ func explore_location() -> void:
 			await get_tree().create_timer(EXPLORE_STEP_SECONDS).timeout
 		var before := ResourceSystem.o2
 		if not ResourceSystem.spend_o2("explore_tick", "", false):
-			_exploring = false
-			_exploration_progress.clear()
+			_finish_exploring()
 			return
 		spent += before - ResourceSystem.o2
 		_exploration_progress = {"step": step, "total": total, "o2_spent": spent}
 		exploration_progressed.emit(step, total, spent)
 	if not ResourceSystem.finish_action("action"):
-		_exploring = false
-		_exploration_progress.clear()
+		_finish_exploring()
 		return
 	EffectResolver.report_change("o2", -spent, "O2")
 	ExplorationSystem.resolve(plan)
-	_exploring = false
-	_exploration_progress.clear()
+	_finish_exploring()
 	if ResourceSystem.is_dead():
 		return
 	_resume_location()
+
+
+func _finish_exploring() -> void:
+	_exploring = false
+	_exploration_progress.clear()
+	exploration_finished.emit()
 
 
 func is_exploring() -> bool:
@@ -231,14 +244,28 @@ func _resume_location() -> void:
 	_show_location()
 
 
+## Картинка модуля висит над лентой, пока событие не покажет свою (поле image)
+## или не попросит убрать фон на всю цепочку (clear_image: true). Если картинку
+## покажет ситуация, лента рисует только её (Game._render_story).
+func _push_location_backdrop(ev: Dictionary = {}) -> void:
+	var clears_image := _active_event_clears_image or bool(ev.get("clear_image", false))
+	if not LocationSystem.is_active() or clears_image or str(ev.get("image", "")) != "":
+		return
+	var image := LocationSystem.get_image()
+	if image != "":
+		NarrativeSystem.push("backdrop", "", image)
+
+
 ## Возвращает true, если событие увело игрока с экрана локации
 ## (ситуация, бой или смерть).
 func _run_event(ev: Dictionary, clear_narrative: bool = true) -> bool:
 	LocationSystem.mark_started(ev)
 	_active_location_event_id = str(ev.get("id", ""))
 	_active_event_completes_on_win = true
+	_active_event_clears_image = bool(ev.get("clear_image", false))
 	if clear_narrative:
 		NarrativeSystem.clear()
+		_push_location_backdrop(ev)
 	# Сначала текст события, потом его последствия: лента должна читаться сверху вниз.
 	NarrativeSystem.push("text", str(ev.get("text", "")), str(ev.get("image", "")))
 	EffectResolver.apply_effects(ev.get("effects", []))
@@ -266,12 +293,18 @@ func _on_situation_ended(_id: String, next: String, completes_event: bool) -> vo
 		return  # забег уже завершён эффектом end_run или смертью
 	if CombatSystem.state == CombatSystem.State.PLAYER_TURN:
 		return  # эффект start_combat уже переключил экран на бой
+	var continues_situation := next != "" and not next.begins_with("map:")
+	NarrativeSystem.clear()
+	# Фон следующей ситуации выбирается до завершения события: clear_image
+	# относится ко всей связанной цепочке, а не только к первому экрану.
+	if continues_situation:
+		_push_location_backdrop()
 	if next == "" or next.begins_with("map:"):
 		if completes_event:
 			_complete_active_location_event()
 		else:
 			_active_location_event_id = ""
-	NarrativeSystem.clear()
+			_active_event_clears_image = false
 	if next == "":
 		if LocationSystem.is_active():
 			LocationSystem.show_current_narrative()
@@ -326,6 +359,7 @@ func _on_combat_ended(result: String) -> void:
 		_complete_active_location_event()
 	elif result == "fled":
 		_active_location_event_id = ""
+		_active_event_clears_image = false
 	if stays_in_location:
 		_resume_location()  # победа — игрок остаётся в модуле
 		return
@@ -342,6 +376,7 @@ func _complete_active_location_event() -> void:
 		return
 	LocationSystem.mark_completed(_active_location_event_id)
 	_active_location_event_id = ""
+	_active_event_clears_image = false
 	_active_event_completes_on_win = true
 
 
@@ -351,6 +386,7 @@ func _on_player_died(cause: String) -> void:
 	last_death_blow = CombatSystem.last_hit_on_player() \
 		if cause == "hp" and current_screen == Screen.COMBAT else ""
 	_active_location_event_id = ""
+	_active_event_clears_image = false
 	MapSystem.cancel_travel()
 	_set_screen(Screen.DEATH)
 

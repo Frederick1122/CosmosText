@@ -79,6 +79,12 @@ var _route_plan: Dictionary = {}
 var _travel_tick_id: int = 0
 ## Идёт перерисовка из-за смены настроек: экран не проявляется заново.
 var _restyling: bool = false
+## Плашка поиска по центру экрана (только пока идёт исследование с анимациями).
+var _explore_overlay: Control
+var _explore_card: PanelContainer
+var _explore_caption: Label
+var _explore_bar: ProgressBar
+var _explore_total: int = 1
 
 
 func _ready() -> void:
@@ -185,6 +191,7 @@ func _build_static_layout() -> void:
 func _connect_signals() -> void:
 	GameState.screen_changed.connect(_on_screen_changed)
 	GameState.exploration_progressed.connect(_on_exploration_progressed)
+	GameState.exploration_finished.connect(_hide_explore_overlay)
 	ResourceSystem.hp_changed.connect(_on_resource_changed)
 	ResourceSystem.o2_changed.connect(_on_resource_changed)
 	ResourceSystem.ammo_changed.connect(_on_resource_changed)
@@ -296,15 +303,18 @@ func _style_scrollbar(bar: VScrollBar) -> void:
 # Колесо мыши ScrollContainer обрабатывает сам. Перетаскивание (палец на
 # телефоне или зажатая мышь) делаем здесь: жест может начаться на кнопке —
 # тогда её нажатие отменяется, и после отпускания она не срабатывает.
+# Карта и ползунки ведут палец сами: отмена нажатия увела бы бегунок ползунка
+# за левый край, и значение упало бы в минимум.
 
 func _input(event: InputEvent) -> void:
 	if _injecting or content_scroll == null or not content_scroll.is_visible_in_tree():
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
-			# Карту перетаскивают как камеру — ленту под ней не прокручиваем.
+			# Карту перетаскивают как камеру, ползунок — как бегунок: ленту под ними не прокручиваем.
 			var on_map := _map_view_alive() and _map_view.get_global_rect().has_point(event.position)
-			_drag_armed = content_scroll.get_global_rect().has_point(event.position) and not on_map
+			_drag_armed = content_scroll.get_global_rect().has_point(event.position) and not on_map \
+				and not _slider_at(event.position)
 			_drag_scrolling = false
 			_drag_origin = event.position
 			_drag_scroll_origin = content_scroll.scroll_vertical
@@ -321,6 +331,15 @@ func _input(event: InputEvent) -> void:
 		if _drag_scrolling:
 			content_scroll.scroll_vertical = _drag_scroll_origin - int(dy)
 			get_viewport().set_input_as_handled()
+
+
+## Ползунок под пальцем: его перетаскивание не превращается в прокрутку ленты.
+func _slider_at(point: Vector2) -> bool:
+	for node in body.find_children("*", "Slider", true, false):
+		var slider := node as Slider
+		if slider.is_visible_in_tree() and slider.get_global_rect().has_point(point):
+			return true
+	return false
 
 
 ## Уводит «курсор» за пределы нажатой кнопки и отпускает там — кнопка
@@ -406,12 +425,16 @@ func _reveal_story_entry(entry: Dictionary, nodes: Array, start: float) -> float
 	for node in nodes:
 		if node is RichTextLabel:
 			var rich := node as RichTextLabel
+			# Строки раскладываются по всему тексту заранее: слово, которое не
+			# влезет, сразу начинает печататься с новой строки.
+			rich.visible_characters_behavior = TextServer.VC_CHARS_AFTER_SHAPING
 			rich.visible_ratio = 0.0
 			var text_tween := rich.create_tween()
 			text_tween.tween_interval(start)
 			text_tween.tween_property(rich, "visible_ratio", 1.0, duration).set_trans(Tween.TRANS_LINEAR)
 		elif node is Label:
 			var label := node as Label
+			label.visible_characters_behavior = TextServer.VC_CHARS_AFTER_SHAPING
 			label.visible_ratio = 0.0
 			var text_tween := label.create_tween()
 			text_tween.tween_interval(start)
@@ -510,9 +533,105 @@ func _on_story_cleared() -> void:
 	_story_shown = 0
 
 
-func _on_exploration_progressed(_step: int, _total: int, _o2_spent: float) -> void:
+func _on_exploration_progressed(step: int, total: int, o2_spent: float) -> void:
+	if step == 0:
+		_show_explore_overlay(total)
+	_update_explore_overlay(step, total, o2_spent)
 	if GameState.current_screen == GameState.Screen.LOCATION and not _any_overlay_open():
 		_render_current_screen()
+
+
+## Плашка по центру: затемнение, карточка с подписью и шкалой. Шкала плавно
+## идёт к концу поиска весь его срок, а не прыгает по тактам. Касания
+## затемнение съедает — пока идёт поиск, остальное не нажать.
+func _show_explore_overlay(total: int) -> void:
+	_drop_explore_overlay()
+	if not SettingsSystem.animations:
+		return
+	_explore_total = maxi(1, total)
+	_explore_overlay = Control.new()
+	_explore_overlay.name = "ExplorationOverlay"
+	_explore_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_explore_overlay)
+	_fill_parent(_explore_overlay)
+	var dim := ColorRect.new()
+	dim.color = Color(0.03, 0.04, 0.07, 0.62)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_explore_overlay.add_child(dim)
+	_fill_parent(dim)
+	var center := CenterContainer.new()
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_explore_overlay.add_child(center)
+	_fill_parent(center)
+	_explore_card = PanelContainer.new()
+	_explore_card.name = "ExplorationProgress"
+	_explore_card.custom_minimum_size.x = 720.0
+	_explore_card.add_theme_stylebox_override("panel", UiKit.box(Color("#171d27"), Color("#5d91a8"), 2, 30))
+	center.add_child(_explore_card)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 18)
+	_explore_card.add_child(column)
+	var title := UiKit.text("🔍 Исследование отсека", 30, UiKit.TITLE_COLOR)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(title)
+	_explore_bar = ProgressBar.new()
+	_explore_bar.name = "ExplorationProgressBar"
+	_explore_bar.max_value = 1.0
+	_explore_bar.value = 0.0
+	_explore_bar.show_percentage = false
+	_explore_bar.custom_minimum_size.y = UiKit.fs(22)
+	_explore_bar.add_theme_stylebox_override("background", UiKit.box(Color("#202733"), Color("#323d4e"), 1, 0))
+	_explore_bar.add_theme_stylebox_override("fill", UiKit.box(Color("#2f8fb5"), Color("#9fd3e6"), 1, 0))
+	column.add_child(_explore_bar)
+	_explore_caption = UiKit.text("", 22, UiKit.ACCENT_COLOR)
+	_explore_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(_explore_caption)
+	# Появление: плашка вырастает из центра, затемнение проявляется.
+	_explore_overlay.modulate.a = 0.0
+	_explore_card.pivot_offset = Vector2(360.0, 90.0)
+	_explore_card.scale = Vector2(0.88, 0.88)
+	var appear := create_tween().set_parallel(true)
+	appear.tween_property(_explore_overlay, "modulate:a", 1.0, 0.22).set_trans(Tween.TRANS_SINE)
+	appear.tween_property(_explore_card, "scale", Vector2.ONE, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	var fill := _explore_overlay.create_tween()
+	fill.tween_property(_explore_bar, "value", 1.0, float(_explore_total) * GameState.EXPLORE_STEP_SECONDS) \
+		.set_trans(Tween.TRANS_LINEAR)
+
+
+func _update_explore_overlay(step: int, total: int, o2_spent: float) -> void:
+	if _explore_overlay == null:
+		return
+	var caption := "Такт %d из %d" % [maxi(1, step), total] if step > 0 else "Осматриваем отсек…"
+	if o2_spent > 0.0:
+		caption += " · −%d O2" % roundi(o2_spent)
+	elif is_zero_approx(ResourceSystem.get_o2_cost("explore_tick")):
+		caption += " · воздух отсека"
+	_explore_caption.text = caption
+
+
+## Поиск закончен: шкала доходит до конца, плашка гаснет и уменьшается.
+func _hide_explore_overlay() -> void:
+	if _explore_overlay == null:
+		return
+	var overlay := _explore_overlay
+	var card := _explore_card
+	_explore_overlay = null
+	_explore_card = null
+	var bar := _explore_bar
+	var fade := overlay.create_tween()
+	fade.tween_property(bar, "value", 1.0, 0.12)
+	fade.tween_interval(0.12)
+	fade.set_parallel(true)
+	fade.tween_property(overlay, "modulate:a", 0.0, 0.25).set_trans(Tween.TRANS_SINE)
+	fade.tween_property(card, "scale", Vector2(0.92, 0.92), 0.25).set_trans(Tween.TRANS_SINE)
+	fade.chain().tween_callback(overlay.queue_free)
+
+
+func _drop_explore_overlay() -> void:
+	if _explore_overlay != null:
+		_explore_overlay.queue_free()
+		_explore_overlay = null
+		_explore_card = null
 
 
 func _on_screen_changed(screen: int) -> void:
@@ -636,11 +755,6 @@ func _toggle_map() -> void:
 	_route_plan = {}
 	_map_message = ""
 	_scroll_to_top()
-	_render_current_screen()
-
-
-func _close_map_overlay() -> void:
-	map_open = false
 	_render_current_screen()
 
 
@@ -1120,10 +1234,7 @@ func _refresh_route_panel() -> void:
 	if _map_message != "":
 		_route_panel.add_child(UiKit.text(_map_message, 22, UiKit.EXIT_COLOR))
 	if _route_panel_read_only:
-		_route_panel.add_child(UiKit.text("Карта только для просмотра — сначала закончи событие.", 20, UiKit.MUTED_COLOR))
-		var close := UiKit.button("✖ Закрыть карту", "quiet", BUTTON_HEIGHT)
-		close.pressed.connect(_close_map_overlay)
-		_route_panel.add_child(close)
+		_route_panel.add_child(UiKit.text("Маршрут недоступен, пока не закончено событие. Вернуться — кнопкой «Карта».", 20, UiKit.MUTED_COLOR))
 		return
 	var travel := MapSystem.get_travel()
 	if MapSystem.is_travelling():
@@ -1245,6 +1356,8 @@ func _render_story() -> void:
 	var reveal_at := 0.0
 	for i in range(entries.size()):
 		var entry: Dictionary = entries[i]
+		if str(entry.get("kind", "")) == "backdrop" and _story_has_other_image(entries):
+			continue
 		var nodes := _story_nodes(entry)
 		for node in nodes:
 			body.add_child(node)
@@ -1252,6 +1365,14 @@ func _render_story() -> void:
 			reveal_at = _reveal_story_entry(entry, nodes, reveal_at)
 	_story_shown = entries.size()
 	_scroll_to_bottom()
+
+
+## Есть ли в ленте картинка событий или ситуации: она важнее картинки отсека.
+func _story_has_other_image(entries: Array) -> bool:
+	for entry in entries:
+		if str(entry.get("kind", "")) != "backdrop" and str(entry.get("image", "")) != "":
+			return true
+	return false
 
 
 ## Узлы одной записи ленты: картинка (если есть) и текст в своём стиле.
@@ -1274,6 +1395,8 @@ func _story_nodes(entry: Dictionary) -> Array:
 			nodes.append(UiKit.codex_text(text, 24, UiKit.TEXT_COLOR))
 		"notice":
 			nodes.append(UiKit.codex_text(text, 22, UiKit.ACCENT_COLOR))
+		"goal":
+			nodes.append(UiKit.codex_text(text, 22, UiKit.GOAL_COLOR, true))
 		"gain":
 			nodes.append(UiKit.codex_text(text, 22, UiKit.GOOD_COLOR))
 		"loss":
@@ -1292,7 +1415,6 @@ func _make_option_callback(opt_id: String) -> Callable:
 func _render_location() -> void:
 	_render_story()
 	if GameState.is_exploring():
-		_render_exploration_progress()
 		return
 
 	var events := LocationSystem.get_manual_events()
@@ -1323,31 +1445,6 @@ func _render_location() -> void:
 		_add_section("Склад" if LocationSystem.is_base() else "Здесь лежит")
 		for item_id in stash.keys():
 			_add_button("✋ Взять: %s%s" % [_item_name(item_id), _count_suffix(int(stash[item_id]))], _make_stash_take_callback(item_id), "quiet")
-
-
-## Промежуточное состояние длительного поиска: одна строка и тонкая шкала
-## меняются каждые полсекунды, остальные действия и HUD-кнопки заблокированы.
-func _render_exploration_progress() -> void:
-	var progress := GameState.get_exploration_progress()
-	var step := int(progress.get("step", 0))
-	var total := maxi(1, int(progress.get("total", 1)))
-	var spent := float(progress.get("o2_spent", 0.0))
-	var dots := ".".repeat(1 + step % 3)
-	var caption := "Исследование%s · %d/%d" % [dots, step, total]
-	if spent > 0.0:
-		caption += " · −%d O2" % roundi(spent)
-	elif is_zero_approx(ResourceSystem.get_o2_cost("explore_tick")):
-		caption += " · воздух отсека"
-	var card := UiKit.card(body)
-	card.name = "ExplorationProgress"
-	card.add_child(UiKit.text(caption, 23, UiKit.ACCENT_COLOR))
-	var bar := ProgressBar.new()
-	bar.name = "ExplorationProgressBar"
-	bar.max_value = total
-	bar.value = step
-	bar.show_percentage = false
-	bar.custom_minimum_size.y = UiKit.fs(12)
-	card.add_child(bar)
 
 
 ## «Исследовать»: сколько ещё можно найти в отсеке. Искать нечего — кнопка
@@ -1630,7 +1727,7 @@ const JOURNAL_COLORS := {
 	"choice": UiKit.TITLE_COLOR,
 	"loot": UiKit.MUTED_COLOR,
 	"rest": UiKit.GOOD_COLOR,
-	"goal": UiKit.EXIT_COLOR,
+	"goal": UiKit.GOAL_COLOR,
 }
 
 
@@ -1715,9 +1812,16 @@ func _render_journal_log() -> void:
 		var entry: Dictionary = entries[i]
 		var count := int(entry.get("count", 1))
 		var line := "O2 %d · %s%s" % [int(entry.get("o2", 0)), str(entry.get("text", "")), _count_suffix(count)]
-		var lbl := _add_text(line)
-		lbl.add_theme_font_size_override("font_size", UiKit.fs(22))
-		lbl.add_theme_color_override("font_color", JOURNAL_COLORS.get(str(entry.get("kind", "")), UiKit.TEXT_COLOR))
+		var kind := str(entry.get("kind", ""))
+		var color: Color = JOURNAL_COLORS.get(kind, UiKit.TEXT_COLOR)
+		if kind == "goal":
+			var goal_line := UiKit.codex_text(line, 22, color, true)
+			goal_line.size.x = _body_width()
+			body.add_child(goal_line)
+		else:
+			var lbl := _add_text(line)
+			lbl.add_theme_font_size_override("font_size", UiKit.fs(22))
+			lbl.add_theme_color_override("font_color", color)
 
 
 ## Архив: открытые лор-фрагменты, каждая запись в рамке.
@@ -1776,8 +1880,6 @@ func _render_settings() -> void:
 	var font_slider := UiKit.slider(SettingsSystem.FONT_SCALE_MIN, SettingsSystem.FONT_SCALE_MAX, 0.05,
 		SettingsSystem.font_scale())
 	font_slider.name = "FontScaleSlider"
-	font_slider.tick_count = SettingsSystem.FONT_SCALE_ANCHORS.size()
-	font_slider.ticks_on_borders = true
 	body.add_child(font_slider)
 	_bind_settings_slider(font_slider, font_caption,
 		func(value: float) -> String: return "Размер шрифта: %s×" % _scale_text(SettingsSystem.snap_font_scale(value)),
