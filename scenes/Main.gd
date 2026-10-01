@@ -42,6 +42,12 @@ func _ready() -> void:
 	_expect(_narrative_count("scene") == 1 and _narrative_count("text") == 1
 		and _narrative_count("choice") == 0 and _narrative_count("result") == 0,
 		"после «Продолжить» событие заменено описанием локации")
+	_expect(QuestSystem.is_step_done("escape_persephone", "leave_capsule") and not QuestSystem.is_completed("escape_persephone")
+		and NotificationSystem.has_journal_alert() and QuestSystem.get_thoughts().contains("ничего не помню"),
+		"цели: побег с обломка начат, первый шаг засчитан, мысли о пробуждении, (!) у журнала")
+	var escape: Dictionary = QuestSystem.get_quests()[0]
+	_expect(escape["steps"].size() == 2 and bool(escape["steps"][1]["current"]),
+		"видны засчитанные шаги и один текущий, дальше цель не раскрывается")
 	_expect(MapSystem.get_known_floor_ids() == ["deck_01"] and MapSystem.player_node_id == "hub",
 		"игрок стоит в капсуле, палубы за лифтом на карте не видны")
 	_expect(MapSystem.is_node_explored("hub") and MapSystem.is_node_fog_visible("lift_01_to_02")
@@ -167,6 +173,8 @@ func _ready() -> void:
 		"победа оставляет игрока в модуле (раундов: %d)" % rounds)
 	_expect(_node_state("cargo_bay") == "cleared" and SituationEngine.get_flag("drone_cargo_down") == true,
 		"узел пройден, on_win выставил флаг")
+	_expect(QuestSystem.is_step_done("escape_persephone", "cargo_drone") and _notice_contains("[✓ Пробиться через грузовой отсек"),
+		"победа над дроном засчитала шаг цели и показала его в ленте")
 	_expect(_notice_contains("[+1 Металлолом]"),
 		"трофей боя показан в ленте модуля строкой в скобках")
 	_expect(int(CombatSystem.reward.get("xp", 0)) == 25 and int(CombatSystem.reward.get("level_before", 0)) == xp_level_before_fight
@@ -393,10 +401,12 @@ func _ready() -> void:
 
 	# --- Сохранение ---
 	var progression_before_save := ProgressionSystem.to_save_data()
+	var quests_before_save := QuestSystem.to_save_data()
 	SaveManager.save_run()
 	SaveManager.load_run()
 	_expect(ProgressionSystem.to_save_data() == progression_before_save and ProgressionSystem.level >= 2,
 		"уровень и опыт переживают сохранение (уровень %d, опыт %d)" % [ProgressionSystem.level, ProgressionSystem.xp])
+	_expect(QuestSystem.to_save_data() == quests_before_save, "цели и засчитанные шаги переживают сохранение")
 	_expect(LocationSystem.is_event_done("cargo_bay/search_containers") and LocationSystem.get_visits("cargo_bay") == 5,
 		"состояние событий и визитов переживает сохранение (визитов: %d)" % LocationSystem.get_visits("cargo_bay"))
 	_expect(CharacterSystem.get_equipped("back") == "makeshift_backpack" and InventorySystem.max_slots == 9
@@ -460,6 +470,10 @@ func _ready() -> void:
 	_expect(MapSystem.current_sector_id == "wreck_02" and GameState.current_screen == Screen.SECTOR_MAP
 		and not InventorySystem.has_item("power_cell"), "прыжок выполнен: сектор wreck_02, ячейка израсходована")
 	_expect(FileAccess.file_exists(SaveManager.CHECKPOINT_PATH), "переход между секторами пишет чекпойнт")
+	_expect(QuestSystem.is_completed("escape_persephone") and not QuestSystem.is_completed("call_for_help")
+		and QuestSystem.get_quests().any(func(q: Dictionary) -> bool: return q["id"] == "call_for_help")
+		and QuestSystem.get_thoughts().contains("позади"),
+		"улетели: побег выполнен, началась цель «Позвать помощь», мысли сменились")
 
 	# --- «Вехтер-9»: стыковка, каюты, медблок ---
 	MapSystem.travel_to("dock_bay")

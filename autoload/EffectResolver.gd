@@ -61,10 +61,13 @@ func apply_effect(effect: Dictionary) -> void:
 			push_warning("EffectResolver: неизвестный тип эффекта '%s'" % effect.get("type", ""))
 
 
+## После набора эффектов — проверка целей: флаги, предметы и события могли
+## засчитать шаг (QuestSystem).
 func apply_effects(effects: Array) -> void:
 	for e in effects:
 		if e is Dictionary:
 			apply_effect(e)
+	QuestSystem.refresh()
 
 
 ## Что делает эффект предмета, коротко для UI: «+30 HP», «+90 O2».

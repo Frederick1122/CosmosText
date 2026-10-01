@@ -48,7 +48,7 @@ var settings_open: bool = false
 ## Верстак базы: оверлей с рецептами поверх экрана модуля.
 var workbench_open: bool = false
 var character_tab: String = "items"
-var journal_tab: String = "log"
+var journal_tab: String = "goals"
 
 var _drag_armed: bool = false
 var _drag_scrolling: bool = false
@@ -654,7 +654,7 @@ func _update_nav_buttons() -> void:
 	settings_button.disabled = GameState.current_screen == GameState.Screen.COMBAT or MapSystem.is_travelling()
 	_set_nav_label(map_button, "🗺️", "Карта", false)
 	_set_nav_label(character_button, "🧑‍🚀", "Персонаж", NotificationSystem.has_character_alert())
-	_set_nav_label(journal_button, "📓", "Журнал", NotificationSystem.has_new_lore())
+	_set_nav_label(journal_button, "📓", "Журнал", NotificationSystem.has_journal_alert())
 	_set_nav_label(settings_button, "⚙️", "Настройки", false)
 	var map_active := not journal_open and not character_open and not settings_open and (
 		map_open or GameState.current_screen == GameState.Screen.SECTOR_MAP
@@ -1470,9 +1470,10 @@ func _on_rollback_ad_completed(success: bool) -> void:
 		_render_current_screen()
 
 
-## Журнал — две вкладки: «Хроника» (что уже произошло в забеге, JournalSystem)
-## и «Архив» (найденные лор-фрагменты, ArchiveSystem).
-const JOURNAL_TABS := [["log", "📜 Хроника"], ["lore", "🗄️ Архив"]]
+## Журнал — три вкладки: «Цели» (мысли героя и задачи, QuestSystem),
+## «Хроника» (что уже произошло в забеге, JournalSystem) и «Архив»
+## (найденные лор-фрагменты, ArchiveSystem). Закрывает журнал кнопка HUD.
+const JOURNAL_TABS := [["goals", "🎯 Цели"], ["log", "📜 Хроника"], ["lore", "🗄️ Архив"]]
 const JOURNAL_COLORS := {
 	"move": UiKit.ACCENT_COLOR,
 	"combat": UiKit.BAD_COLOR,
@@ -1482,6 +1483,7 @@ const JOURNAL_COLORS := {
 	"choice": UiKit.TITLE_COLOR,
 	"loot": UiKit.MUTED_COLOR,
 	"rest": UiKit.GOOD_COLOR,
+	"goal": UiKit.EXIT_COLOR,
 }
 
 
@@ -1493,7 +1495,7 @@ func _render_journal() -> void:
 	for entry in JOURNAL_TABS:
 		var tab_id := str(entry[0])
 		var label := str(entry[1])
-		if tab_id == "lore" and NotificationSystem.has_new_lore():
+		if (tab_id == "lore" and NotificationSystem.has_new_lore()) or (tab_id == "goals" and NotificationSystem.has_new_goals()):
 			label += " (!)"
 		var btn := UiKit.button(label, "tab_active" if tab_id == journal_tab else "quiet", 58)
 		btn.name = "JournalTab_%s" % tab_id
@@ -1503,11 +1505,44 @@ func _render_journal() -> void:
 		tabs.add_child(btn)
 	body.add_child(tabs)
 
-	if journal_tab == "lore":
-		_render_journal_archive()
-	else:
-		_render_journal_log()
-	_add_button("✖ Закрыть", _toggle_journal, "quiet")
+	match journal_tab:
+		"lore":
+			_render_journal_archive()
+		"log":
+			_render_journal_log()
+		_:
+			_render_journal_goals()
+
+
+## Цели: сверху мысли героя о происходящем, ниже начатые цели — текущие с
+## шагами (засчитанные ✓, текущий ▸), под ними выполненные.
+func _render_journal_goals() -> void:
+	var thoughts := QuestSystem.get_thoughts()
+	if thoughts != "":
+		var thoughts_card := UiKit.card(body)
+		thoughts_card.add_child(UiKit.text("💭 Мысли", 24, UiKit.ACCENT_COLOR))
+		thoughts_card.add_child(UiKit.text(thoughts, 22))
+	var quests := QuestSystem.get_quests()
+	var active := quests.filter(func(q: Dictionary) -> bool: return not bool(q["completed"]))
+	var completed := quests.filter(func(q: Dictionary) -> bool: return bool(q["completed"]))
+	_add_section("Цели" if not active.is_empty() else "Текущих целей нет")
+	for quest in active:
+		var card := UiKit.card(body)
+		card.add_child(UiKit.text("🎯 " + str(quest["title"]), 26, UiKit.TITLE_COLOR))
+		if str(quest["description"]) != "":
+			card.add_child(UiKit.text(str(quest["description"]), 21, UiKit.MUTED_COLOR))
+		for step in quest["steps"]:
+			var done := bool(step["done"])
+			card.add_child(UiKit.text(("✓ " if done else "▸ ") + str(step["text"]), 22,
+				UiKit.MUTED_COLOR if done else UiKit.TEXT_COLOR))
+	if completed.is_empty():
+		return
+	_add_section("Выполнено")
+	for quest in completed:
+		var card := UiKit.card(body)
+		card.add_child(UiKit.text("✓ " + str(quest["title"]), 24, UiKit.GOOD_COLOR))
+		for step in quest["steps"]:
+			card.add_child(UiKit.text("✓ " + str(step["text"]), 20, UiKit.MUTED_COLOR))
 
 
 func _select_journal_tab(tab_id: String) -> void:

@@ -2,14 +2,15 @@ extends Node
 ## Уведомления о новом содержимом персонажа и журнала.
 ## Состояние забега сохраняется вместе с run.json.
 ##
-## Новые предметы и записи архива помечаются до просмотра. Очки навыков —
-## не «новость», а долг: пока они не потрачены, кнопка «Персонаж» и вкладка
-## «Навыки» показывают (!) и «(+N)».
+## Новые предметы, записи архива и цели (новая или засчитанный шаг)
+## помечаются до просмотра. Очки навыков — не «новость», а долг: пока они
+## не потрачены, кнопка «Персонаж» и вкладка «Навыки» показывают (!) и «(+N)».
 
 signal changed()
 
 var _new_items: Dictionary = {}  # item_id -> true
 var _new_lore: bool = false
+var _new_goals: bool = false
 
 
 func _ready() -> void:
@@ -21,6 +22,7 @@ func _ready() -> void:
 func reset_for_new_run() -> void:
 	_new_items.clear()
 	_new_lore = false
+	_new_goals = false
 	changed.emit()
 
 
@@ -44,6 +46,23 @@ func has_new_lore() -> bool:
 	return _new_lore
 
 
+func has_new_goals() -> bool:
+	return _new_goals
+
+
+## Кнопка «Журнал»: новая запись архива или новость по целям.
+func has_journal_alert() -> bool:
+	return _new_lore or _new_goals
+
+
+## Цель началась или засчитан шаг (QuestSystem.refresh).
+func mark_goals_new() -> void:
+	if _new_goals:
+		return
+	_new_goals = true
+	changed.emit()
+
+
 func mark_item_seen(item_id: String) -> void:
 	if not _new_items.has(item_id):
 		return
@@ -59,9 +78,10 @@ func mark_character_seen() -> void:
 
 
 func mark_journal_seen() -> void:
-	if not _new_lore:
+	if not _new_lore and not _new_goals:
 		return
 	_new_lore = false
+	_new_goals = false
 	changed.emit()
 
 
@@ -69,6 +89,7 @@ func to_save_data() -> Dictionary:
 	return {
 		"new_items": _new_items.keys(),
 		"new_lore": _new_lore,
+		"new_goals": _new_goals,
 	}
 
 
@@ -79,6 +100,7 @@ func load_save_data(data: Dictionary) -> void:
 		for item_id in item_ids:
 			_new_items[str(item_id)] = true
 	_new_lore = bool(data.get("new_lore", false))
+	_new_goals = bool(data.get("new_goals", false))
 	changed.emit()
 
 

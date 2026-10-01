@@ -35,7 +35,7 @@ func reset_for_new_run() -> void:
 
 
 ## kind: "move" | "event" | "situation" | "choice" | "combat" | "loot" |
-##       "lore" | "death" | "victory"
+##       "lore" | "death" | "victory" | "rest" (сон, обморок) | "goal" (цели)
 func add(kind: String, text: String) -> void:
 	var trimmed := _trim(text)
 	if trimmed == "":

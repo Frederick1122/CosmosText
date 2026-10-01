@@ -26,6 +26,7 @@ Godot 4.7 (GDScript) проект: текстовая survival-RPG для тел
 - Размеры шрифта задаются только через `UiKit.fs()`; настройки интерфейса — `SettingsSystem` (`user://settings.json`), анимации переходов включаются там же.
 - Кислород тратится не по таймеру, а на действия: цены в `data/config.json` → `o2_costs`, списывает `ResourceSystem.spend_o2`; в локации с `breathable: true` — бесплатно.
 - Дни, силы и голод — `NeedsSystem` (расход за действия по `ResourceSystem.action_taken`, настройки `data/config.json` → `needs`); новый день — сон на базе (`GameState.end_day`).
+- Цели и мысли героя — `data/quests.json`, засчитывает `QuestSystem.refresh()` (после `EffectResolver.apply_effects` и завершения события); засчитанное не откатывается, вкладка «Цели» в журнале.
 - Ключи — предметы категории `key` с `unlocks`; замок (`lock`) ставится на узел сектора или на событие локации, открывает `EffectResolver.can_open_lock` / `open_lock`.
 - Модуль-база — локация с `base: true` (обычно и `breathable: true`): сон с чекпойнтом, склад (stash локации) и верстак.
 - Бой — манёвры и дистанция в духе Neo Scavenger (`CombatSystem` + `scenes/ui/CombatView.gd`), ходы сторон разыгрываются одновременно; экран боя прижат к низу (манёвры у большого пальца), победа — затемнение и панель награды.

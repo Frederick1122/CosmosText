@@ -50,6 +50,7 @@ func start_new_run() -> void:
 	CharacterSystem.reset_for_new_run(_config)  # после ресурсов и сумки: применяет бонусы
 	ProgressionSystem.reset_for_new_run()
 	NeedsSystem.reset_for_new_run()
+	QuestSystem.reset_for_new_run()
 	SituationEngine.reset_for_new_run()
 	LocationSystem.reset_for_new_run()
 	CombatSystem.reset_for_new_run()
@@ -68,6 +69,7 @@ func save_run() -> void:
 		"character": CharacterSystem.to_save_data(),
 		"progression": ProgressionSystem.to_save_data(),
 		"needs": NeedsSystem.to_save_data(),
+		"quests": QuestSystem.to_save_data(),
 		"situation": SituationEngine.to_save_data(),
 		"locations": LocationSystem.to_save_data(),
 		"map": MapSystem.to_save_data(),
@@ -112,6 +114,7 @@ func load_run(fallback_sector_id: String = "wreck_01") -> bool:
 	CharacterSystem.load_save_data(data.get("character", {}))  # после ресурсов и сумки
 	ProgressionSystem.load_save_data(data.get("progression", {}))
 	NeedsSystem.load_save_data(data.get("needs", {}))
+	QuestSystem.load_save_data(data.get("quests", {}))
 	SituationEngine.load_save_data(situation_data)
 	LocationSystem.load_save_data(data.get("locations", {}))
 	var journal_data = data.get("journal", [])

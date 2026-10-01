@@ -148,6 +148,12 @@ def main():
         errors.append(f"lore.json: {e}")
         lore = {}
 
+    try:
+        quests_data = load_json(os.path.join(DATA, "quests.json"))
+    except Exception as e:
+        errors.append(f"quests.json: {e}")
+        quests_data = {}
+
     skills = load_optional("skills.json")
     recipes = load_optional("recipes.json")
     endings = load_optional("endings.json")
@@ -631,6 +637,63 @@ def main():
             errors.append(f"{ctx}: нет текста финала (text)")
         if end_id not in referenced_endings:
             warnings.append(f"{ctx}: финал недостижим — ни один effect 'end_run' на него не ссылается")
+
+    # Цели и мысли героя (QuestSystem).
+    thoughts = quests_data.get("thoughts", [])
+    if not isinstance(thoughts, list):
+        errors.append("quests.json: thoughts — ожидается массив")
+        thoughts = []
+    for i, variant in enumerate(thoughts):
+        tctx = f"quests/thoughts[{i}]"
+        if not isinstance(variant, dict) or not str(variant.get("text", "")).strip():
+            errors.append(f"{tctx}: нужен объект с непустым text")
+            continue
+        check_requires(variant.get("requires", []), tctx)
+    if thoughts and thoughts[-1].get("requires"):
+        warnings.append("quests/thoughts: последний вариант стоит оставить без условий — мысли будут всегда")
+    quest_list = quests_data.get("quests", [])
+    if not isinstance(quest_list, list):
+        errors.append("quests.json: quests — ожидается массив")
+        quest_list = []
+    quest_ids = set()
+    for i, quest in enumerate(quest_list):
+        if not isinstance(quest, dict):
+            errors.append(f"quests/quests[{i}]: цель должна быть объектом")
+            continue
+        qid = quest.get("id", "")
+        qctx = f"quests/{qid or i}"
+        if not qid:
+            errors.append(f"{qctx}: нет id")
+        elif qid in quest_ids:
+            errors.append(f"{qctx}: дублирующийся id")
+        quest_ids.add(qid)
+        if not str(quest.get("title", "")).strip():
+            errors.append(f"{qctx}: нужен title")
+        check_requires(quest.get("start", []), f"{qctx}.start")
+        if "done" in quest:
+            check_requires(quest["done"], f"{qctx}.done")
+        steps = quest.get("steps", [])
+        if not isinstance(steps, list) or not steps:
+            errors.append(f"{qctx}.steps: нужен непустой массив шагов")
+            continue
+        step_ids = set()
+        for step in steps:
+            sid = step.get("id", "") if isinstance(step, dict) else ""
+            sctx = f"{qctx}#{sid or '?'}"
+            if not sid:
+                errors.append(f"{sctx}: шагу нужен id")
+            elif sid in step_ids:
+                errors.append(f"{sctx}: дублирующийся id шага")
+            step_ids.add(sid)
+            if not str(step.get("text", "")).strip():
+                errors.append(f"{sctx}: нужен text")
+            if "hidden" in step and not isinstance(step["hidden"], bool):
+                errors.append(f"{sctx}.hidden: должно быть true/false")
+            done = step.get("done", [])
+            if not isinstance(done, list) or not done:
+                errors.append(f"{sctx}.done: нужны условия — шаг без них засчитается сразу")
+            else:
+                check_requires(done, sctx)
 
     for eid, enemy in enemies.items():
         for special in enemy.get("special_actions", []):

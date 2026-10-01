@@ -217,6 +217,7 @@ func mark_completed(event_id: String) -> void:
 		return
 	var key := "%s/%s" % [current_id, event_id]
 	_done[key] = int(_done.get(key, 0)) + 1
+	QuestSystem.refresh()  # шаги целей вида event_done
 
 
 ## Служебное сообщение игроку — уходит в ленту повествования.
