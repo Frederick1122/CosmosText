@@ -197,7 +197,7 @@ func move_title(move_id: String) -> String:
 func get_available_moves() -> Array:
 	var moves: Array = []
 	# Стрелять можно только из огнестрела в руках (предмет с "firearm": true) и при патронах.
-	var firearm := _has_firearm()
+	var firearm := CharacterSystem.has_firearm()
 	var shoot_reason := "Нет патронов" if firearm else "Нет огнестрела в руках"
 	moves.append(_move_entry("shoot", "Выстрелить (патронов: %d)" % ResourceSystem.ammo,
 		firearm and ResourceSystem.ammo > 0, shoot_reason))
@@ -570,7 +570,7 @@ func _player_conditions() -> Array:
 		result.append("В защите")
 	if ResourceSystem.hp * 4 <= ResourceSystem.max_hp:
 		result.append("Тяжело ранен")
-	if _has_firearm() and ResourceSystem.ammo <= 0:
+	if CharacterSystem.has_firearm() and ResourceSystem.ammo <= 0:
 		result.append("Без патронов")
 	if _holding_debris:
 		result.append("Обломок в руке")
@@ -597,10 +597,6 @@ func _enemy_conditions() -> Array:
 func _player_weapon_name() -> String:
 	var weapon := CharacterSystem.get_equipped_name("arms")
 	return weapon if weapon != "" else "голые руки"
-
-
-func _has_firearm() -> bool:
-	return bool(InventorySystem.get_item_data(CharacterSystem.get_equipped("arms")).get("firearm", false))
 
 
 func _available_specials() -> Array:

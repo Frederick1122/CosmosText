@@ -71,6 +71,12 @@ func is_equipped(item_id: String) -> bool:
 	return item_id != "" and equipment.values().has(item_id)
 
 
+## В руках огнестрел (предмет с "firearm": true) — стрелять можно, патроны
+## имеют смысл (бой, HUD).
+func has_firearm() -> bool:
+	return bool(InventorySystem.get_item_data(get_equipped("arms")).get("firearm", false))
+
+
 ## Надеть предмет из сумки; прежний предмет слота уходит в сумку.
 ## Возвращает текст ошибки или "" при успехе.
 func equip(item_id: String) -> String:

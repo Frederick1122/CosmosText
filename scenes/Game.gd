@@ -28,7 +28,8 @@ var hud: VBoxContainer
 var content_scroll: ScrollContainer
 var hp_label: Label
 var o2_label: Label
-var ammo_label: Label
+## Оружие в руках; патроны — только при огнестреле.
+var weapon_label: Label
 var bag_label: Label
 ## Силы, голод и день (NeedsSystem).
 var energy_label: Label
@@ -123,7 +124,8 @@ func _build_static_layout() -> void:
 	hud.add_child(stats_row)
 	hp_label = _make_hud_label()
 	o2_label = _make_hud_label()
-	ammo_label = _make_hud_label()
+	weapon_label = _make_hud_label()
+	weapon_label.name = "WeaponLabel"
 	bag_label = _make_hud_label()
 	bag_label.name = "BagLabel"
 	energy_label = _make_hud_label()
@@ -477,7 +479,9 @@ func _update_hud() -> void:
 	var o2i := int(ResourceSystem.o2)
 	o2_label.text = "💨 O2 %d" % o2i
 	o2_label.add_theme_color_override("font_color", UiKit.BAD_COLOR if o2i <= ResourceSystem.LOW_O2 else Color("#eef3ff"))
-	ammo_label.text = "💥 %d" % ResourceSystem.ammo
+	weapon_label.text = _weapon_text()
+	weapon_label.add_theme_color_override("font_color",
+		UiKit.BAD_COLOR if CharacterSystem.has_firearm() and ResourceSystem.ammo <= 0 else Color("#eef3ff"))
 	bag_label.text = "🧰 %d/%d" % [InventorySystem.used_slots(), InventorySystem.max_slots]
 	energy_label.text = "⚡ %d" % roundi(NeedsSystem.energy)
 	energy_label.add_theme_color_override("font_color", UiKit.BAD_COLOR if NeedsSystem.is_tired() else Color("#eef3ff"))
@@ -488,7 +492,18 @@ func _update_hud() -> void:
 
 
 func _hud_labels() -> Array:
-	return [hp_label, o2_label, ammo_label, bag_label, energy_label, hunger_label, day_label]
+	return [hp_label, o2_label, weapon_label, bag_label, energy_label, hunger_label, day_label]
+
+
+## «⚔️ Обломок трубы», «⚔️ Табельный пистолет · 💥 6», «✊ Без оружия»:
+## патроны без огнестрела ни к чему, их не показываем.
+func _weapon_text() -> String:
+	var weapon := CharacterSystem.get_equipped_name("arms")
+	if weapon == "":
+		return "✊ Без оружия"
+	if CharacterSystem.has_firearm():
+		return "⚔️ %s · 💥 %d" % [weapon, ResourceSystem.ammo]
+	return "⚔️ " + weapon
 
 
 ## Вырубился посреди карты — ленты там не видно, причина пишется под картой.
