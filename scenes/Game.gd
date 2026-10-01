@@ -74,6 +74,8 @@ var _route_panel: VBoxContainer
 var _route_panel_read_only: bool = false
 var _route_plan: Dictionary = {}
 var _travel_tick_id: int = 0
+## Идёт перерисовка из-за смены настроек: экран не проявляется заново.
+var _restyling: bool = false
 
 
 func _ready() -> void:
@@ -365,8 +367,9 @@ func _any_overlay_open() -> bool:
 
 
 ## Плавное появление экрана целиком (карта, журнал, бой, смена сцены).
+## Перерисовка того же экрана из-за смены настроек не мигает (_restyling).
 func _animate_body() -> void:
-	if not SettingsSystem.animations:
+	if not SettingsSystem.animations or _restyling:
 		body.modulate.a = 1.0
 		return
 	body.modulate.a = 0.0
@@ -420,9 +423,23 @@ func _on_map_node_blocked(_node_id: String, message: String) -> void:
 	_refresh_route_panel()
 
 
+## Настройка изменилась — тот же экран перерисовывается под новый шрифт
+## без анимации появления и на той же прокрутке: иначе каждый щелчок
+## переключателя или отпущенный ползунок мигали бы всем экраном.
 func _on_settings_changed() -> void:
+	var scroll := content_scroll.scroll_vertical
 	_apply_hud_fonts()
+	_restyling = true
 	_render_current_screen()
+	_restyling = false
+	_restore_scroll(scroll)
+
+
+## Прокрутку возвращаем после раскладки: до неё новое тело ещё нулевой высоты.
+func _restore_scroll(value: int) -> void:
+	await get_tree().process_frame
+	if is_instance_valid(content_scroll):
+		content_scroll.scroll_vertical = value
 
 
 ## Выбор применён и его последствие уже в ленте — показываем «Продолжить».
