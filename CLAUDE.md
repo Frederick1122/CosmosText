@@ -27,8 +27,9 @@ Godot 4.7 (GDScript) проект: текстовая survival-RPG для тел
 - Кислород тратится не по таймеру, а на действия: цены в `data/config.json` → `o2_costs`, списывает `ResourceSystem.spend_o2`.
 - Ключи — предметы категории `key` с `unlocks`; замок (`lock`) ставится на узел сектора или на событие локации, открывает `EffectResolver.can_open_lock` / `open_lock`.
 - Модуль-база — локация с `base: true`: чекпойнт, склад (stash локации) и верстак.
-- Бой — манёвры и дистанция в духе Neo Scavenger (`CombatSystem` + `scenes/ui/CombatView.gd`), ходы сторон разыгрываются одновременно.
-- Пиксельные картинки: `assets/art/scenes/<image>.png` подключаются полем `image` у ситуаций, локаций и событий; иконки `assets/art/items/<item_id>.png` — по id предмета. Рисует `tools/make_pixel_art.py`.
+- Бой — манёвры и дистанция в духе Neo Scavenger (`CombatSystem` + `scenes/ui/CombatView.gd`), ходы сторон разыгрываются одновременно; экран боя прижат к низу (манёвры у большого пальца), победа — затемнение и панель награды.
+- Уровни — `ProgressionSystem` (опыт за разведку, крафт, лор, победы; награды и формула — `data/config.json` → `xp`, у врага — поле `xp`); уровень даёт очки навыков, UI — `scenes/ui/XpBar.gd`.
+- Пиксельные картинки: `assets/art/scenes/<image>.png` подключаются полем `image` у ситуаций, локаций, вариантов `descriptions` и событий; иконки `assets/art/items/<item_id>.png` — по id предмета. Рисует `tools/make_pixel_art.py`.
 - Звуки: `assets/sounds/<id>.wav`, играет `SoundSystem` (автозагрузка перед `GameState`) — по сигналам систем или `SoundSystem.play(id)` из UI; в `--headless` молчит. Включение и громкость — `SettingsSystem`.
 - GDScript: отступы табами.
 

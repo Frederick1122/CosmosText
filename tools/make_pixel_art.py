@@ -451,8 +451,8 @@ def scene_wreckage(c, rng):
     c.noise_specks(rng, 4, 78, 92, 95, p["hot"], 18)
 
 
-def scene_cargo_drone(c, rng):
-    """Грузовой отсек: контейнеры, в центре сервисный дрон с красным окуляром."""
+def _cargo_bay(c):
+    """Грузовой отсек без дрона: коробка, штабели контейнеров. Возвращает палитру."""
     p = {
         "d0": (38, 44, 54), "d1": (28, 33, 41), "d2": (22, 27, 35),
         "f0": (46, 44, 40), "f1": (35, 34, 31), "f2": (22, 27, 35),
@@ -489,6 +489,18 @@ def scene_cargo_drone(c, rng):
     c.rect(58, 52, 74, 66, p["seam"])
     c.fill_rect(88, 56, 102, 66, p["crate_d"])
     c.rect(88, 56, 102, 66, p["seam"])
+    return p
+
+
+def _cargo_bay_floor(c, rng, p):
+    """Разбросанный по палубе грузового отсека груз."""
+    c.noise_specks(rng, 40, 76, 120, 95, p["crate_d"], 40)
+    c.noise_specks(rng, 40, 80, 120, 95, p["metal_d"], 20)
+
+
+def scene_cargo_drone(c, rng):
+    """Грузовой отсек: контейнеры, в центре сервисный дрон с красным окуляром."""
+    p = _cargo_bay(c)
     # дрон в центре
     c.dither_disc(80, 44, 20, p["metal_d"], 1)
     c.ellipse(80, 42, 15, 11, p["metal"])
@@ -517,9 +529,66 @@ def scene_cargo_drone(c, rng):
     c.noise_specks(rng, 114, 36, 124, 50, p["spark"], 7)
     c.line(66, 46, 56, 54, p["metal"])
     c.line(66, 47, 56, 55, p["seam"])
-    # разбросанный груз на полу
-    c.noise_specks(rng, 40, 76, 120, 95, p["crate_d"], 40)
-    c.noise_specks(rng, 40, 80, 120, 95, p["metal_d"], 20)
+    _cargo_bay_floor(c, rng, p)
+
+
+def scene_cargo_drone_down(c, rng):
+    """Тот же грузовой отсек после боя: дрон рухнул на палубу, окуляр погас."""
+    p = _cargo_bay(c)
+    _cargo_bay_floor(c, rng, p)
+    dead = (54, 30, 36)
+    smoke = (84, 90, 102)
+    # тень и корпус, завалившийся набок
+    c.ellipse(80, 89, 21, 3, p["seam"])
+    c.ellipse(80, 80, 16, 9, p["metal"])
+    c.ellipse(80, 84, 15, 5, p["metal_d"])
+    c.ellipse(85, 76, 10, 4, p["metal_d"])
+    c.ellipse(80, 80, 16, 9, p["seam"], filled=False)
+    # вмятины и копоть
+    c.line(76, 72, 80, 78, p["seam"])
+    c.line(80, 78, 78, 82, p["seam"])
+    c.dither_over(86, 73, 95, 80, p["seam"], 0)
+    # погасший окуляр с трещиной
+    c.circle(72, 81, 5, p["seam"])
+    c.circle(72, 81, 4, p["metal_d"])
+    c.circle(72, 81, 3, dead)
+    c.line(70, 78, 72, 81, p["seam"])
+    c.line(72, 81, 71, 84, p["seam"])
+    c.line(72, 81, 75, 80, p["seam"])
+    c.pixel(70, 80, p["metal"])
+    # пробоина в корпусе: оголённая проводка
+    c.fill_rect(88, 74, 93, 78, p["seam"])
+    c.pixel(87, 75, p["seam"])
+    c.pixel(94, 77, p["seam"])
+    c.pixel(89, 76, p["amber"])
+    c.pixel(91, 75, p["red"])
+    c.pixel(92, 77, p["crate_d"])
+    # погнутая антенна с погасшим маячком
+    c.line(84, 72, 87, 66, p["metal_d"])
+    c.line(87, 66, 93, 64, p["metal_d"])
+    c.pixel(94, 64, p["seam"])
+    # обломанное сопло
+    c.fill_rect(63, 85, 67, 88, p["metal_d"])
+    c.rect(63, 85, 67, 88, p["seam"])
+    # обвисший манипулятор лежит на палубе
+    c.line(95, 82, 101, 89, p["metal"])
+    c.line(94, 83, 100, 90, p["seam"])
+    c.fill_rect(99, 89, 104, 92, p["metal_d"])
+    c.rect(99, 89, 104, 92, p["seam"])
+    c.pixel(105, 93, p["metal_d"])
+    # оторванная вторая рука
+    c.line(56, 91, 62, 87, p["metal"])
+    c.line(56, 92, 62, 88, p["seam"])
+    # дым из пробоины и редкие искры
+    c.dither_disc(91, 69, 4, smoke, 0)
+    c.dither_disc(93, 61, 4, smoke, 1)
+    c.dither_disc(96, 53, 3, smoke, 0)
+    c.dither_disc(98, 47, 2, smoke, 1)
+    c.noise_specks(rng, 86, 68, 97, 79, p["amber"], 6)
+    c.noise_specks(rng, 87, 69, 96, 78, p["spark"], 4)
+    # осколки корпуса на палубе
+    c.noise_specks(rng, 56, 86, 106, 95, p["metal"], 14)
+    c.noise_specks(rng, 56, 86, 106, 95, p["seam"], 10)
 
 
 def scene_shuttle_bay(c, rng):
@@ -810,8 +879,8 @@ def scene_dock_bay(c, rng):
     c.noise_specks(rng, 0, 72, 159, 95, p["f2"], 34)
 
 
-def scene_comms_sentry(c, rng):
-    """Зал связи: антенные стойки, турель охраны на потолке с красным лучом."""
+def _comms_hall(c):
+    """Зал связи без турели: аппаратура в торце, антенные стойки. Возвращает палитру."""
     p = {
         "d0": (34, 39, 50), "d1": (25, 30, 39), "d2": (19, 23, 31),
         "f0": (38, 40, 48), "f1": (29, 31, 38), "f2": (19, 23, 31),
@@ -857,6 +926,19 @@ def scene_comms_sentry(c, rng):
     # кабельные лотки к стойкам
     c.line(34, 40, 56, 44, p["rack_d"])
     c.line(126, 40, 104, 44, p["rack_d"])
+    return p
+
+
+def _comms_hall_floor(c, rng, p):
+    """Блики экранов и мусор на полу зала связи."""
+    c.dither_over(56, 70, 104, 78, p["cyan"], 1)
+    c.noise_specks(rng, 0, 76, 159, 95, p["f2"], 30)
+    c.noise_specks(rng, 30, 80, 130, 95, p["rack_d"], 16)
+
+
+def scene_comms_sentry(c, rng):
+    """Зал связи: антенные стойки, турель охраны на потолке с красным лучом."""
+    p = _comms_hall(c)
     # турель на потолке
     c.fill_rect(72, 0, 88, 6, p["rack_d"])
     c.fill_rect(74, 6, 86, 12, p["rack"])
@@ -872,10 +954,71 @@ def scene_comms_sentry(c, rng):
     c.line(82, 20, 54, 95, p["red_d"])
     c.dither_over(40, 84, 70, 95, p["red_d"], 1)
     c.dither_disc(80, 18, 10, p["red_d"], 0)
-    # блики и мусор на полу
-    c.dither_over(56, 70, 104, 78, p["cyan"], 1)
-    c.noise_specks(rng, 0, 76, 159, 95, p["f2"], 30)
-    c.noise_specks(rng, 30, 80, 130, 95, p["rack_d"], 16)
+    _comms_hall_floor(c, rng, p)
+
+
+def scene_comms_sentry_down(c, rng):
+    """Тот же зал связи после боя: турель сорвана с подвеса, линза погасла."""
+    p = _comms_hall(c)
+    _comms_hall_floor(c, rng, p)
+    dead = (46, 26, 32)
+    lit = (98, 110, 130)
+    smoke = (66, 72, 88)
+    spark = (250, 240, 214)
+    # потолочная плита с вырванным креплением
+    c.fill_rect(72, 0, 88, 6, p["rack_d"])
+    c.fill_rect(79, 3, 86, 6, p["seam"])
+    c.pixel(78, 5, p["seam"])
+    c.pixel(87, 4, p["seam"])
+    # уцелевший кронштейн перекошен: турель качнулась вниз и вправо
+    for d in range(3):
+        c.line(74 + d, 6, 84 + d, 17, p["rack"])
+    c.line(74, 7, 83, 18, p["seam"])
+    c.line(77, 6, 87, 17, lit)
+    # оборванный кабель с искрящим концом
+    c.line(83, 6, 80, 13, p["seam"])
+    c.line(80, 13, 81, 22, p["seam"])
+    c.pixel(81, 23, p["amber"])
+    # корпус турели висит под углом
+    c.ellipse(91, 23, 11, 7, p["rack"])
+    c.ellipse(93, 26, 9, 3, p["rack_d"])
+    c.ellipse(91, 23, 11, 7, p["seam"], filled=False)
+    c.line(84, 18, 92, 17, lit)
+    c.line(85, 22, 98, 28, p["seam"])
+    # блок излучателя с погасшей треснувшей линзой
+    c.fill_rect(93, 27, 101, 32, p["rack_d"])
+    c.rect(93, 27, 101, 32, p["seam"])
+    c.circle(97, 30, 2, dead)
+    c.line(96, 28, 98, 31, p["seam"])
+    # погнутый спаренный ствол обвис вниз
+    for d in range(2):
+        c.line(99 + d, 33, 104 + d, 41, p["rack"])
+        c.line(104 + d, 41, 103 + d, 51, p["rack"])
+    c.line(98, 33, 103, 41, lit)
+    c.line(106, 33, 106, 41, p["seam"])
+    c.line(106, 42, 105, 51, p["seam"])
+    c.pixel(103, 52, p["seam"])
+    c.pixel(104, 52, p["seam"])
+    # второй ствол обломан
+    c.line(95, 33, 96, 38, p["rack"])
+    c.line(96, 33, 97, 38, p["rack_d"])
+    c.pixel(95, 39, p["seam"])
+    c.pixel(97, 39, p["rack"])
+    # дымок вдоль потолка и искры, падающие из крепления
+    c.dither_disc(88, 6, 3, smoke, 0)
+    c.dither_disc(94, 4, 3, smoke, 1)
+    c.dither_disc(100, 3, 2, smoke, 0)
+    c.noise_specks(rng, 76, 2, 90, 14, p["amber"], 6)
+    c.noise_specks(rng, 78, 4, 88, 12, spark, 4)
+    for sx, sy in ((81, 27), (82, 32), (80, 38), (81, 45)):
+        c.pixel(sx, sy, p["amber"])
+    # обломки под турелью
+    c.fill_rect(86, 84, 90, 86, p["rack"])
+    c.rect(86, 84, 90, 86, p["seam"])
+    c.line(96, 88, 102, 86, p["rack"])
+    c.line(96, 89, 102, 87, p["seam"])
+    c.noise_specks(rng, 78, 80, 110, 94, p["rack"], 12)
+    c.noise_specks(rng, 78, 80, 110, 94, p["seam"], 8)
 
 
 def scene_antenna_mast(c, rng):
@@ -1205,6 +1348,9 @@ SCENES = (
     # экран смерти: своя картинка на каждую причину (GameState.last_death_cause)
     ("death_o2", scene_death_o2),
     ("death_hp", scene_death_hp),
+    # те же отсеки после уничтожения стража (в конце, чтобы не сдвигать seed остальных)
+    ("cargo_drone_down", scene_cargo_drone_down),
+    ("comms_sentry_down", scene_comms_sentry_down),
 )
 
 

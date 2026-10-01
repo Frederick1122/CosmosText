@@ -129,6 +129,12 @@ func use_item(item_id: String) -> bool:
 	return true
 
 
+## Действие расходника для UI: «+30 HP» ("" — у предмета нет use_effect).
+func describe_use(item_id: String) -> String:
+	var effect = get_item_data(item_id).get("use_effect", {})
+	return EffectResolver.describe_effect(effect) if effect is Dictionary else ""
+
+
 ## Сюжетные предметы и ключи нельзя выбросить: иначе замок не открыть.
 func can_drop(item_id: String) -> bool:
 	var category := str(get_item_data(item_id).get("category", ""))

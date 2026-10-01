@@ -48,6 +48,16 @@ func push(kind: String, text: String, image: String = "") -> void:
 	entries_added.emit(1)
 
 
+## Модуль сменил вариант (победа выставила флаг): заголовок сцены, картинка и
+## описание в начале ленты обновляются, записи под ними остаются.
+func update_head(title: String, image: String, text: String) -> void:
+	if entries.size() < 2 or entries[0]["kind"] != "scene" or entries[1]["kind"] != "text":
+		return
+	entries[0]["text"] = title.strip_edges()
+	entries[0]["image"] = image
+	entries[1]["text"] = text.strip_edges()
+
+
 func get_entries() -> Array:
 	return entries
 

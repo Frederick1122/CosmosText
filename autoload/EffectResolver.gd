@@ -4,7 +4,7 @@ extends Node
 ## отдельным автозагрузом в tech-spec-v1.md — добавлен, чтобы не дублировать
 ## switch по типу эффекта в нескольких системах. Справочник типов — docs/CONTENT.md.
 
-## Изменение показано в ленте. kind: "hp" | "o2" | "ammo" | "item";
+## Изменение показано в ленте. kind: "hp" | "o2" | "ammo" | "item" | "xp";
 ## amount — фактическое изменение (со знаком). Слушает SoundSystem.
 signal change_reported(kind: String, amount: float)
 ## Замок открыт подходящим ключом (узел карты или событие-ящик).
@@ -34,6 +34,7 @@ func apply_effect(effect: Dictionary) -> void:
 			SituationEngine.set_flag(effect.get("flag", ""), effect.get("value", true))
 		"unlock_lore":
 			ArchiveSystem.unlock_fragment(effect.get("id", ""))
+			ProgressionSystem.lore_read(str(effect.get("id", "")))
 		"reveal_map":
 			MapSystem.reveal_map()
 		"open_map_node":
@@ -63,9 +64,25 @@ func apply_effects(effects: Array) -> void:
 			apply_effect(e)
 
 
+## Что делает эффект предмета, коротко для UI: «+30 HP», «+90 O2».
+## "" — эффект не про ресурсы (флаги, записи, бой).
+func describe_effect(effect: Dictionary) -> String:
+	var value := roundi(float(effect.get("value", 0)))
+	match effect.get("type", ""):
+		"hp_delta":
+			return "%+d HP" % value
+		"o2_delta":
+			return "%+d O2" % value
+		"ammo_delta":
+			return "%+d патр." % value
+		"skill_points_add":
+			return "%+d очк. навыков" % value
+	return ""
+
+
 ## Строка ленты вида «[−5 HP]» / «[+1 Аптечка]»: прибыль — kind ленты "gain",
 ## убыль — "loss". Нулевое изменение (лечение при полном HP) не показывается.
-## kind — что изменилось ("hp" | "o2" | "ammo" | "item"), what — подпись.
+## kind — что изменилось ("hp" | "o2" | "ammo" | "item" | "xp"), what — подпись.
 func report_change(kind: String, amount: float, what: String) -> void:
 	if is_zero_approx(amount):
 		return

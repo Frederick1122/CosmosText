@@ -10,6 +10,9 @@ extends Node
 ## или оружием ближнего боя, издалека — только огнестрелом. Побег возможен
 ## только с безопасного расстояния.
 ##
+## Обломок с палубы есть в любой схватке: «Подобрать» тратит ход, «Бросить» —
+## ещё один; попадание ранит немного, но противник теряет следующий ход.
+##
 ## Характеристики персонажа берутся из CharacterSystem, формулы — в
 ## docs/ARCHITECTURE.md.
 
@@ -38,16 +41,22 @@ const DEFEND_DAMAGE_MULTIPLIER := 0.5
 const DEFEND_HIT_PENALTY := 0.2
 ## Дистанция, с которой побег удаётся без броска.
 const SAFE_FLEE_RANGE := 4
+## Обломок с палубы: подобрать — ход, бросить — ещё ход. Попадание ранит
+## немного, зато сбивает противника с толку: следующий ход он теряет.
+const THROW_HIT_CHANCE := 0.7
+const THROW_DAMAGE := 5
+const THROW_STAGGER_TURNS := 1
 
 var state: int = State.IDLE
 var enemy_id: String = ""
 var enemy_hp: int = 0
 var enemy_data: Dictionary = {}
 ## Журнал схватки: [{ text, kind, turn, fx }].
-##   kind — "info" | "move" | "hit" | "damage" | "end";
+##   kind — "info" | "move" | "hit" | "damage" | "heal" | "end";
 ##   turn — номер хода, в котором появилась запись (0 — начало боя);
-##   fx   — удары этой записи для эффектов экрана боя:
-##          [{ "target": "enemy"|"player", "amount": урон (0 — промах) }].
+##   fx   — удары и лечение этой записи для эффектов экрана боя:
+##          [{ "target": "enemy"|"player", "amount": урон или лечение (0 — промах),
+##             "style": "melee" | "ranged" | "heal" }].
 var log: Array = []
 ## Номер текущего хода: экран боя проигрывает эффекты только свежих записей.
 var turn: int = 0
@@ -64,6 +73,9 @@ var clear_node_id: String = ""
 ## Эффекты из start_combat.on_win / on_flee — применяет GameState по итогу боя.
 var on_win_effects: Array = []
 var on_flee_effects: Array = []
+## Награда за победу (пусто — схватка не выиграна): { xp, level_before,
+## xp_before, loot } — опыт уже начислен, трофеи выдаст GameState по «Продолжить».
+var reward: Dictionary = {}
 
 var _enemy_db: Dictionary = {}
 var _used_specials: Dictionary = {}
@@ -74,6 +86,8 @@ var _enemy_defending: bool = false
 var _enemy_distracted_turns: int = 0
 ## Следующая атака игрока попадает без броска — противник его не видит.
 var _guaranteed_hit: bool = false
+## В руке подобранный обломок — следующим ходом его можно бросить.
+var _holding_debris: bool = false
 
 const MOVE_TITLES := {
 	"approach": "Сблизиться",
@@ -86,6 +100,8 @@ const MOVE_TITLES := {
 	"use_item": "Использовать предмет",
 	"special": "Спецдействие",
 	"hold": "Выжидать",
+	"grab": "Подобрать обломок",
+	"throw": "Бросить обломок",
 	"distracted": "Потерял цель",
 }
 
@@ -110,6 +126,8 @@ func reset_for_new_run() -> void:
 	_enemy_defending = false
 	_enemy_distracted_turns = 0
 	_guaranteed_hit = false
+	_holding_debris = false
+	reward = {}
 	turn = 0
 	outcome = ""
 	log.clear()
@@ -134,6 +152,8 @@ func start_combat(id: String, clear_node: String = "", on_win: Array = [], on_fl
 	_enemy_defending = false
 	_enemy_distracted_turns = 0
 	_guaranteed_hit = false
+	_holding_debris = false
+	reward = {}
 	turn = 0
 	outcome = ""
 	_used_specials.clear()
@@ -164,6 +184,7 @@ func get_state() -> Dictionary:
 		"outcome": outcome,
 		"moves": get_available_moves(),
 		"available_specials": _available_specials(),
+		"reward": reward.duplicate(true),
 	}
 
 
@@ -171,7 +192,8 @@ func move_title(move_id: String) -> String:
 	return str(MOVE_TITLES.get(move_id, ""))
 
 
-## Манёвры этого хода: [{ id, label, hint, enabled, reason }].
+## Манёвры этого хода: [{ id, label, hint, enabled, reason }]. Порядок — сетка
+## экрана боя по две кнопки: отход слева, сближение справа.
 func get_available_moves() -> Array:
 	var moves: Array = []
 	var ranged_ready := ResourceSystem.ammo > 0
@@ -181,10 +203,14 @@ func get_available_moves() -> Array:
 	var melee_label := "Удар: %s" % melee_name if melee_name != "" else "Удар голыми руками"
 	moves.append(_move_entry("strike", melee_label, range_steps <= MELEE_RANGE,
 		"Слишком далеко (нужно ≤ %d)" % MELEE_RANGE))
-	moves.append(_move_entry("approach", "Сблизиться", range_steps > 0, "Уже вплотную"))
 	moves.append(_move_entry("retreat", "Разорвать дистанцию", range_steps < MAX_RANGE, "Дальше отходить некуда"))
+	moves.append(_move_entry("approach", "Сблизиться", range_steps > 0, "Уже вплотную"))
 	moves.append(_move_entry("aim", "Прицелиться (+%d%% к попаданию)" % int(AIM_BONUS * 100.0), true, ""))
 	moves.append(_move_entry("defend", "Уклоняться", true, ""))
+	if _holding_debris:
+		moves.append(_move_entry("throw", "Бросить обломок (%d%%, сбивает с толку)" % int(_throw_chance() * 100.0), true, ""))
+	else:
+		moves.append(_move_entry("grab", "Подобрать обломок", true, ""))
 	var flee_label := "Бежать (уверенно)" if range_steps >= SAFE_FLEE_RANGE else "Бежать (риск: %d%%)" % int(_flee_risk() * 100.0)
 	moves.append(_move_entry("flee", flee_label, true, ""))
 	return moves
@@ -249,14 +275,61 @@ func _resolve_player_move(move_id: String, payload) -> void:
 		"strike":
 			_resolve_strike()
 		"use_item":
-			var item_id: String = payload if payload is String else ""
-			var item_name := str(InventorySystem.get_item_data(item_id).get("name", item_id))
-			if InventorySystem.use_item(item_id):
-				_log("Вы используете: %s." % item_name, "move")
-			else:
-				_log("Предмет нельзя использовать.", "info")
+			_resolve_use_item(payload if payload is String else "")
+		"grab":
+			_holding_debris = true
+			_log("Вы подхватываете с палубы увесистый обломок.", "move")
+		"throw":
+			_resolve_throw()
 		_:
 			_log("Вы выжидаете.", "move")
+
+
+## Расходник в бою: в журнале — что он на самом деле дал. Лечение всплывает
+## над карточкой игрока (fx со style "heal").
+func _resolve_use_item(item_id: String) -> void:
+	var item_name := str(InventorySystem.get_item_data(item_id).get("name", item_id))
+	var hp_before := ResourceSystem.hp
+	var o2_before := ResourceSystem.o2
+	var ammo_before := ResourceSystem.ammo
+	if not InventorySystem.use_item(item_id):
+		_log("Предмет нельзя использовать.", "info")
+		return
+	var healed := ResourceSystem.hp - hp_before
+	var gains := PackedStringArray()
+	if healed != 0:
+		gains.append("%+d HP" % healed)
+	var o2_gain := roundi(ResourceSystem.o2 - o2_before)
+	if o2_gain != 0:
+		gains.append("%+d O2" % o2_gain)
+	if ResourceSystem.ammo != ammo_before:
+		gains.append("%+d патр." % (ResourceSystem.ammo - ammo_before))
+	if gains.is_empty():
+		_log("Вы используете: %s — ничего не изменилось." % item_name, "move")
+		return
+	_log("Вы используете: %s (%s)." % [item_name, ", ".join(gains)], "heal",
+		[_fx("player", healed, "heal")] if healed > 0 else [])
+
+
+## Брошенный обломок: на попадание — немного урона и потерянный врагом ход.
+func _resolve_throw() -> void:
+	_holding_debris = false
+	var chance := _throw_chance()
+	_consume_aim()
+	if _take_guaranteed_hit() or randf() <= chance:
+		_enemy_distracted_turns = maxi(_enemy_distracted_turns, THROW_STAGGER_TURNS)
+		_damage_enemy(THROW_DAMAGE, "Обломок попадает в цель. Урон: %d — %s сбит с толку." % [
+			THROW_DAMAGE, str(enemy_data.get("name", "Противник"))], "thrown")
+	else:
+		_log("Обломок пролетает мимо и гремит по палубе.", "info", [_fx("enemy", 0, "thrown")])
+
+
+func _throw_chance() -> float:
+	var chance := THROW_HIT_CHANCE + CharacterSystem.get_stat("hit_chance") + _aim_bonus()
+	chance -= 0.08 * float(maxi(0, range_steps - 2))
+	if _enemy_defending:
+		chance -= DEFEND_HIT_PENALTY
+	return clampf(chance, 0.05, MAX_HIT_CHANCE)
 
 
 func _resolve_shot() -> void:
@@ -487,6 +560,8 @@ func _player_conditions() -> Array:
 		result.append("Тяжело ранен")
 	if ResourceSystem.ammo <= 0:
 		result.append("Без патронов")
+	if _holding_debris:
+		result.append("Обломок в руке")
 	return result
 
 
@@ -533,6 +608,15 @@ func _end_combat(result: String) -> void:
 	outcome = result
 	if result == "won":
 		_log("%s обезврежен." % str(enemy_data.get("name", "Противник")), "end")
+		# Опыт — сразу: экран победы показывает, как он набирается.
+		var xp := ProgressionSystem.kill_reward(enemy_data)
+		reward = {
+			"xp": xp,
+			"level_before": ProgressionSystem.level,
+			"xp_before": ProgressionSystem.xp,
+			"loot": (enemy_data.get("loot", []) as Array).duplicate(),
+		}
+		ProgressionSystem.add_xp(xp)
 
 
 ## «Продолжить» под итогом схватки: только теперь бой заканчивается.

@@ -1,36 +1,44 @@
 extends VBoxContainer
-## Экран боя в духе Neo Scavenger: сверху две карточки участников (состояние,
-## оружие, последний манёвр), между ними — дистанция, ниже — сетка манёвров и
-## журнал схватки. Логики боя не содержит: читает CombatSystem.get_state() и
-## сообщает выбранный манёвр наружу.
+## Экран боя в духе Neo Scavenger. Экран прижат к низу, под большой палец:
+## сверху журнал схватки, ниже — две карточки участников (состояние, оружие,
+## последний манёвр) и дистанция, в самом низу — расходники и сетка манёвров.
+## Логики боя не содержит: читает CombatSystem.get_state() и сообщает
+## выбранный манёвр наружу.
 ##
-## Эффекты ударов: записи журнала текущего хода несут fx (кто получил удар и
-## сколько, 0 — промах). По очереди записей карточка цели вздрагивает и
-## вспыхивает, над портретом всплывает урон или «мимо», полоса HP стекает
-## до нового значения; удар по игроку ещё и окрашивает экран красным.
-## Картинка — только при включённых анимациях (SettingsSystem), звуки ударов
-## (SoundSystem) звучат в том же ритме всегда.
+## Эффекты ударов: записи журнала текущего хода несут fx (кто получил удар или
+## лечение и сколько, 0 — промах). По очереди записей карточка цели
+## вздрагивает и вспыхивает, над портретом всплывает урон, лечение или «мимо»,
+## полоса HP перетекает к новому значению; удар по игроку ещё и окрашивает
+## экран красным. Картинка — только при включённых анимациях (SettingsSystem),
+## звуки ударов (SoundSystem) звучат в том же ритме всегда.
+##
+## Победа затемняет экран: поверх — итог, награда (опыт набирается на глазах,
+## трофеи) и «Продолжить».
 
 signal move_selected(move_id: String, payload: Variant)
 ## «Продолжить» под итогом схватки (победа или побег).
 signal finished()
 
 const UiKit = preload("res://scenes/ui/UiKit.gd")
+const XP_BAR_SCRIPT := preload("res://scenes/ui/XpBar.gd")
 
-const LOG_LINES := 7
+const LOG_LINES := 6
 const LOG_COLORS := {
 	"hit": UiKit.GOOD_COLOR,
 	"damage": UiKit.BAD_COLOR,
+	"heal": UiKit.GOOD_COLOR,
 	"move": UiKit.ACCENT_COLOR,
 	"end": UiKit.EXIT_COLOR,
 }
 const MOVE_ICONS := {
-	"shoot": "🔫 ",
+	"shoot": "💥 ",
 	"strike": "👊 ",
-	"approach": "⏩ ",
 	"retreat": "⏪ ",
+	"approach": "⏩ ",
 	"aim": "🎯 ",
 	"defend": "🛡️ ",
+	"grab": "✋ ",
+	"throw": "🪨 ",
 	"flee": "🏃 ",
 }
 ## Пауза между ударами одного хода: сначала манёвр игрока, затем ответ врага.
@@ -40,11 +48,18 @@ const FLOAT_RISE := 90.0
 const FLOAT_TIME := 0.95
 ## Сила встряски карточки (поворот в четвертях градуса, сжатие): удар в упор
 ## трясёт сильнее выстрела.
-const SHAKE := {"melee": 16.0, "ranged": 9.0}
+const SHAKE := {"melee": 16.0, "ranged": 9.0, "thrown": 12.0}
 const PLAYER_ACCENT := Color("#5ea9c9")
 const ENEMY_ACCENT := Color("#b86d79")
 ## Счётчик HP в карточке; во время эффекта стекает вместе с полосой.
 const HP_TEXT := "%d/%d HP"
+## Экран победы: затемнение, отступ панели от низа (над жестами системы) и
+## порядок появления — затемнение, панель, набор опыта.
+const VICTORY_DIM := 0.72
+const VICTORY_BOTTOM := 150
+const VICTORY_PANEL_DELAY := 0.25
+const VICTORY_XP_DELAY := 0.6
+const XP_COUNT_TIME := 0.6
 
 var state: Dictionary = {}
 ## Ход новый: его удары ещё не звучали и не показывались.
@@ -57,6 +72,7 @@ var _sides: Dictionary = {}
 func _init() -> void:
 	name = "CombatView"
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_theme_constant_override("separation", 14)
 
 
@@ -77,6 +93,12 @@ func _rebuild() -> void:
 		remove_child(child)
 		child.queue_free()
 	_sides.clear()
+
+	# Журнал — сверху; распорка прижимает карточки и манёвры к низу экрана.
+	_build_log()
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	add_child(spacer)
 
 	var row := HBoxContainer.new()
 	row.name = "CombatSides"
@@ -109,13 +131,14 @@ func _rebuild() -> void:
 	add_child(_range_card())
 
 	var outcome := str(state.get("outcome", ""))
-	if outcome != "":
-		_build_outcome(outcome)
+	if outcome == "won":
+		_build_victory()
+	elif outcome != "":
+		_build_fled()
 	elif int(CombatSystem.state) != CombatSystem.State.PLAYER_TURN:
 		add_child(UiKit.text("…", 24, UiKit.MUTED_COLOR))
 	else:
 		_build_moves()
-	_build_log()
 
 
 ## Карточка участника: полоса здоровья, оружие, последний манёвр, состояния.
@@ -194,46 +217,169 @@ func _range_card() -> Control:
 	return panel
 
 
-## Схватка решена: итог и «Продолжить» вместо манёвров.
-func _build_outcome(outcome: String) -> void:
-	var won := outcome == "won"
+## Побег: итог и «Продолжить» вместо манёвров.
+func _build_fled() -> void:
+	var panel := _outcome_panel("Вы ушли от схватки", "Противник остался в отсеке — модуль опасен.",
+		UiKit.EXIT_COLOR, Color("#211c12"))
+	add_child(panel)
+	if _animate:
+		_pop_in(panel, _fx_end_delay())
+	add_child(_continue_button())
+
+
+## Победа: экран темнеет, поверх — итог, награда и «Продолжить» у нижнего
+## края. Опыт уже начислен (CombatSystem.reward): полоса уровня набирается от
+## того, что было до боя. top_level + z_index — поверх тела экрана и HUD.
+func _build_victory() -> void:
+	var reward: Dictionary = state.get("reward", {})
+	var overlay := Control.new()
+	overlay.name = "VictoryOverlay"
+	overlay.top_level = true
+	overlay.z_index = 50
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(overlay)
+	overlay.position = Vector2.ZERO
+	overlay.size = get_viewport_rect().size
+
+	var dim := ColorRect.new()
+	dim.name = "VictoryDim"
+	dim.color = Color(0.02, 0.03, 0.05, VICTORY_DIM)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.add_child(dim)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 36)
+	margin.add_theme_constant_override("margin_right", 36)
+	margin.add_theme_constant_override("margin_top", 120)
+	margin.add_theme_constant_override("margin_bottom", VICTORY_BOTTOM)
+	overlay.add_child(margin)
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 16)
+	margin.add_child(column)
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(spacer)
+
+	var panel := _outcome_panel("🏆 Победа", "%s больше не угрожает." % str(state.get("enemy_name", "Противник")),
+		UiKit.GOOD_COLOR, Color("#161d22"))
+	column.add_child(panel)
+	var box: VBoxContainer = panel.get_child(0)
+	var xp := int(reward.get("xp", 0))
+	var level_before := int(reward.get("level_before", ProgressionSystem.level))
+	var levels := ProgressionSystem.level - level_before
+	var xp_label: Label = null
+	var xp_bar: HBoxContainer = null
+	var level_label: Label = null
+	if xp > 0:
+		box.add_child(UiKit.section("Награда"))
+		xp_label = UiKit.text("⭐ +%d опыта" % xp, 30, UiKit.EXIT_COLOR)
+		xp_label.name = "VictoryXp"
+		xp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		box.add_child(xp_label)
+		xp_bar = XP_BAR_SCRIPT.new()
+		xp_bar.font_size = 22
+		xp_bar.bar_height = 14
+		xp_bar.apply_fonts()
+		box.add_child(xp_bar)
+		if levels > 0:
+			level_label = UiKit.text("Новый уровень: %d! Очки навыков: +%d" % [
+				ProgressionSystem.level, levels * ProgressionSystem.skill_points_per_level()], 24, UiKit.EXIT_COLOR)
+			level_label.name = "VictoryLevel"
+			level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			box.add_child(level_label)
+	var loot: Array = reward.get("loot", [])
+	if not loot.is_empty():
+		box.add_child(UiKit.section("Трофеи"))
+		for item_id in loot:
+			var row := HBoxContainer.new()
+			row.alignment = BoxContainer.ALIGNMENT_CENTER
+			row.add_theme_constant_override("separation", 10)
+			var icon := UiKit.item_icon(str(item_id), 48)
+			if icon != null:
+				row.add_child(icon)
+			var item_name := UiKit.text(str(InventorySystem.get_item_data(str(item_id)).get("name", item_id)), 24)
+			item_name.autowrap_mode = TextServer.AUTOWRAP_OFF
+			item_name.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+			row.add_child(item_name)
+			box.add_child(row)
+	var btn := _continue_button()
+	column.add_child(btn)
+
+	if not _animate:
+		if xp_bar != null:
+			xp_bar.show_state(ProgressionSystem.level, ProgressionSystem.xp)
+		return
+	# Сначала последний удар, потом затемнение, панель и набор опыта.
+	var start := _fx_end_delay()
+	dim.color.a = 0.0
+	var dim_tween := create_tween()
+	dim_tween.tween_interval(start)
+	dim_tween.tween_property(dim, "color:a", VICTORY_DIM, 0.4).set_trans(Tween.TRANS_SINE)
+	_pop_in(panel, start + VICTORY_PANEL_DELAY)
+	_pop_in(btn, start + VICTORY_PANEL_DELAY)
+	if xp_bar == null:
+		return
+	var xp_at := start + VICTORY_XP_DELAY
+	xp_bar.show_state(level_before, int(reward.get("xp_before", 0)))
+	xp_bar.animate_to(ProgressionSystem.level, ProgressionSystem.xp, xp_at)
+	var count := create_tween()
+	count.tween_interval(xp_at)
+	count.tween_method(func(value: float) -> void: xp_label.text = "⭐ +%d опыта" % roundi(value), 0.0, float(xp), XP_COUNT_TIME)
+	_play_sound("xp", xp_at)
+	if level_label != null:
+		var level_at := xp_at + XP_BAR_SCRIPT.FILL_TIME
+		_pop_in(level_label, level_at)
+		_play_sound("level_up", level_at)
+
+
+## Рамка итога схватки: заголовок и пояснение; дальше в неё можно добавлять.
+func _outcome_panel(title: String, note: String, accent: Color, bg: Color) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.name = "CombatOutcome"
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var accent := UiKit.GOOD_COLOR if won else UiKit.EXIT_COLOR
-	panel.add_theme_stylebox_override("panel", UiKit.box(Color("#161d22") if won else Color("#211c12"), accent, 2, 18))
+	panel.add_theme_stylebox_override("panel", UiKit.box(bg, accent, 2, 18))
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 6)
+	box.add_theme_constant_override("separation", 8)
 	panel.add_child(box)
-	var title := UiKit.text("Победа" if won else "Вы ушли от схватки", 34, accent)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(title)
-	var note := "%s больше не угрожает." % str(state.get("enemy_name", "Противник")) if won \
-		else "Противник остался в отсеке — модуль опасен."
+	var title_label := UiKit.text(title, 34, accent)
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(title_label)
 	var note_label := UiKit.text(note, 21, UiKit.MUTED_COLOR)
 	note_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(note_label)
-	add_child(panel)
-	if _animate:
-		_pop_in(panel, FX_START + FX_STEP * float(_fresh_fx().size()))
+	return panel
 
+
+func _continue_button() -> Button:
 	var btn := UiKit.button("▶️ Продолжить", "exit", 72)
 	btn.name = "CombatContinue"
 	btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	btn.pressed.connect(func() -> void: finished.emit())
-	add_child(btn)
+	return btn
 
 
+## Когда отыграет последний удар хода — после него появляется итог.
+func _fx_end_delay() -> float:
+	return FX_START + FX_STEP * float(_fresh_fx().size())
+
+
+## Снизу вверх по важности: расходники и спецдействия, затем сетка манёвров —
+## у самого края, под большим пальцем.
 func _build_moves() -> void:
-	add_child(UiKit.section("Манёвр этого хода"))
-	var grid := GridContainer.new()
-	grid.name = "CombatMoves"
-	grid.columns = 2
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
-	add_child(grid)
+	_build_consumables()
+	for special in state.get("available_specials", []):
+		var sid := str(special.get("id", ""))
+		var special_btn := UiKit.button(str(special.get("label", sid)), "default", 72)
+		special_btn.name = "CombatSpecial_%s" % sid
+		special_btn.add_theme_font_size_override("font_size", UiKit.fs(20))
+		special_btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		special_btn.pressed.connect(func() -> void: move_selected.emit("special", sid))
+		add_child(special_btn)
 
+	add_child(UiKit.section("Манёвр этого хода"))
+	var grid := _button_grid("CombatMoves")
 	for move in state.get("moves", []):
 		var move_id := str(move.get("id", ""))
 		var enabled := bool(move.get("enabled", false))
@@ -249,38 +395,45 @@ func _build_moves() -> void:
 		btn.name = "CombatMove_%s" % move_id
 		btn.disabled = not enabled
 		btn.add_theme_font_size_override("font_size", UiKit.fs(20))
-		btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.pressed.connect(func() -> void: move_selected.emit(move_id, null))
 		grid.add_child(btn)
 
-	for special in state.get("available_specials", []):
-		var sid := str(special.get("id", ""))
-		var btn := UiKit.button(str(special.get("label", sid)), "default", 72)
-		btn.name = "CombatSpecial_%s" % sid
-		btn.add_theme_font_size_override("font_size", UiKit.fs(20))
-		btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		btn.pressed.connect(func() -> void: move_selected.emit("special", sid))
-		add_child(btn)
 
+## Расходники сумки: иконка, сколько есть и что дают — «Аптечка ×2 (+30 HP)».
+func _build_consumables() -> void:
 	var consumables := _consumables()
 	if consumables.is_empty():
 		return
-	add_child(UiKit.section("Расходники (тратят ход)"))
+	add_child(UiKit.section("Расходники — тратят ход"))
+	var grid := _button_grid("CombatItems")
 	for item_id in consumables:
-		var data := InventorySystem.get_item_data(item_id)
-		var row := HBoxContainer.new()
-		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_theme_constant_override("separation", 8)
-		var icon := UiKit.item_icon(item_id, 44)
-		if icon != null:
-			row.add_child(icon)
-		var btn := UiKit.button("💊 Использовать: " + str(data.get("name", item_id)), "quiet", 64)
+		var count := InventorySystem.count_item(item_id)
+		var label := str(InventorySystem.get_item_data(item_id).get("name", item_id))
+		if count > 1:
+			label += " ×%d" % count
+		var effect := InventorySystem.describe_use(item_id)
+		if effect != "":
+			label += " (%s)" % effect
+		var btn := UiKit.button(label, "quiet", 64)
 		btn.name = "CombatItem_%s" % item_id
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.add_theme_font_size_override("font_size", UiKit.fs(20))
+		btn.icon = UiKit.item_texture(item_id)
+		btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		btn.expand_icon = true
+		btn.add_theme_constant_override("icon_max_width", UiKit.fs(40))
 		btn.pressed.connect(func() -> void: move_selected.emit("use_item", item_id))
-		row.add_child(btn)
-		add_child(row)
+		grid.add_child(btn)
+
+
+func _button_grid(grid_name: String) -> GridContainer:
+	var grid := GridContainer.new()
+	grid.name = grid_name
+	grid.columns = 2
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	add_child(grid)
+	return grid
 
 
 func _consumables() -> Array:
@@ -320,7 +473,7 @@ func _build_log() -> void:
 
 # --- Эффекты ударов -------------------------------------------------------------
 
-## Удары текущего хода по порядку журнала: [{ target, amount, style }].
+## Удары и лечение текущего хода по порядку журнала: [{ target, amount, style }].
 func _fresh_fx() -> Array:
 	var result: Array = []
 	var current_turn := int(state.get("turn", 0))
@@ -338,7 +491,7 @@ func _fresh_fx() -> Array:
 func _play_turn() -> void:
 	var fx_list := _fresh_fx()
 	var won := str(state.get("outcome", "")) == "won"
-	var end_delay := FX_START + FX_STEP * float(fx_list.size())
+	var end_delay := _fx_end_delay()
 	for i in range(fx_list.size()):
 		for sound_id in _fx_sounds(fx_list[i]):
 			_play_sound(sound_id, FX_START + FX_STEP * float(i))
@@ -346,15 +499,15 @@ func _play_turn() -> void:
 		_play_sound("combat_won", end_delay)
 	if not _animate or fx_list.is_empty():
 		return
-	# Полосы HP начинают с того, что было до ударов, и стекают по одному удару.
+	# Полосы HP начинают с того, что было до хода, и меняются по одному fx.
 	var shown := {}
 	for side in _sides.keys():
 		var info: Dictionary = _sides[side]
-		var taken := 0
+		var before := int(info["hp"])
 		for fx in fx_list:
 			if str(fx.get("target", "")) == side:
-				taken += int(fx.get("amount", 0))
-		shown[side] = mini(int(info["hp"]) + taken, int(info["max_hp"]))
+				before += -int(fx.get("amount", 0)) if _is_heal(fx) else int(fx.get("amount", 0))
+		shown[side] = clampi(before, 0, int(info["max_hp"]))
 		_set_hp_shown(float(shown[side]), side)
 	await get_tree().process_frame
 	if not is_inside_tree():
@@ -364,8 +517,11 @@ func _play_turn() -> void:
 		var side := str(fx.get("target", ""))
 		var amount := int(fx.get("amount", 0))
 		var delay := FX_START + FX_STEP * float(i)
-		if amount > 0:
-			var from := float(shown[side])
+		var from := float(shown[side])
+		if _is_heal(fx):
+			shown[side] = mini(int(_sides[side]["max_hp"]), int(shown[side]) + amount)
+			_heal_fx(side, amount, delay, from, float(shown[side]))
+		elif amount > 0:
 			shown[side] = maxi(0, int(shown[side]) - amount)
 			_hit_fx(side, amount, str(fx.get("style", "melee")), delay, from, float(shown[side]))
 		else:
@@ -377,9 +533,12 @@ func _play_turn() -> void:
 
 
 ## Выстрел слышен всегда, дальше — чем кончился удар: промах, удар по игроку,
-## удар в упор по врагу (попадание пулей по врагу — один выстрел).
+## удар в упор или обломком по врагу (попадание пулей — один выстрел).
+## Лечение уже прозвучало в момент применения (EffectResolver → SoundSystem).
 func _fx_sounds(fx: Dictionary) -> Array:
 	var ids: Array = []
+	if _is_heal(fx):
+		return ids
 	var ranged := str(fx.get("style", "")) == "ranged"
 	if ranged:
 		ids.append("shot")
@@ -447,6 +606,24 @@ func _miss_fx(side: String, delay: float) -> void:
 	tween.tween_property(panel, "rotation", lean, 0.08).set_trans(Tween.TRANS_SINE)
 	tween.tween_property(panel, "rotation", 0.0, 0.2).set_trans(Tween.TRANS_SINE)
 	_float_text(side, "мимо", UiKit.MUTED_COLOR, 30, delay)
+
+
+## Лечение: карточка вспыхивает зелёным, полоса HP растёт, всплывает «+N».
+func _heal_fx(side: String, amount: int, delay: float, hp_from: float, hp_to: float) -> void:
+	var panel: Control = _sides[side]["panel"]
+	var flash := create_tween()
+	flash.tween_interval(delay)
+	flash.tween_property(panel, "modulate", Color(0.8, 1.9, 1.1), 0.08)
+	flash.tween_property(panel, "modulate", Color.WHITE, 0.4).set_trans(Tween.TRANS_SINE)
+	var bar_tween := create_tween()
+	bar_tween.tween_interval(delay + 0.05)
+	bar_tween.tween_method(_set_hp_shown.bind(side), hp_from, hp_to, 0.45) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_float_text(side, "+%d" % amount, UiKit.GOOD_COLOR, 46, delay)
+
+
+func _is_heal(fx: Dictionary) -> bool:
+	return str(fx.get("style", "")) == "heal"
 
 
 ## Всплывающая надпись над портретом (или серединой карточки): поднимается

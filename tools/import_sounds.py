@@ -48,6 +48,9 @@ SOUNDS = {
     "locked": ("Environment/lock_quick.wav", -21.0),
     "lore": ("Items/page_turn.wav", -22.0),
     "low_o2": ("UI/synth_warning.wav", -22.0),
+    # опыт и уровни
+    "xp": ("UI/sci_fi_confirm.wav", -24.0),
+    "level_up": ("Musical Effects/synth_bass_level_start.wav", -20.0),
     # бой
     "hurt": ("Combat and Gore/punch_2.wav", -16.0),
     "hit": ("Combat and Gore/punch.wav", -16.0),

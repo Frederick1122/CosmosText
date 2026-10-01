@@ -14,5 +14,14 @@
   },
   "o2_unsealed_multiplier": 2.0,
   "start_equipment": { "body": "flight_suit" },
-  "start_skill_points": 1
+  "start_skill_points": 1,
+  "xp": {
+    "explore": 10,
+    "craft": 10,
+    "lore": 15,
+    "kill": 20,
+    "level_base": 50,
+    "level_step": 25,
+    "skill_points_per_level": 1
+  }
 }

@@ -19,6 +19,8 @@ EQUIP_SLOTS = ("head", "body", "arms", "legs", "back")
 STATS = ("armor", "melee_damage", "ranged_damage", "hit_chance", "flee_chance", "max_hp", "inventory_slots")
 # Должны совпадать с ResourceSystem.DEFAULT_O2_COSTS.
 O2_COST_KINDS = ("move", "elevator", "action", "choice", "combat_turn")
+# Должны совпадать с ProgressionSystem.DEFAULT_CONFIG (секция config.json → xp).
+XP_CONFIG_KEYS = ("explore", "craft", "lore", "kill", "level_base", "level_step", "skill_points_per_level")
 # Должны совпадать с CombatSystem: типы ИИ и предел дистанции.
 ENEMY_AI_TYPES = ("brawler", "shooter", "turret")
 MAX_COMBAT_RANGE = 5
@@ -575,6 +577,7 @@ def main():
                     errors.append(f"{ctx}.descriptions[{i}]: нужен объект с непустым text")
                     continue
                 check_requires(variant.get("requires", []), f"{ctx}.descriptions[{i}]", lid)
+                check_image(variant.get("image"), f"{ctx}.descriptions[{i}]")
         events = loc.get("events", [])
         if not isinstance(events, list):
             continue
@@ -647,6 +650,10 @@ def main():
         for loot_item in enemy.get("loot", []):
             if loot_item not in items:
                 errors.append(f"enemies/{eid}: loot ссылается на неизвестный предмет '{loot_item}'")
+        if "xp" in enemy:
+            xp = enemy["xp"]
+            if not isinstance(xp, int) or isinstance(xp, bool) or xp < 0:
+                errors.append(f"enemies/{eid}.xp: неотрицательное целое (опыт за победу)")
 
     for item_id, item in items.items():
         ctx = f"items/{item_id}"
@@ -752,6 +759,18 @@ def main():
     multiplier = config.get("o2_unsealed_multiplier", 1.0)
     if not is_number(multiplier) or multiplier < 1.0:
         errors.append("config.json: o2_unsealed_multiplier должен быть числом не меньше 1")
+
+    xp_config = config.get("xp", {})
+    if not isinstance(xp_config, dict):
+        errors.append("config.json: xp должен быть объектом {источник: опыт}")
+    else:
+        for key, value in xp_config.items():
+            if key not in XP_CONFIG_KEYS:
+                errors.append(f"config.json: xp — неизвестный ключ '{key}' (допустимы: {', '.join(XP_CONFIG_KEYS)})")
+            elif not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                errors.append(f"config.json: xp.{key} — неотрицательное целое")
+        if xp_config.get("level_base", 1) == 0 and xp_config.get("level_step", 1) == 0:
+            errors.append("config.json: xp.level_base и xp.level_step не могут быть оба нулевыми")
 
     for sid in sorted(situations):
         if sid not in referenced_situations:

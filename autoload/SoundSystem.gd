@@ -10,6 +10,8 @@ extends Node
 ##   EffectResolver.lock_opened / MapSystem.node_blocked — замки;
 ##   LocationSystem.location_entered / MapSystem.elevator_used / player_moved — перемещение;
 ##   ArchiveSystem.fragment_unlocked, CraftingSystem.crafted;
+##   ProgressionSystem.xp_gained — опыт и новый уровень (в бою их озвучивает
+##   экран победы, в такт своей анимации);
 ##   GameState.screen_changed — начало боя, смерть, победа;
 ##   ResourceSystem.o2_changed — тревога при падении ниже LOW_O2.
 
@@ -17,6 +19,7 @@ const SOUND_DIR := "res://assets/sounds/"
 const SOUNDS := [
 	"ui_click", "map_open", "door", "elevator", "step",
 	"pickup", "equip", "craft", "heal", "o2_refill", "unlock", "locked", "lore", "low_o2",
+	"xp", "level_up",
 	"hurt", "hit", "shot", "miss", "combat_start", "combat_won",
 	"death", "victory",
 ]
@@ -56,6 +59,7 @@ func _ready() -> void:
 	LocationSystem.location_entered.connect(func(_id: String) -> void: play("door"))
 	ArchiveSystem.fragment_unlocked.connect(func(_id: String) -> void: play("lore"))
 	CraftingSystem.crafted.connect(func(_recipe_id: String, _item_id: String) -> void: play("craft"))
+	ProgressionSystem.xp_gained.connect(_on_xp_gained)
 	ResourceSystem.o2_changed.connect(_on_o2_changed)
 	GameState.screen_changed.connect(_on_screen_changed)
 
@@ -93,6 +97,13 @@ func _on_change_reported(kind: String, amount: float) -> void:
 		"item", "ammo":
 			if amount > 0.0:
 				play("pickup")
+
+
+## Опыт за ход боя звучит на экране победы, а не в момент удара.
+func _on_xp_gained(_amount: int, levels: int) -> void:
+	if GameState.current_screen == GameState.Screen.COMBAT:
+		return
+	play("level_up" if levels > 0 else "xp")
 
 
 ## Тревога — один раз при переходе через порог. Проверка отложена: если

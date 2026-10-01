@@ -11,7 +11,7 @@ const UiKit = preload("res://scenes/ui/UiKit.gd")
 const DOLL_SCRIPT = preload("res://scenes/ui/CharacterDollView.gd")
 
 const TABS := [
-	["items", "🎒 Предметы"],
+	["items", "🧰 Предметы"],
 	["equipment", "🦺 Снаряжение"],
 	["skills", "⭐ Навыки"],
 ]
@@ -124,13 +124,16 @@ func _build_items() -> void:
 		var stats_text := CharacterSystem.describe_stats(InventorySystem.get_item_stats(item_id))
 		if stats_text != "":
 			card.add_child(UiKit.text(stats_text, 21, UiKit.ACCENT_COLOR))
+		var use_text := InventorySystem.describe_use(item_id)
+		if use_text != "":
+			card.add_child(UiKit.text("При использовании: %s" % use_text, 21, UiKit.GOOD_COLOR))
 
 		var actions := HFlowContainer.new()
 		actions.add_theme_constant_override("h_separation", 8)
 		actions.add_theme_constant_override("v_separation", 8)
 		card.add_child(actions)
 		if data.has("use_effect"):
-			actions.add_child(_action_button("💊 Использовать", _use_item.bind(item_id)))
+			actions.add_child(_action_button("💊 Использовать" + (" (%s)" % use_text if use_text != "" else ""), _use_item.bind(item_id)))
 		if slot != "":
 			actions.add_child(_action_button("🦺 Надеть", _equip.bind(item_id)))
 		for inter in InventorySystem.get_interactions(item_id):
@@ -286,6 +289,9 @@ func _unequip(slot: String) -> void:
 # --- Навыки -------------------------------------------------------------------
 
 func _build_skills() -> void:
+	add_child(UiKit.section("Уровень %d · опыт %d/%d · новый уровень: +%d очк. навыков" % [
+		ProgressionSystem.level, ProgressionSystem.xp, ProgressionSystem.xp_to_next(),
+		ProgressionSystem.skill_points_per_level()]))
 	add_child(UiKit.section("Очки навыков: %d" % CharacterSystem.skill_points))
 	for skill in CharacterSystem.get_skills():
 		var skill_id := str(skill.get("id", ""))

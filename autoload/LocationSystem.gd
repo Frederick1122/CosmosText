@@ -95,6 +95,13 @@ func show_current_narrative() -> void:
 	NarrativeSystem.push("text", get_description())
 
 
+## Обновляет описание и картинку модуля в начале ленты, не стирая того, что
+## под ними (трофеи и награда после победы).
+func refresh_current_narrative() -> void:
+	if is_active():
+		NarrativeSystem.update_head(get_title(), get_image(), get_description())
+
+
 func leave() -> void:
 	if current_id == "":
 		return
@@ -118,16 +125,22 @@ func get_title() -> String:
 
 ## Первый вариант из descriptions, чьи requires выполнены, иначе description.
 func get_description() -> String:
-	var data := _current()
-	for variant in data.get("descriptions", []):
-		if variant is Dictionary and EffectResolver.check_requirements(variant.get("requires", [])):
-			return str(variant.get("text", ""))
-	return str(data.get("description", ""))
+	var variant := _active_variant()
+	return str(variant.get("text", "")) if not variant.is_empty() else str(_current().get("description", ""))
 
 
-## Пиксельная иллюстрация модуля (assets/art/scenes/<image>.png).
+## Пиксельная иллюстрация модуля (assets/art/scenes/<image>.png). Вариант
+## описания может сменить её: побеждённый дрон лежит, а не следит за входом.
 func get_image() -> String:
-	return str(_current().get("image", ""))
+	var variant_image := str(_active_variant().get("image", ""))
+	return variant_image if variant_image != "" else str(_current().get("image", ""))
+
+
+func _active_variant() -> Dictionary:
+	for variant in _current().get("descriptions", []):
+		if variant is Dictionary and EffectResolver.check_requirements(variant.get("requires", [])):
+			return variant
+	return {}
 
 
 ## Модуль-база: чекпойнт при входе, склад и верстак (см. docs/CONTENT.md).

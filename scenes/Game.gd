@@ -5,6 +5,7 @@ const SECTOR_MAP_VIEW_SCRIPT := preload("res://scenes/ui/SectorMapView.gd")
 const CHARACTER_PANEL_SCRIPT := preload("res://scenes/ui/CharacterPanel.gd")
 const WORKBENCH_PANEL_SCRIPT := preload("res://scenes/ui/WorkbenchPanel.gd")
 const COMBAT_VIEW_SCRIPT := preload("res://scenes/ui/CombatView.gd")
+const XP_BAR_SCRIPT := preload("res://scenes/ui/XpBar.gd")
 
 const CONTENT_MARGIN := 36
 ## Минимальный запас сверху под камеру/вырез, даже если система не сообщила
@@ -29,6 +30,8 @@ var hp_label: Label
 var o2_label: Label
 var ammo_label: Label
 var bag_label: Label
+## Уровень и опыт — тонкая полоса над показателями HUD.
+var xp_bar: HBoxContainer
 var map_button: Button
 var character_button: Button
 var journal_button: Button
@@ -102,6 +105,9 @@ func _build_static_layout() -> void:
 	hud.name = "Hud"
 	hud.add_theme_constant_override("separation", 10)
 	root_vbox.add_child(hud)
+
+	xp_bar = XP_BAR_SCRIPT.new()
+	hud.add_child(xp_bar)
 
 	# При крупном шрифте показатели не помещаются в одну строку — переносятся.
 	var stats_row := HFlowContainer.new()
@@ -177,6 +183,8 @@ func _connect_signals() -> void:
 	SettingsSystem.changed.connect(_on_settings_changed)
 	SituationEngine.option_resolved.connect(_on_situation_option_resolved)
 	NarrativeSystem.entries_added.connect(_on_story_entries_added)
+	ProgressionSystem.xp_gained.connect(_on_xp_gained)
+	ProgressionSystem.changed.connect(_update_hud)
 
 func _fill_parent(control: Control) -> void:
 	control.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -238,6 +246,7 @@ func _apply_hud_fonts() -> void:
 	for btn in [map_button, character_button, journal_button, settings_button]:
 		btn.custom_minimum_size = Vector2(0, UiKit.fs(78))
 		btn.add_theme_font_size_override("font_size", UiKit.fs(19))
+	xp_bar.apply_fonts()
 
 
 ## Активная вкладка HUD (открытый экран или оверлей) подсвечивается.
@@ -369,6 +378,16 @@ func _on_resource_changed(_value) -> void:
 	_update_hud()
 
 
+## Опыт набирается на глазах: полоса дотекает, всплывает «+N опыта». Победу
+## в бою показывает экран победы — HUD под затемнением просто подтягивается.
+func _on_xp_gained(amount: int, _levels: int) -> void:
+	if GameState.current_screen == GameState.Screen.COMBAT:
+		xp_bar.show_state(ProgressionSystem.level, ProgressionSystem.xp)
+		return
+	xp_bar.float_gain(amount)
+	xp_bar.animate_to(ProgressionSystem.level, ProgressionSystem.xp)
+
+
 func _on_inventory_changed(_item_id: String) -> void:
 	_update_hud()
 	_update_nav_buttons()
@@ -429,8 +448,9 @@ func _update_hud() -> void:
 	var o2i := int(ResourceSystem.o2)
 	o2_label.text = "💨 O2 %d" % o2i
 	o2_label.add_theme_color_override("font_color", UiKit.BAD_COLOR if o2i <= ResourceSystem.LOW_O2 else Color("#eef3ff"))
-	ammo_label.text = "🔫 %d" % ResourceSystem.ammo
-	bag_label.text = "🎒 %d/%d" % [InventorySystem.used_slots(), InventorySystem.max_slots]
+	ammo_label.text = "💥 %d" % ResourceSystem.ammo
+	bag_label.text = "🧰 %d/%d" % [InventorySystem.used_slots(), InventorySystem.max_slots]
+	xp_bar.sync()
 
 
 # --- HUD-вкладки ----------------------------------------------------------------
@@ -1172,16 +1192,6 @@ func _render_location() -> void:
 		for item_id in stash.keys():
 			_add_button("✋ Взять: %s%s" % [_item_name(item_id), _count_suffix(int(stash[item_id]))], _make_stash_take_callback(item_id), "quiet")
 
-	var usable: Array = []
-	for entry in InventorySystem.get_slots():
-		var item_id: String = entry.get("id", "")
-		if InventorySystem.get_item_data(item_id).has("use_effect"):
-			usable.append(item_id)
-	if not usable.is_empty():
-		_add_section("Инвентарь")
-		for item_id in usable:
-			_add_button("💊 Использовать: " + _item_name(item_id), _make_location_item_callback(item_id), "quiet")
-
 
 ## Модуль-база: ручное сохранение, верстак и разгрузка сумки на склад.
 func _render_base_section() -> void:
@@ -1229,15 +1239,6 @@ func _make_location_event_callback(event_id: String) -> Callable:
 	return func(): GameState.start_location_event(event_id)
 
 
-## «Использовано» пишется до эффекта, чтобы его «[+25 HP]» стояло ниже.
-func _make_location_item_callback(item_id: String) -> Callable:
-	return func():
-		if InventorySystem.has_item(item_id):
-			LocationSystem.add_notice("Использовано: %s." % _item_name(item_id))
-			InventorySystem.use_item(item_id)
-		GameState.refresh_location()
-
-
 func _make_stash_take_callback(item_id: String) -> Callable:
 	return func():
 		var total := int(LocationSystem.get_stash().get(item_id, 0))
@@ -1271,9 +1272,11 @@ func _on_character_tab_changed(new_tab: String) -> void:
 
 
 ## Эффекты ударов проигрываются один раз на ход: повторная перерисовка того
-## же хода (смена настроек) их не повторяет.
+## же хода (смена настроек) их не повторяет. Экран боя прижат к низу —
+## манёвры под большим пальцем; не влез — прокручен к концу.
 func _render_combat() -> void:
 	_clear_body()
+	_set_body_stretch(true)
 	var st := CombatSystem.get_state()
 	_add_title("Схватка: %s" % str(st.get("enemy_name", "")))
 	var view: VBoxContainer = COMBAT_VIEW_SCRIPT.new()
@@ -1283,6 +1286,7 @@ func _render_combat() -> void:
 	var turn := int(st.get("turn", 0))
 	view.setup(st, turn > _combat_fx_turn)
 	_combat_fx_turn = turn
+	_scroll_to_bottom()
 
 
 func _combat_action(move_id: String, payload = null) -> void:

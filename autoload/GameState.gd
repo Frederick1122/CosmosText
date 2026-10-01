@@ -244,6 +244,8 @@ func _on_combat_ended(result: String) -> void:
 	if result == "won":
 		EffectResolver.apply_effects(CombatSystem.loot_effects())  # лишнее — на пол модуля
 		EffectResolver.apply_effects(CombatSystem.on_win_effects)
+		if stays_in_location:
+			LocationSystem.refresh_current_narrative()  # on_win мог сменить вариант модуля
 	elif result == "fled":
 		EffectResolver.apply_effects(CombatSystem.on_flee_effects)
 	if ResourceSystem.is_dead():

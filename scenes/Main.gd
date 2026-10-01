@@ -56,6 +56,10 @@ func _ready() -> void:
 	_expect(ArchiveSystem.is_unlocked("log_01") and InventorySystem.get_interactions("broken_datapad").is_empty(),
 		"взаимодействие открыло запись журнала и скрылось")
 	_expect(not InventorySystem.drop_item("broken_datapad"), "сюжетный предмет нельзя выбросить")
+	_expect(ProgressionSystem.level == 1 and ProgressionSystem.xp == ProgressionSystem.reward("lore"),
+		"прочитанная запись дала опыт, вход в базу — нет (опыт: %d)" % ProgressionSystem.xp)
+	EffectResolver.apply_effect({"type": "unlock_lore", "id": "log_01"})
+	_expect(ProgressionSystem.xp == ProgressionSystem.reward("lore"), "повторно та же запись опыта не даёт")
 
 	GameState.start_location_event("inspect_capsule")
 	GameState.start_location_event("inspect_capsule")
@@ -98,7 +102,10 @@ func _ready() -> void:
 		and MapSystem.get_known_floor_ids() == ["deck_01", "deck_02"],
 		"лифт перевёз на палубу 02, она появилась на карте")
 
+	var xp_before_explore := ProgressionSystem.xp
 	MapSystem.travel_to("cargo_bay")
+	_expect(ProgressionSystem.xp == xp_before_explore + ProgressionSystem.reward("explore"),
+		"первый вход в модуль — опыт за разведку")
 	_expect(SituationEngine.current_id == "sit_1_3_drone", "вход в грузовой отсек запускает автособытие дрона")
 	_choose("B")
 	_expect(GameState.current_screen == Screen.SECTOR_MAP and _node_state("cargo_bay") == "dangerous"
@@ -123,15 +130,22 @@ func _ready() -> void:
 	CombatSystem.player_action("approach")
 	_expect(CombatSystem.range_steps <= 2 and _combat_move_enabled("strike"),
 		"сближение подпускает дрона на дистанцию удара (шагов: %d)" % CombatSystem.range_steps)
-	var enemy_hp_before := CombatSystem.enemy_hp
-	var player_hp_before := ResourceSystem.hp
-	CombatSystem.player_action("special", "distract_datapad")
-	_expect(CombatSystem.enemy_hp == enemy_hp_before and ResourceSystem.hp == player_hp_before,
-		"отвлекающий манёвр не наносит урона и не даёт врагу ударить")
-	var hp_after_distraction := CombatSystem.enemy_hp
-	CombatSystem.player_action("strike")
-	_expect(CombatSystem.enemy_hp < hp_after_distraction,
-		"пока враг ищет цель, удар проходит наверняка")
+	CombatSystem.player_action("grab")
+	_expect(_combat_move_enabled("throw") and not _has_combat_move("grab"),
+		"подобранный обломок можно бросить")
+	var enemy_hp_before_throw := CombatSystem.enemy_hp
+	CombatSystem.player_action("throw")
+	var throw_hit := CombatSystem.enemy_hp == enemy_hp_before_throw - CombatSystem.THROW_DAMAGE
+	_expect(_has_combat_move("grab") and throw_hit == CombatSystem.get_state()["enemy_conditions"].has("Потерял цель"),
+		"бросок: попадание ранит и сбивает с толку, обломок израсходован (попал: %s)" % throw_hit)
+	ResourceSystem.apply_hp_delta(-30)
+	InventorySystem.add_item("ration_bar")
+	CombatSystem.player_action("use_item", "ration_bar")
+	_expect(_combat_log_has_heal(10) and not InventorySystem.has_item("ration_bar"),
+		"расходник в бою: лечение в журнале и в эффектах карточки")
+	ResourceSystem.apply_hp_delta(30)
+	var xp_level_before_fight := ProgressionSystem.level
+	var xp_before_fight := ProgressionSystem.xp
 	var rounds := _fight()
 	_expect(GameState.current_screen == Screen.LOCATION and LocationSystem.current_id == "cargo_bay",
 		"победа оставляет игрока в модуле (раундов: %d)" % rounds)
@@ -139,9 +153,17 @@ func _ready() -> void:
 		"узел пройден, on_win выставил флаг")
 	_expect(_notice_contains("[+1 Металлолом]"),
 		"трофей боя показан в ленте модуля строкой в скобках")
-	_expect(CharacterSystem.skill_points == 2, "on_win выдал очко навыка")
+	_expect(int(CombatSystem.reward.get("xp", 0)) == 25 and int(CombatSystem.reward.get("level_before", 0)) == xp_level_before_fight
+		and int(CombatSystem.reward.get("xp_before", -1)) == xp_before_fight and CombatSystem.reward.get("loot", []) == ["scrap_metal"],
+		"награда за победу: опыт врага и трофеи для экрана победы")
+	_expect(ProgressionSystem.level == 2 and CharacterSystem.skill_points == 3,
+		"опыт за дрона дал 2-й уровень: +1 очко навыков к очку от on_win")
+	_expect(LocationSystem.get_image() == "cargo_drone_down"
+		and str(NarrativeSystem.get_entries()[0].get("image", "")) == "cargo_drone_down"
+		and _notice_contains("[+1 Металлолом]"),
+		"после победы у отсека другая картинка уже в ленте, трофей под ней")
 	NotificationSystem.mark_character_seen()
-	_expect(NotificationSystem.has_character_alert() and NotificationSystem.unspent_skill_points() == 2,
+	_expect(NotificationSystem.has_character_alert() and NotificationSystem.unspent_skill_points() == 3,
 		"неистраченные очки навыков держат уведомление и после просмотра персонажа")
 	_expect(not _has_manual("force_shuttle_airlock"), "шлюз недоступен без трубы")
 
@@ -168,15 +190,18 @@ func _ready() -> void:
 		"труба надета в руки: +6 к ближнему бою")
 	_expect(_has_manual("force_shuttle_airlock"), "надетая труба засчитывается в has_item")
 	_expect(CraftingSystem.craft("plate_vest") != "", "жилет без Инженерии не крафтится")
+	var xp_before_craft := ProgressionSystem.xp
 	_expect(CraftingSystem.craft("makeshift_backpack") == "" and InventorySystem.count_item("cloth_rags") == 1,
 		"рюкзак создан из ветоши и изоленты")
+	_expect(ProgressionSystem.xp == xp_before_craft + ProgressionSystem.reward("craft"), "крафт дал опыт")
 	_expect(CharacterSystem.equip("makeshift_backpack") == "" and InventorySystem.max_slots == 9,
 		"рюкзак на спине: +3 слота сумки")
 	_expect(LocationSystem.stash_take("ration_bar") == 2 and LocationSystem.get_stash().is_empty()
 		and InventorySystem.count_item("ration_bar") == 2, "брикеты подняты с пола")
 	_expect(InventorySystem.drop_item("cloth_rags") and int(LocationSystem.get_stash().get("cloth_rags", 0)) == 1,
 		"выброшенный в модуле предмет остался лежать на полу")
-	_expect(CharacterSystem.learn("engineering") and CharacterSystem.skill_points == 1, "изучена Инженерия")
+	var points_before_learn := CharacterSystem.skill_points
+	_expect(CharacterSystem.learn("engineering") and CharacterSystem.skill_points == points_before_learn - 1, "изучена Инженерия")
 	_expect(CraftingSystem.craft("plate_vest") == "", "с Инженерией жилет крафтится")
 	_expect(CharacterSystem.equip("plate_vest") == "" and CharacterSystem.get_stat("armor") == 3.0
 		and InventorySystem.has_item("flight_suit"), "жилет надет, комбинезон ушёл в сумку")
@@ -345,8 +370,11 @@ func _ready() -> void:
 		and _node_state("reactor") == "cleared", "Штамм побеждён (раундов: %d, HP: %d)" % [rounds, ResourceSystem.hp])
 
 	# --- Сохранение ---
+	var progression_before_save := ProgressionSystem.to_save_data()
 	SaveManager.save_run()
 	SaveManager.load_run()
+	_expect(ProgressionSystem.to_save_data() == progression_before_save and ProgressionSystem.level >= 2,
+		"уровень и опыт переживают сохранение (уровень %d, опыт %d)" % [ProgressionSystem.level, ProgressionSystem.xp])
 	_expect(LocationSystem.is_event_done("cargo_bay/search_containers") and LocationSystem.get_visits("cargo_bay") == 5,
 		"состояние событий и визитов переживает сохранение (визитов: %d)" % LocationSystem.get_visits("cargo_bay"))
 	_expect(CharacterSystem.get_equipped("back") == "makeshift_backpack" and InventorySystem.max_slots == 9
@@ -578,6 +606,24 @@ func _combat_move_enabled(move_id: String) -> bool:
 	for move in CombatSystem.get_available_moves():
 		if str(move.get("id", "")) == move_id:
 			return bool(move.get("enabled", false))
+	return false
+
+
+func _has_combat_move(move_id: String) -> bool:
+	for move in CombatSystem.get_available_moves():
+		if str(move.get("id", "")) == move_id:
+			return true
+	return false
+
+
+## В журнале текущего хода есть лечение игрока на amount.
+func _combat_log_has_heal(amount: int) -> bool:
+	for entry in CombatSystem.log:
+		if int(entry.get("turn", -1)) != CombatSystem.turn:
+			continue
+		for fx in entry.get("fx", []):
+			if str(fx.get("style", "")) == "heal" and int(fx.get("amount", 0)) == amount:
+				return true
 	return false
 
 func _expect(condition: bool, label: String) -> void:
