@@ -1,10 +1,10 @@
 extends VBoxContainer
-## Экран персонажа — оверлей поверх текущего экрана (кнопка «Персонаж» в HUD).
-## Вкладки: «Предметы», «Снаряжение», «Навыки». Крафт — только на верстаке
-## базы (WorkbenchPanel). Игровой логики не содержит: вызывает
-## InventorySystem / CharacterSystem и перерисовывается после каждого действия.
+## Экран персонажа — оверлей поверх текущего экрана (кнопка «Персонаж» в HUD
+## открывает и закрывает его). Вкладки: «Предметы», «Снаряжение», «Навыки».
+## Крафт — только на верстаке базы (WorkbenchPanel). Игровой логики не
+## содержит: вызывает InventorySystem / CharacterSystem и перерисовывается
+## после каждого действия.
 
-signal closed()
 signal tab_changed(tab: String)
 
 const UiKit = preload("res://scenes/ui/UiKit.gd")
@@ -74,73 +74,78 @@ func _rebuild() -> void:
 		_:
 			_build_items()
 
-	# Во вкладке навыков закрыть панель можно кнопкой «Персонаж» в HUD.
-	if tab == "skills":
-		return
-	var close := UiKit.button("✖ Закрыть", "quiet")
-	close.name = "CloseCharacter"
-	close.pressed.connect(func(): closed.emit())
-	add_child(close)
-
 
 # --- Предметы -----------------------------------------------------------------
 
+## Сумка — сетка и карточки того, что занимает место. Инфо-предметы (сюжетные
+## и ключи) места не занимают и идут отдельным списком ниже.
 func _build_items() -> void:
 	add_child(UiKit.section("Сумка: %d/%d слотов" % [InventorySystem.used_slots(), InventorySystem.max_slots]))
-	var entries := InventorySystem.get_slots()
-	if entries.is_empty():
+	var bag: Array = []
+	var info: Array = []
+	for entry in InventorySystem.get_slots():
+		(info if InventorySystem.is_info_item(str(entry.get("id", ""))) else bag).append(entry)
+	add_child(_bag_grid(bag))
+	if bag.is_empty():
 		add_child(UiKit.text("Сумка пуста."))
+	for entry in bag:
+		_item_card(entry)
+	if info.is_empty():
 		return
-	add_child(_bag_grid(entries))
-	for entry in entries:
-		var item_id := str(entry.get("id", ""))
-		var data := InventorySystem.get_item_data(item_id)
-		var count := int(entry.get("count", 1))
-		var card := UiKit.card(self)
-		var title_row := HBoxContainer.new()
-		title_row.add_theme_constant_override("separation", 10)
-		var icon := UiKit.item_icon(item_id, 64)
-		if icon != null:
-			title_row.add_child(icon)
-		var title := UiKit.text(_item_name(item_id) + (" x%d" % count if count > 1 else ""), 26, UiKit.TITLE_COLOR)
-		title_row.add_child(title)
-		if NotificationSystem.is_item_new(item_id):
-			title_row.add_child(UiKit.text("НОВОЕ", 18, UiKit.ACCENT_COLOR))
-		card.add_child(title_row)
-		var card_panel := card.get_parent() as PanelContainer
-		card_panel.gui_input.connect(_on_item_card_input.bind(item_id))
-		var meta := PackedStringArray()
-		var category := str(data.get("category", ""))
-		meta.append(str(CATEGORY_TITLES.get(category, category)))
-		var slot := CharacterSystem.get_item_slot(item_id)
-		if slot != "":
-			meta.append("слот: " + str(CharacterSystem.SLOT_TITLES.get(slot, slot)))
+	add_child(UiKit.section("📜 Записи и ключи — не занимают места"))
+	for entry in info:
+		_item_card(entry)
+
+
+func _item_card(entry: Dictionary) -> void:
+	var item_id := str(entry.get("id", ""))
+	var data := InventorySystem.get_item_data(item_id)
+	var count := int(entry.get("count", 1))
+	var card := UiKit.card(self)
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 10)
+	var icon := UiKit.item_icon(item_id, 64)
+	if icon != null:
+		title_row.add_child(icon)
+	var title := UiKit.text(_item_name(item_id) + (" x%d" % count if count > 1 else ""), 26, UiKit.TITLE_COLOR)
+	title_row.add_child(title)
+	if NotificationSystem.is_item_new(item_id):
+		title_row.add_child(UiKit.text("НОВОЕ", 18, UiKit.ACCENT_COLOR))
+	card.add_child(title_row)
+	var card_panel := card.get_parent() as PanelContainer
+	card_panel.gui_input.connect(_on_item_card_input.bind(item_id))
+	var meta := PackedStringArray()
+	var category := str(data.get("category", ""))
+	meta.append(str(CATEGORY_TITLES.get(category, category)))
+	var slot := CharacterSystem.get_item_slot(item_id)
+	if slot != "":
+		meta.append("слот: " + str(CharacterSystem.SLOT_TITLES.get(slot, slot)))
+	if not InventorySystem.is_info_item(item_id):
 		meta.append("место в сумке: %d" % int(data.get("slot_cost", 1)))
-		card.add_child(UiKit.text(" · ".join(meta), 19, UiKit.MUTED_COLOR))
+	card.add_child(UiKit.text(" · ".join(meta), 19, UiKit.MUTED_COLOR))
 
-		var description := str(data.get("description", ""))
-		if description != "":
-			card.add_child(UiKit.text(description, 21))
-		var stats_text := CharacterSystem.describe_stats(InventorySystem.get_item_stats(item_id))
-		if stats_text != "":
-			card.add_child(UiKit.text(stats_text, 21, UiKit.ACCENT_COLOR))
-		var use_text := InventorySystem.describe_use(item_id)
-		if use_text != "":
-			card.add_child(UiKit.text("При использовании: %s" % use_text, 21, UiKit.GOOD_COLOR))
+	var description := str(data.get("description", ""))
+	if description != "":
+		card.add_child(UiKit.text(description, 21))
+	var stats_text := CharacterSystem.describe_stats(InventorySystem.get_item_stats(item_id))
+	if stats_text != "":
+		card.add_child(UiKit.text(stats_text, 21, UiKit.ACCENT_COLOR))
+	var use_text := InventorySystem.describe_use(item_id)
+	if use_text != "":
+		card.add_child(UiKit.text("При использовании: %s" % use_text, 21, UiKit.GOOD_COLOR))
 
-		var actions := HFlowContainer.new()
-		actions.add_theme_constant_override("h_separation", 8)
-		actions.add_theme_constant_override("v_separation", 8)
-		card.add_child(actions)
-		if data.has("use_effect"):
-			actions.add_child(_action_button("💊 Использовать" + (" (%s)" % use_text if use_text != "" else ""), _use_item.bind(item_id)))
-		if slot != "":
-			actions.add_child(_action_button("🦺 Надеть", _equip.bind(item_id)))
-		for inter in InventorySystem.get_interactions(item_id):
-			actions.add_child(_action_button(str(inter.get("label", "")), _interact.bind(item_id, str(inter.get("id", "")))))
-		if InventorySystem.can_drop(item_id):
-			actions.add_child(_action_button("📦 Оставить здесь" if LocationSystem.is_active() else "🗑️ Выбросить", _drop.bind(item_id), "danger"))
-
+	var actions := HFlowContainer.new()
+	actions.add_theme_constant_override("h_separation", 8)
+	actions.add_theme_constant_override("v_separation", 8)
+	card.add_child(actions)
+	if data.has("use_effect"):
+		actions.add_child(_action_button("💊 Использовать" + (" (%s)" % use_text if use_text != "" else ""), _use_item.bind(item_id)))
+	if slot != "":
+		actions.add_child(_action_button("🦺 Надеть", _equip.bind(item_id)))
+	for inter in InventorySystem.get_interactions(item_id):
+		actions.add_child(_action_button(str(inter.get("label", "")), _interact.bind(item_id, str(inter.get("id", "")))))
+	if InventorySystem.can_drop(item_id):
+		actions.add_child(_action_button("📦 Оставить здесь" if LocationSystem.is_active() else "🗑️ Выбросить", _drop.bind(item_id), "danger"))
 
 
 ## Сетка сумки: ячейки с иконками, как в Neo Scavenger. Пустые ячейки

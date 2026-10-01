@@ -15,18 +15,19 @@ Godot 4.7 (GDScript) проект: текстовая survival-RPG для тел
 
 - Логика находится в автозагрузках `autoload/`. Порядок в `project.godot` важен, `GameState` стоит последним.
 - Модель контента: узел карты → локация (`data/locations`, описание + события) → событие (auto/manual, разовое/повторяемое, `triggers`) → ситуация или мгновенные `text`/`effects`.
-- Персонаж: `InventorySystem` — сумка; `CharacterSystem` — снаряжение (5 слотов), навыки, характеристики (`stats`); `CraftingSystem` — рецепты. UI — оверлей `scenes/ui/CharacterPanel.gd` (+ `CharacterDollView`, `UiKit`).
+- Персонаж: `InventorySystem` — сумка (предметы `quest`/`key` места не занимают, `slot_cost: 0`); `CharacterSystem` — снаряжение (5 слотов), навыки, характеристики (`stats`); `CraftingSystem` — рецепты. UI — оверлей `scenes/ui/CharacterPanel.gd` (+ `CharacterDollView`, `UiKit`).
 - Экраны переключает **только** `GameState` (`enter_location`, `enter_situation`, `start_location_event`, `leave_location`).
 - Эффекты и условия из JSON применяются только через `EffectResolver`. Новый тип требует правок в `EffectResolver.gd`, `tools/validate_content.py` и `docs/CONTENT.md`.
 - Контент лежит только в `data/`; id в коде не хардкодить.
 - Система с состоянием забега реализует `reset_for_new_run` / `to_save_data` / `load_save_data` и подключается в `SaveManager`.
 - UI (`scenes/Game.gd`, `scenes/ui/SectorMapView.gd`) строится из кода и перерисовывается целиком по `GameState.screen_changed`.
 - Экран модуля и экран ситуации — общая лента `NarrativeSystem`: текст дописывается снизу, ничего не очищается. Выбор в ситуации → реплика игрока → эффекты → `result` → кнопка «Продолжить» (`SituationEngine.confirm_continue`).
-- Отдельной кнопки «Выйти на карту» нет: «Карта» в HUD открывает карту поверх модуля, игрок выходит, когда идёт по маршруту. Игрок стоит в узле (`MapSystem.player_node_id`) и ходит маршрутами (`plan_route` / `start_travel` / `travel_step`); транзитный модуль с автособытием перехватывает игрока. Видны только палубы, где игрок был.
+- Отдельной кнопки «Выйти на карту» нет: «Карта» в HUD открывает карту поверх модуля, игрок выходит, когда идёт по маршруту. Игрок стоит в узле (`MapSystem.player_node_id`) и ходит маршрутами (`plan_route` / `start_travel` / `travel_step`); транзитный модуль перехватывает игрока, только если вход начнёт бой (`LocationSystem.peek().combat`). Видны только палубы, где игрок был.
 - Размеры шрифта задаются только через `UiKit.fs()`; настройки интерфейса — `SettingsSystem` (`user://settings.json`), анимации переходов включаются там же.
-- Кислород тратится не по таймеру, а на действия: цены в `data/config.json` → `o2_costs`, списывает `ResourceSystem.spend_o2`.
+- Кислород тратится не по таймеру, а на действия: цены в `data/config.json` → `o2_costs`, списывает `ResourceSystem.spend_o2`; в локации с `breathable: true` — бесплатно.
+- Дни, силы и голод — `NeedsSystem` (расход за действия по `ResourceSystem.action_taken`, настройки `data/config.json` → `needs`); новый день — сон на базе (`GameState.end_day`).
 - Ключи — предметы категории `key` с `unlocks`; замок (`lock`) ставится на узел сектора или на событие локации, открывает `EffectResolver.can_open_lock` / `open_lock`.
-- Модуль-база — локация с `base: true`: чекпойнт, склад (stash локации) и верстак.
+- Модуль-база — локация с `base: true` (обычно и `breathable: true`): сон с чекпойнтом, склад (stash локации) и верстак.
 - Бой — манёвры и дистанция в духе Neo Scavenger (`CombatSystem` + `scenes/ui/CombatView.gd`), ходы сторон разыгрываются одновременно; экран боя прижат к низу (манёвры у большого пальца), победа — затемнение и панель награды.
 - Уровни — `ProgressionSystem` (опыт за разведку, крафт, лор, победы; награды и формула — `data/config.json` → `xp`, у врага — поле `xp`); уровень даёт очки навыков, UI — `scenes/ui/XpBar.gd`.
 - Пиксельные картинки: `assets/art/scenes/<image>.png` подключаются полем `image` у ситуаций, локаций, вариантов `descriptions` и событий; иконки `assets/art/items/<item_id>.png` — по id предмета. Рисует `tools/make_pixel_art.py`.

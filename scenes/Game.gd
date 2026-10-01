@@ -30,6 +30,10 @@ var hp_label: Label
 var o2_label: Label
 var ammo_label: Label
 var bag_label: Label
+## Силы, голод и день (NeedsSystem).
+var energy_label: Label
+var hunger_label: Label
+var day_label: Label
 ## Уровень и опыт — тонкая полоса над показателями HUD.
 var xp_bar: HBoxContainer
 var map_button: Button
@@ -120,7 +124,13 @@ func _build_static_layout() -> void:
 	ammo_label = _make_hud_label()
 	bag_label = _make_hud_label()
 	bag_label.name = "BagLabel"
-	for lbl in [hp_label, o2_label, ammo_label, bag_label]:
+	energy_label = _make_hud_label()
+	energy_label.name = "EnergyLabel"
+	hunger_label = _make_hud_label()
+	hunger_label.name = "HungerLabel"
+	day_label = _make_hud_label()
+	day_label.name = "DayLabel"
+	for lbl in _hud_labels():
 		stats_row.add_child(lbl)
 
 	var nav_row := HBoxContainer.new()
@@ -185,6 +195,8 @@ func _connect_signals() -> void:
 	NarrativeSystem.entries_added.connect(_on_story_entries_added)
 	ProgressionSystem.xp_gained.connect(_on_xp_gained)
 	ProgressionSystem.changed.connect(_update_hud)
+	NeedsSystem.changed.connect(_update_hud)
+	NeedsSystem.passed_out.connect(_on_passed_out)
 
 func _fill_parent(control: Control) -> void:
 	control.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -241,7 +253,7 @@ func _make_nav_button(text: String, node_name: String, callback: Callable) -> Bu
 ## HUD строится один раз, поэтому размеры шрифта переприменяются при смене
 ## настройки «Размер шрифта», а не только при создании.
 func _apply_hud_fonts() -> void:
-	for lbl in [hp_label, o2_label, ammo_label, bag_label]:
+	for lbl in _hud_labels():
 		lbl.add_theme_font_size_override("font_size", UiKit.fs(22))
 	for btn in [map_button, character_button, journal_button, settings_button]:
 		btn.custom_minimum_size = Vector2(0, UiKit.fs(78))
@@ -450,7 +462,23 @@ func _update_hud() -> void:
 	o2_label.add_theme_color_override("font_color", UiKit.BAD_COLOR if o2i <= ResourceSystem.LOW_O2 else Color("#eef3ff"))
 	ammo_label.text = "💥 %d" % ResourceSystem.ammo
 	bag_label.text = "🧰 %d/%d" % [InventorySystem.used_slots(), InventorySystem.max_slots]
+	energy_label.text = "⚡ %d" % roundi(NeedsSystem.energy)
+	energy_label.add_theme_color_override("font_color", UiKit.BAD_COLOR if NeedsSystem.is_tired() else Color("#eef3ff"))
+	hunger_label.text = "🍖 %d" % roundi(NeedsSystem.hunger)
+	hunger_label.add_theme_color_override("font_color", UiKit.BAD_COLOR if NeedsSystem.is_hungry() else Color("#eef3ff"))
+	day_label.text = "☀️ День %d" % NeedsSystem.day
 	xp_bar.sync()
+
+
+func _hud_labels() -> Array:
+	return [hp_label, o2_label, ammo_label, bag_label, energy_label, hunger_label, day_label]
+
+
+## Вырубился посреди карты — ленты там не видно, причина пишется под картой.
+func _on_passed_out(o2: float) -> void:
+	if GameState.current_screen == GameState.Screen.SECTOR_MAP:
+		_map_message = "😵 Силы кончились — вы вырубились прямо в пути (−%d O2). Выспитесь на базе." % roundi(o2)
+		_refresh_route_panel()
 
 
 # --- HUD-вкладки ----------------------------------------------------------------
@@ -1066,6 +1094,8 @@ func _route_warnings(path: Array, cost: float) -> Array:
 		warnings.append("⛔ Кислорода не хватит: нужно ≈ %d, в баллоне %d." % [roundi(cost), int(o2)])
 	elif o2 - cost <= ResourceSystem.LOW_O2:
 		warnings.append("⚠️ После перехода останется ≈ %d O2 — это мало." % roundi(o2 - cost))
+	if NeedsSystem.is_tired():
+		warnings.append("😵 Сил ≈ %d — можно вырубиться в пути. Выспитесь на базе." % roundi(NeedsSystem.energy))
 	var hostile: Array = []
 	var unknown := false
 	for i in range(path.size() - 1):
@@ -1196,7 +1226,7 @@ func _render_location() -> void:
 ## Модуль-база: ручное сохранение, верстак и разгрузка сумки на склад.
 func _render_base_section() -> void:
 	_add_section("База")
-	_add_button("💾 Сохранить забег", _base_save, "quiet")
+	_add_button("🛏️ Закончить день — сон и сохранение", GameState.end_day, "quiet")
 	_add_button("🛠️ Верстак", _open_workbench, "quiet")
 	var droppable: Array = []
 	for entry in InventorySystem.get_slots():
@@ -1208,11 +1238,6 @@ func _render_base_section() -> void:
 	_add_section("Разложить по складу")
 	for item_id in droppable:
 		_add_button("📦 Положить: " + _item_name(item_id), _make_base_store_callback(item_id), "quiet")
-
-
-func _base_save() -> void:
-	SaveManager.write_checkpoint()
-	LocationSystem.add_notice("Забег сохранён: точка возврата — этот модуль.")
 
 
 func _open_workbench() -> void:
@@ -1256,7 +1281,6 @@ func _render_character() -> void:
 	var panel: VBoxContainer = CHARACTER_PANEL_SCRIPT.new()
 	panel.tab = character_tab
 	panel.tab_changed.connect(_on_character_tab_changed)
-	panel.closed.connect(_close_character)
 	body.add_child(panel)
 
 
@@ -1457,6 +1481,7 @@ const JOURNAL_COLORS := {
 	"lore": UiKit.TITLE_COLOR,
 	"choice": UiKit.TITLE_COLOR,
 	"loot": UiKit.MUTED_COLOR,
+	"rest": UiKit.GOOD_COLOR,
 }
 
 
@@ -1520,18 +1545,29 @@ func _render_journal_archive() -> void:
 		card.add_child(UiKit.text(ArchiveSystem.get_text(str(id)), 22))
 
 
-## Настройки интерфейса: размер шрифта, плавные переходы и звук.
+## Настройки интерфейса: размер шрифта и громкость — ползунки, плавные
+## переходы и звук — переключатели. В игре настройки закрывает кнопка HUD;
+## в главном меню HUD нет, поэтому там внизу «В меню».
 func _render_settings() -> void:
 	_add_title("Настройки")
-	_add_section("Размер шрифта")
-	for size_id in SettingsSystem.FONT_SIZES.keys():
-		var active: bool = str(size_id) == SettingsSystem.font_size_id
-		var btn := UiKit.button(
-			SettingsSystem.font_size_title(str(size_id)) + ("  ✓" if active else ""),
-			"tab_active" if active else "quiet")
-		btn.name = "FontSize_%s" % size_id
-		btn.pressed.connect(_select_font_size.bind(str(size_id)))
-		body.add_child(btn)
+	var font_caption := UiKit.section("")
+	body.add_child(font_caption)
+	var font_slider := UiKit.slider(SettingsSystem.FONT_SCALE_MIN, SettingsSystem.FONT_SCALE_MAX, 0.05,
+		SettingsSystem.font_scale())
+	font_slider.name = "FontScaleSlider"
+	font_slider.tick_count = SettingsSystem.FONT_SCALE_ANCHORS.size()
+	font_slider.ticks_on_borders = true
+	body.add_child(font_slider)
+	_bind_settings_slider(font_slider, font_caption,
+		func(value: float) -> String: return "Размер шрифта: %s×" % _scale_text(SettingsSystem.snap_font_scale(value)),
+		func(value: float) -> void: SettingsSystem.set_font_scale(value))
+	var anchors := HBoxContainer.new()
+	for i in range(SettingsSystem.FONT_SCALE_ANCHORS.size()):
+		var anchor := UiKit.text("%s×" % _scale_text(float(SettingsSystem.FONT_SCALE_ANCHORS[i])), 20, UiKit.MUTED_COLOR)
+		anchor.horizontal_alignment = [HORIZONTAL_ALIGNMENT_LEFT, HORIZONTAL_ALIGNMENT_CENTER, HORIZONTAL_ALIGNMENT_RIGHT][mini(i, 2)]
+		anchors.add_child(anchor)
+	body.add_child(anchors)
+
 	_add_section("Плавные переходы")
 	var anim_btn := UiKit.button(
 		"Анимации: включены" if SettingsSystem.animations else "Анимации: выключены",
@@ -1547,25 +1583,42 @@ func _render_settings() -> void:
 	sound_btn.pressed.connect(_toggle_sound)
 	body.add_child(sound_btn)
 	if SettingsSystem.sound_enabled:
-		for volume_id in SettingsSystem.SOUND_VOLUMES.keys():
-			var active: bool = str(volume_id) == SettingsSystem.sound_volume_id
-			var btn := UiKit.button(
-				"Громкость: %s%s" % [SettingsSystem.sound_volume_title(str(volume_id)), "  ✓" if active else ""],
-				"tab_active" if active else "quiet")
-			btn.name = "SoundVolume_%s" % volume_id
-			btn.pressed.connect(_select_sound_volume.bind(str(volume_id)))
-			body.add_child(btn)
+		var volume_caption := UiKit.section("")
+		body.add_child(volume_caption)
+		var volume_slider := UiKit.slider(0, 100, 1, SettingsSystem.sound_volume_percent)
+		volume_slider.name = "SoundVolumeSlider"
+		body.add_child(volume_slider)
+		_bind_settings_slider(volume_slider, volume_caption,
+			func(value: float) -> String: return "Громкость: %d" % roundi(value),
+			_set_sound_volume)
 	_add_text("Настройки меняют интерфейс сразу и сохраняются между запусками.")
-	_add_button("✖ Закрыть", _toggle_settings, "quiet")
+	if GameState.current_screen == GameState.Screen.MAIN_MENU:
+		_add_button("← В меню", _toggle_settings, "quiet")
 
 
-func _select_font_size(size_id: String) -> void:
-	SettingsSystem.set_font_size(size_id)
+## Подпись ползунка следует за пальцем, а значение применяется, когда палец
+## отпущен (или по нажатию на дорожку): настройка перерисовывает экран, и
+## ползунок под пальцем не должен пересоздаваться посреди движения.
+func _bind_settings_slider(slider: HSlider, caption: Label, describe: Callable, commit: Callable) -> void:
+	caption.text = describe.call(slider.value)
+	var dragging := [false]
+	slider.drag_started.connect(func() -> void: dragging[0] = true)
+	slider.drag_ended.connect(func(_changed: bool) -> void:
+		dragging[0] = false
+		commit.call_deferred(slider.value))
+	slider.value_changed.connect(func(value: float) -> void:
+		caption.text = describe.call(value)
+		if not dragging[0]:
+			commit.call_deferred(value))
+
+
+func _scale_text(value: float) -> String:
+	return str(snappedf(value, 0.05)).trim_suffix(".0")
 
 
 ## После смены громкости или включения звука — образец на новой громкости.
-func _select_sound_volume(volume_id: String) -> void:
-	SettingsSystem.set_sound_volume(volume_id)
+func _set_sound_volume(value: float) -> void:
+	SettingsSystem.set_sound_volume(roundi(value))
 	SoundSystem.play("pickup")
 
 

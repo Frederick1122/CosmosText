@@ -4,7 +4,7 @@ extends Node
 ## отдельным автозагрузом в tech-spec-v1.md — добавлен, чтобы не дублировать
 ## switch по типу эффекта в нескольких системах. Справочник типов — docs/CONTENT.md.
 
-## Изменение показано в ленте. kind: "hp" | "o2" | "ammo" | "item" | "xp";
+## Изменение показано в ленте. kind: "hp" | "o2" | "ammo" | "item" | "xp" | "hunger";
 ## amount — фактическое изменение (со знаком). Слушает SoundSystem.
 signal change_reported(kind: String, amount: float)
 ## Замок открыт подходящим ключом (узел карты или событие-ящик).
@@ -26,6 +26,9 @@ func apply_effect(effect: Dictionary) -> void:
 			var ammo_before := ResourceSystem.ammo
 			ResourceSystem.apply_ammo_delta(int(effect.get("value", 0)))
 			report_change("ammo", ResourceSystem.ammo - ammo_before, "Патроны")
+		"hunger_delta":
+			# Голод убывает — это хорошо: строка «[−40 голода]» зелёная.
+			report_change("hunger", NeedsSystem.apply_hunger_delta(float(effect.get("value", 0.0))), "голода", true)
 		"item_add":
 			_add_item(str(effect.get("item", "")), int(effect.get("count", 1)))
 		"item_remove":
@@ -75,6 +78,8 @@ func describe_effect(effect: Dictionary) -> String:
 			return "%+d O2" % value
 		"ammo_delta":
 			return "%+d патр." % value
+		"hunger_delta":
+			return "%+d голода" % value
 		"skill_points_add":
 			return "%+d очк. навыков" % value
 	return ""
@@ -82,13 +87,15 @@ func describe_effect(effect: Dictionary) -> String:
 
 ## Строка ленты вида «[−5 HP]» / «[+1 Аптечка]»: прибыль — kind ленты "gain",
 ## убыль — "loss". Нулевое изменение (лечение при полном HP) не показывается.
-## kind — что изменилось ("hp" | "o2" | "ammo" | "item" | "xp"), what — подпись.
-func report_change(kind: String, amount: float, what: String) -> void:
+## kind — что изменилось ("hp" | "o2" | "ammo" | "item" | "xp" | "hunger"), what —
+## подпись; less_is_better — убыль считается прибылью (голод).
+func report_change(kind: String, amount: float, what: String, less_is_better: bool = false) -> void:
 	if is_zero_approx(amount):
 		return
 	var shown := maxi(1, roundi(absf(amount)))
-	var gained := amount > 0.0
-	NarrativeSystem.push("gain" if gained else "loss", "[%s%d %s]" % ["+" if gained else "−", shown, what])
+	var increased := amount > 0.0
+	NarrativeSystem.push("gain" if increased != less_is_better else "loss",
+		"[%s%d %s]" % ["+" if increased else "−", shown, what])
 	change_reported.emit(kind, amount)
 
 

@@ -154,7 +154,6 @@
 				},
 				"floor": "deck_01",
 				"kind": "elevator",
-				"label": "Лифт",
 				"note": "Рабочая шахта вниз, к грузовому уровню",
 				"order": 20.0,
 				"target_floor": "deck_02"
@@ -175,7 +174,6 @@
 				},
 				"floor": "deck_02",
 				"kind": "elevator",
-				"label": "Лифт ↑",
 				"note": "Вернуться к капсуле",
 				"order": 40.0,
 				"target_floor": "deck_01"
@@ -196,7 +194,6 @@
 				},
 				"floor": "deck_02",
 				"kind": "elevator",
-				"label": "Лифт ↓",
 				"note": "Спуск к поврежденной реакторной секции",
 				"order": 60.0,
 				"target_floor": "deck_03"
@@ -217,7 +214,6 @@
 				},
 				"floor": "deck_03",
 				"kind": "elevator",
-				"label": "Лифт ↑",
 				"note": "Шахта скрипит, но кабина отвечает",
 				"order": 80.0,
 				"target_floor": "deck_02"

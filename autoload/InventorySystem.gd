@@ -135,10 +135,16 @@ func describe_use(item_id: String) -> String:
 	return EffectResolver.describe_effect(effect) if effect is Dictionary else ""
 
 
-## Сюжетные предметы и ключи нельзя выбросить: иначе замок не открыть.
-func can_drop(item_id: String) -> bool:
+## Инфо-предметы — сюжетные и ключи: место в сумке не занимают (slot_cost 0,
+## проверяет валидатор), показываются отдельным списком и не выбрасываются —
+## иначе замок не открыть и сюжет не продвинуть.
+func is_info_item(item_id: String) -> bool:
 	var category := str(get_item_data(item_id).get("category", ""))
-	return has_item(item_id) and category != "quest" and category != "key"
+	return category == "quest" or category == "key"
+
+
+func can_drop(item_id: String) -> bool:
+	return has_item(item_id) and not is_info_item(item_id)
 
 
 func drop_item(item_id: String) -> bool:
@@ -151,16 +157,21 @@ func drop_item(item_id: String) -> bool:
 
 
 ## Сумка уменьшилась (например, уничтожен надетый рюкзак) — лишнее ссыпается
-## на пол модуля, как при получении предмета в переполненную сумку.
+## на пол модуля, как при получении предмета в переполненную сумку. Ссыпается
+## только то, что занимает место: инфо-предметы остаются при игроке.
 ## Вне модуля ничего не делаем: уронить предмет некуда, терять его нельзя.
 func spill_overflow() -> void:
 	if used_slots() <= max_slots or not LocationSystem.is_active():
 		return
-	while used_slots() > max_slots and not slots.is_empty():
-		var entry: Dictionary = slots[slots.size() - 1]
+	for i in range(slots.size() - 1, -1, -1):
+		if used_slots() <= max_slots:
+			return
+		var entry: Dictionary = slots[i]
+		if int(entry.get("slot_cost", 1)) <= 0:
+			continue
 		var item_id := str(entry.get("id", ""))
 		var count := int(entry.get("count", 1))
-		slots.remove_at(slots.size() - 1)
+		slots.remove_at(i)
 		item_removed.emit(item_id)
 		LocationSystem.stash_add(item_id, count)
 		var item_name := str(get_item_data(item_id).get("name", item_id))
@@ -205,13 +216,17 @@ func load_save_data(data) -> void:
 	bonus_slots = 0
 	if data is Array:
 		slots = data.duplicate(true)
-		return
-	if not (data is Dictionary):
+	elif data is Dictionary:
+		base_slots = int(data.get("base_slots", data.get("max_slots", base_slots)))
+		var loaded_slots = data.get("slots", [])
+		slots = loaded_slots.duplicate(true) if loaded_slots is Array else []
+	else:
 		slots.clear()
-		return
-	base_slots = int(data.get("base_slots", data.get("max_slots", base_slots)))
-	var loaded_slots = data.get("slots", [])
-	slots = loaded_slots.duplicate(true) if loaded_slots is Array else []
+	# Место предмета — из контента: старые сейвы хранят прежнюю цену слота.
+	for entry in slots:
+		var item_data := get_item_data(str(entry.get("id", "")))
+		if not item_data.is_empty():
+			entry["slot_cost"] = int(item_data.get("slot_cost", 1))
 
 
 func _add_one(item_id: String) -> bool:

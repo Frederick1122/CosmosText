@@ -196,9 +196,11 @@ func move_title(move_id: String) -> String:
 ## экрана боя по две кнопки: отход слева, сближение справа.
 func get_available_moves() -> Array:
 	var moves: Array = []
-	var ranged_ready := ResourceSystem.ammo > 0
+	# Стрелять можно только из огнестрела в руках (предмет с "firearm": true) и при патронах.
+	var firearm := _has_firearm()
+	var shoot_reason := "Нет патронов" if firearm else "Нет огнестрела в руках"
 	moves.append(_move_entry("shoot", "Выстрелить (патронов: %d)" % ResourceSystem.ammo,
-		ranged_ready, "Нет патронов"))
+		firearm and ResourceSystem.ammo > 0, shoot_reason))
 	var melee_name := CharacterSystem.get_equipped_name("arms")
 	var melee_label := "Удар: %s" % melee_name if melee_name != "" else "Удар голыми руками"
 	moves.append(_move_entry("strike", melee_label, range_steps <= MELEE_RANGE,
@@ -292,6 +294,7 @@ func _resolve_use_item(item_id: String) -> void:
 	var hp_before := ResourceSystem.hp
 	var o2_before := ResourceSystem.o2
 	var ammo_before := ResourceSystem.ammo
+	var hunger_before := NeedsSystem.hunger
 	if not InventorySystem.use_item(item_id):
 		_log("Предмет нельзя использовать.", "info")
 		return
@@ -304,6 +307,9 @@ func _resolve_use_item(item_id: String) -> void:
 		gains.append("%+d O2" % o2_gain)
 	if ResourceSystem.ammo != ammo_before:
 		gains.append("%+d патр." % (ResourceSystem.ammo - ammo_before))
+	var hunger_change := roundi(NeedsSystem.hunger - hunger_before)
+	if hunger_change != 0:
+		gains.append("%+d голода" % hunger_change)
 	if gains.is_empty():
 		_log("Вы используете: %s — ничего не изменилось." % item_name, "move")
 		return
@@ -325,7 +331,7 @@ func _resolve_throw() -> void:
 
 
 func _throw_chance() -> float:
-	var chance := THROW_HIT_CHANCE + CharacterSystem.get_stat("hit_chance") + _aim_bonus()
+	var chance := THROW_HIT_CHANCE + _accuracy_bonus()
 	chance -= 0.08 * float(maxi(0, range_steps - 2))
 	if _enemy_defending:
 		chance -= DEFEND_HIT_PENALTY
@@ -337,7 +343,7 @@ func _resolve_shot() -> void:
 		_log("Осечка: патронов нет.", "info")
 		return
 	ResourceSystem.apply_ammo_delta(-1)
-	var chance := RANGED_HIT_CHANCE + CharacterSystem.get_stat("hit_chance") + _aim_bonus()
+	var chance := RANGED_HIT_CHANCE + _accuracy_bonus()
 	# На вытянутой руке стрелять неудобно, на большой дистанции — тем более.
 	chance -= 0.08 * float(maxi(0, range_steps - 2))
 	if range_steps == 0:
@@ -356,7 +362,7 @@ func _resolve_strike() -> void:
 	if range_steps > MELEE_RANGE:
 		_log("Противник слишком далеко — удар рассекает пустоту.", "info")
 		return
-	var chance := MELEE_HIT_CHANCE + CharacterSystem.get_stat("hit_chance") + _aim_bonus()
+	var chance := MELEE_HIT_CHANCE + _accuracy_bonus()
 	if _enemy_defending:
 		chance -= DEFEND_HIT_PENALTY
 	_consume_aim()
@@ -537,6 +543,12 @@ func _aim_bonus() -> float:
 	return AIM_BONUS if _player_aiming else 0.0
 
 
+## Прибавка к шансу попадания: точность снаряжения и навыков, прицел, минус
+## усталость (NeedsSystem).
+func _accuracy_bonus() -> float:
+	return CharacterSystem.get_stat("hit_chance") + _aim_bonus() - NeedsSystem.hit_penalty()
+
+
 func _consume_aim() -> void:
 	_player_aiming = false
 
@@ -558,10 +570,14 @@ func _player_conditions() -> Array:
 		result.append("В защите")
 	if ResourceSystem.hp * 4 <= ResourceSystem.max_hp:
 		result.append("Тяжело ранен")
-	if ResourceSystem.ammo <= 0:
+	if _has_firearm() and ResourceSystem.ammo <= 0:
 		result.append("Без патронов")
 	if _holding_debris:
 		result.append("Обломок в руке")
+	if NeedsSystem.is_tired():
+		result.append("Измотан: −%d%% к попаданию" % roundi(NeedsSystem.hit_penalty() * 100.0))
+	if NeedsSystem.is_hungry():
+		result.append("Голоден")
 	return result
 
 
@@ -579,11 +595,12 @@ func _enemy_conditions() -> Array:
 
 
 func _player_weapon_name() -> String:
-	if ResourceSystem.ammo > 0:
-		var ranged := CharacterSystem.get_equipped_name("arms")
-		return ranged if ranged != "" else "огнестрел"
-	var melee := CharacterSystem.get_equipped_name("arms")
-	return melee if melee != "" else "голые руки"
+	var weapon := CharacterSystem.get_equipped_name("arms")
+	return weapon if weapon != "" else "голые руки"
+
+
+func _has_firearm() -> bool:
+	return bool(InventorySystem.get_item_data(CharacterSystem.get_equipped("arms")).get("firearm", false))
 
 
 func _available_specials() -> Array:

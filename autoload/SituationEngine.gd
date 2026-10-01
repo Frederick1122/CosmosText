@@ -165,6 +165,17 @@ func is_closing_option(opt: Dictionary) -> bool:
 	return next_id == "" or next_id.begins_with("map:")
 
 
+## Может ли ситуация начать бой: start_combat в эффектах любого варианта.
+func situation_starts_combat(situation_id: String) -> bool:
+	for opt in _situations.get(situation_id, {}).get("options", []):
+		if not (opt is Dictionary):
+			continue
+		for effect in opt.get("effects", []):
+			if effect is Dictionary and str(effect.get("type", "")) == "start_combat":
+				return true
+	return false
+
+
 func _find_option(option_id: String):
 	for opt in _current_data.get("options", []):
 		if opt.get("id", "") == option_id:

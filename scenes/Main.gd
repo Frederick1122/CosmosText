@@ -89,9 +89,24 @@ func _ready() -> void:
 		"со склада можно забрать обратно")
 	InventorySystem.remove_item("ration_bar")
 	InventorySystem.remove_item("improvised_bandage")
+
+	# --- Дни, силы и голод ---
+	_expect(is_zero_approx(ResourceSystem.get_o2_cost("action")) and is_equal_approx(ResourceSystem.o2, o2_before_decline),
+		"в капсуле есть воздух: действия на базе кислорода не тратят")
+	_expect(NeedsSystem.energy < NeedsSystem.max_energy() and NeedsSystem.hunger > 0.0,
+		"действия отнимают силы и копят голод")
+	var hunger_before_sleep := NeedsSystem.hunger
 	_delete_save(SaveManager.CHECKPOINT_PATH)
-	SaveManager.write_checkpoint()
-	_expect(FileAccess.file_exists(SaveManager.CHECKPOINT_PATH), "кнопка «Сохранить забег» на базе пишет чекпойнт")
+	GameState.end_day()
+	_expect(NeedsSystem.day == 2 and is_equal_approx(NeedsSystem.energy, NeedsSystem.max_energy())
+		and NeedsSystem.hunger > hunger_before_sleep and FileAccess.file_exists(SaveManager.CHECKPOINT_PATH)
+		and GameState.current_screen == Screen.LOCATION,
+		"сон на базе: новый день, силы восстановлены, голод вырос, чекпойнт записан")
+	InventorySystem.add_item("ration_bar")
+	var hunger_before_meal := NeedsSystem.hunger
+	InventorySystem.use_item("ration_bar")
+	_expect(NeedsSystem.hunger < hunger_before_meal and _narrative_kind_last("gain").contains("голода"),
+		"брикет утоляет голод, в ленте зелёная строка")
 
 	# --- Палуба 02: грузовой отсек ---
 	GameState.leave_location()
@@ -121,12 +136,13 @@ func _ready() -> void:
 	_expect(SituationEngine.current_id == "sit_1_3_drone" and GameState.current_screen == Screen.SITUATION
 		and MapSystem.player_node_id == "cargo_bay" and not MapSystem.is_travelling(),
 		"дрон перехватывает игрока в пути через грузовой отсек")
-	ResourceSystem.apply_ammo_delta(10)  # чит для детерминированной победы
+	ResourceSystem.apply_ammo_delta(10)  # патроны есть, а пистолета ещё нет
 	_choose("A")
 	_expect(GameState.current_screen == Screen.COMBAT, "начат бой")
 	_expect(CombatSystem.range_steps == 2, "бой начинается с дистанции врага (2 шага)")
-	_expect(not _combat_move_enabled("strike") and _combat_move_enabled("shoot"),
-		"вплотную не ударить: удар доступен только на дистанции ≤ 1")
+	_expect(not _combat_move_enabled("strike"), "вплотную не ударить: удар доступен только на дистанции ≤ 1")
+	_expect(not _combat_move_enabled("shoot") and _combat_move_reason("shoot") == "Нет огнестрела в руках",
+		"без огнестрела в руках не выстрелить, даже с патронами")
 	CombatSystem.player_action("approach")
 	_expect(CombatSystem.range_steps <= 2 and _combat_move_enabled("strike"),
 		"сближение подпускает дрона на дистанцию удара (шагов: %d)" % CombatSystem.range_steps)
@@ -139,9 +155,9 @@ func _ready() -> void:
 	_expect(_has_combat_move("grab") and throw_hit == CombatSystem.get_state()["enemy_conditions"].has("Потерял цель"),
 		"бросок: попадание ранит и сбивает с толку, обломок израсходован (попал: %s)" % throw_hit)
 	ResourceSystem.apply_hp_delta(-30)
-	InventorySystem.add_item("ration_bar")
-	CombatSystem.player_action("use_item", "ration_bar")
-	_expect(_combat_log_has_heal(10) and not InventorySystem.has_item("ration_bar"),
+	InventorySystem.add_item("improvised_bandage")
+	CombatSystem.player_action("use_item", "improvised_bandage")
+	_expect(_combat_log_has_heal(15) and not InventorySystem.has_item("improvised_bandage"),
 		"расходник в бою: лечение в журнале и в эффектах карточки")
 	ResourceSystem.apply_hp_delta(30)
 	var xp_level_before_fight := ProgressionSystem.level
@@ -171,12 +187,15 @@ func _ready() -> void:
 	_expect(InventorySystem.count_item("duct_tape") == 2 and InventorySystem.count_item("cloth_rags") == 3
 		and InventorySystem.count_item("scrap_metal") == 2 and InventorySystem.has_item("pipe_scrap"),
 		"контейнеры обысканы (item_add с count)")
-	_expect(InventorySystem.free_slots() == 0, "сумка заполнена: 6/6")
+	_expect(InventorySystem.free_slots() == 1 and InventorySystem.has_item("broken_datapad"),
+		"сумка 5/6: планшет — инфо-предмет и места не занимает")
 	_expect(not _has_manual("search_containers"), "одноразовое событие исчезло из меню")
 
+	InventorySystem.add_item("improvised_bandage")  # последний слот — сумка полна
 	EffectResolver.apply_effect({"type": "item_add", "item": "ration_bar", "count": 2})
 	_expect(int(LocationSystem.get_stash().get("ration_bar", 0)) == 2 and not InventorySystem.has_item("ration_bar")
 		and _notice_contains("Не поместилось"), "полная сумка: лишнее осталось лежать в модуле")
+	InventorySystem.remove_item("improvised_bandage")
 	var hp_before_hurt := ResourceSystem.hp
 	EffectResolver.apply_effect({"type": "hp_delta", "value": -5})
 	_expect(_narrative_kind_last("loss") == "[−5 HP]", "урон из эффекта показан в ленте: [−5 HP]")
@@ -316,6 +335,9 @@ func _ready() -> void:
 
 	# --- Палуба 03: коридор и реактор ---
 	GameState.leave_location()
+	MapSystem.travel_to("hub")
+	GameState.end_day()  # выспаться перед спуском: иначе вырубится по дороге к реактору
+	GameState.leave_location()
 	MapSystem.travel_to("lift_01_to_02")
 	MapSystem.travel_to("lift_02_to_03")
 	var o2_before_move := ResourceSystem.o2
@@ -445,9 +467,16 @@ func _ready() -> void:
 		and SituationEngine.get_flag("docked_wechter") == true, "прибытие: автособытие и запись журнала")
 	GameState.leave_location()
 	MapSystem.travel_to("crew_quarters")
+	while InventorySystem.has_item("ration_bar"):
+		InventorySystem.use_item("ration_bar")
+	var day_before_quarters := NeedsSystem.day
+	GameState.end_day()
+	_expect(LocationSystem.is_base() and NeedsSystem.day == day_before_quarters + 1
+		and is_equal_approx(NeedsSystem.energy, NeedsSystem.max_energy()) and not NeedsSystem.is_hungry(),
+		"каюты смены — вторая база: поели и выспались на станции")
 	GameState.start_location_event("search_bunks")
 	_expect(InventorySystem.has_item("medkit"), "в каютах найдена аптечка")
-	ResourceSystem.apply_hp_delta(-40)
+	ResourceSystem.apply_hp_delta(-mini(40, ResourceSystem.hp - 1))
 	var hp_before := ResourceSystem.hp
 	while InventorySystem.has_item("medkit"):
 		InventorySystem.use_item("medkit")
@@ -572,6 +601,24 @@ func _ready() -> void:
 	_expect(MapSystem.current_floor_id == "deck_03" and MapSystem.player_node_id == "lift_03_to_02"
 		and _node_state("cargo_bay") == "dangerous", "прорыв: игрок за дроном, на палубе 03")
 
+	# --- Путь не прерывают события без боя; силы и голод на исходе ---
+	_expect(bool(LocationSystem.peek("service_corridor", true)["auto"])
+		and not bool(LocationSystem.peek("service_corridor", true)["combat"])
+		and bool(LocationSystem.peek("cargo_bay", true)["combat"]),
+		"по пути останавливает только бой: предупреждение в коридоре подождёт входа")
+	NeedsSystem.energy = 1.0
+	var o2_before_faint := ResourceSystem.o2
+	var move_cost := ResourceSystem.get_o2_cost("move", "service_corridor")
+	MapSystem.travel_to("service_corridor")
+	_expect(is_equal_approx(NeedsSystem.energy, 30.0) and _journal_has("Обморок от усталости")
+		and is_equal_approx(o2_before_faint - ResourceSystem.o2, move_cost + 30.0),
+		"силы на нуле: обморок стоит кислорода, игрок приходит в себя с запасом сил")
+	NeedsSystem.hunger = NeedsSystem.max_hunger()
+	var hp_before_starving := ResourceSystem.hp
+	ResourceSystem.spend_o2("action")
+	_expect(ResourceSystem.hp == hp_before_starving - 3 and _narrative_kind_last("loss").contains("голод"),
+		"голод на максимуме: каждое действие отнимает здоровье")
+
 	if _failures.is_empty():
 		print("SMOKE OK")
 	else:
@@ -594,12 +641,18 @@ func _fight() -> int:
 
 
 func _best_move() -> String:
-	if ResourceSystem.ammo > 0:
+	if _combat_move_enabled("shoot"):
 		return "shoot"
 	if CombatSystem.range_steps > CombatSystem.MELEE_RANGE:
 		return "approach"
 	return "strike"
 
+
+func _combat_move_reason(move_id: String) -> String:
+	for move in CombatSystem.get_available_moves():
+		if str(move.get("id", "")) == move_id:
+			return str(move.get("reason", ""))
+	return ""
 
 
 func _combat_move_enabled(move_id: String) -> bool:

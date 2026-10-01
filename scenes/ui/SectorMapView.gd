@@ -40,13 +40,13 @@ const ROUTE_COLOR := Color("#ffd166")
 
 ## Статус узла → заливка, рамка, значок, цвет подписи и строка легенды.
 const STATUS_STYLE := {
-	"base": {"fill": Color("#174c3c"), "border": Color("#70d1a0"), "icon": "🏠", "text": Color("#b6f0d0"), "legend": "База: сохранение и склад"},
+	"base": {"fill": Color("#174c3c"), "border": Color("#70d1a0"), "icon": "🏠", "text": Color("#b6f0d0"), "legend": "База: сон, сохранение и склад"},
 	"events": {"fill": Color("#4d3c12"), "border": Color("#f0c24b"), "icon": "❗", "text": Color("#ffe08a"), "legend": "Есть что сделать"},
 	"locked": {"fill": Color("#1c3358"), "border": Color("#6f9cf0"), "icon": "🔒", "text": Color("#bcd2ff"), "legend": "Нужен ключ: дверь, ящик"},
 	"door": {"fill": Color("#1c3358"), "border": Color("#6f9cf0"), "icon": "🔒", "text": Color("#bcd2ff"), "legend": ""},
 	"empty": {"fill": Color("#2a2f38"), "border": Color("#646d7c"), "icon": "✓", "text": Color("#9aa3b2"), "legend": "Больше ничего нет"},
 	"hostile": {"fill": Color("#5b2530"), "border": Color("#e0707e"), "icon": "☠", "text": Color("#ffb3bd"), "legend": "Враг"},
-	"elevator": {"fill": Color("#174a5c"), "border": Color("#7fdcf5"), "icon": "⇅", "text": Color("#c8f2ff"), "legend": "Лифт на другую палубу"},
+	"elevator": {"fill": Color("#174a5c"), "border": Color("#7fdcf5"), "icon": "🛗", "text": Color("#c8f2ff"), "legend": "Лифт на другую палубу"},
 	"unknown": {"fill": Color("#1b2029"), "border": Color("#4a5363"), "icon": "?", "text": Color("#9aa4b6"), "legend": "Ещё не исследован"},
 }
 ## Порядок строк легенды над картой.
@@ -804,6 +804,14 @@ func _node_floor_id(node: Dictionary) -> String:
 	return configured if configured != "" else _current_floor_id
 
 
+## Короткая метка палубы с кнопки справа от карты: «02», «B».
+func _floor_label(floor_id: String) -> String:
+	for floor in _map_config.get("floors", []):
+		if floor is Dictionary and str(floor.get("id", "")) == floor_id:
+			return str(floor.get("label", floor_id))
+	return floor_id
+
+
 func _floor_title(floor_id: String) -> String:
 	for floor in _map_config.get("floors", []):
 		if floor is Dictionary and str(floor.get("id", "")) == floor_id:
@@ -852,12 +860,16 @@ func _style(node: Dictionary) -> Dictionary:
 	return STATUS_STYLE.get(str(node.get("status", "unknown")), STATUS_STYLE["unknown"])
 
 
+## Подпись под узлом. Лифт подписан палубой, куда ведёт: «Лифт к 02» —
+## та же метка, что на кнопке палубы.
 func _node_label(node: Dictionary) -> String:
 	var cfg := _node_map(node)
 	if _is_unknown_room(node):
 		return "Неизвестно"
 	if str(node.get("state", "locked")) == "locked" and not bool(cfg.get("reveal_title_when_locked", true)):
 		return "Неизвестно"
+	if _is_elevator_node(node) and str(cfg.get("target_floor", "")) != "":
+		return "Лифт к %s" % _floor_label(str(cfg["target_floor"]))
 	return str(cfg.get("label", node.get("title", node.get("id", ""))))
 
 

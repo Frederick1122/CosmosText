@@ -27,7 +27,7 @@
 			}
 		],
 		"name": "Сломанный планшет",
-		"slot_cost": 1.0,
+		"slot_cost": 0.0,
 		"stackable": false
 	},
 	"cloth_rags": {
@@ -171,18 +171,18 @@
 		"category": "quest",
 		"description": "Ячейка из стойки реактора. Ещё тёплая. Без неё корабль не поднять.",
 		"name": "Энергоячейка",
-		"slot_cost": 1.0,
+		"slot_cost": 0.0,
 		"stackable": false
 	},
 	"ration_bar": {
 		"category": "consumable",
-		"description": "Спрессованный паёк. На вкус как картон, но придаёт сил.",
+		"description": "Спрессованный паёк. На вкус как картон, зато утоляет голод надолго.",
 		"name": "Пищевой брикет",
 		"slot_cost": 1.0,
 		"stackable": true,
 		"use_effect": {
-			"type": "hp_delta",
-			"value": 10.0
+			"type": "hunger_delta",
+			"value": -40.0
 		}
 	},
 	"scrap_metal": {
@@ -196,6 +196,7 @@
 		"category": "weapon",
 		"description": "Компактный пистолет экипажа. Хорош, пока есть патроны; в рукопашной бесполезен.",
 		"equip_slot": "arms",
+		"firearm": true,
 		"name": "Табельный пистолет",
 		"slot_cost": 1.0,
 		"stackable": false,
@@ -208,7 +209,7 @@
 		"category": "quest",
 		"description": "Схема палуб и технических проходов. После изучения убирает туман с карты.",
 		"name": "Схема обломка",
-		"slot_cost": 1.0,
+		"slot_cost": 0.0,
 		"stackable": false
 	},
 	"station_keycard": {

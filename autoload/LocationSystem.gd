@@ -150,6 +150,12 @@ func is_base(location_id: String = "") -> bool:
 	return bool(_locations.get(location_id, {}).get("base", false))
 
 
+## В модуле есть воздух ("breathable": true, например база): действия здесь
+## кислорода не тратят (ResourceSystem.environment_multiplier).
+func is_breathable(location_id: String) -> bool:
+	return bool(_locations.get(location_id, {}).get("breathable", false))
+
+
 func get_visits(location_id: String = "") -> int:
 	if location_id == "":
 		location_id = current_id
@@ -219,13 +225,13 @@ func add_notice(text: String) -> void:
 
 
 ## Что осталось в модуле, не входя в него (для цвета узла на карте и для
-## перехвата в пути): { open, locked, auto, stash } — доступные ручные
-## события, запертые ключом, ждущее автособытие и вещи на полу.
+## перехвата в пути): { open, locked, auto, combat, stash } — доступные ручные
+## события, запертые ключом, ждущее автособытие, ждущий бой и вещи на полу.
 ## simulate_entry — проверить так, будто игрок сейчас входит: визит +1,
 ## автособытия этого визита ещё не срабатывали. Состояние не меняется:
 ## контекст текущей локации подменяется только на время проверки условий.
 func peek(location_id: String, simulate_entry: bool = false) -> Dictionary:
-	var result := {"open": 0, "locked": 0, "auto": false, "stash": not get_stash(location_id).is_empty()}
+	var result := {"open": 0, "locked": 0, "auto": false, "combat": false, "stash": not get_stash(location_id).is_empty()}
 	if not _locations.has(location_id):
 		return result
 	var saved_id := current_id
@@ -242,6 +248,8 @@ func peek(location_id: String, simulate_entry: bool = false) -> Dictionary:
 			continue
 		if str(ev.get("start", "manual")) == "auto":
 			result["auto"] = true
+			if is_combat_event(ev):
+				result["combat"] = true
 		elif is_event_locked(ev):
 			result["locked"] = int(result["locked"]) + 1
 		else:
@@ -254,6 +262,15 @@ func peek(location_id: String, simulate_entry: bool = false) -> Dictionary:
 		else:
 			_visits.erase(location_id)
 	return result
+
+
+## Событие-бой: start_combat в его effects или в одном из вариантов его ситуации.
+func is_combat_event(ev: Dictionary) -> bool:
+	for effect in ev.get("effects", []):
+		if effect is Dictionary and str(effect.get("type", "")) == "start_combat":
+			return true
+	var situation_id := str(ev.get("situation", ""))
+	return situation_id != "" and SituationEngine.situation_starts_combat(situation_id)
 
 
 # --- Предметы на полу модуля ----------------------------------------------------

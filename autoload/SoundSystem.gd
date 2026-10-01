@@ -65,7 +65,7 @@ func _ready() -> void:
 
 
 func play(id: String) -> void:
-	if not SettingsSystem.sound_enabled or not _streams.has(id):
+	if not SettingsSystem.sound_enabled or SettingsSystem.sound_volume_percent <= 0 or not _streams.has(id):
 		return
 	var now := Time.get_ticks_msec()
 	if now - int(_last_played.get(id, -REPEAT_GUARD_MS)) < REPEAT_GUARD_MS:
@@ -97,6 +97,9 @@ func _on_change_reported(kind: String, amount: float) -> void:
 		"item", "ammo":
 			if amount > 0.0:
 				play("pickup")
+		"hunger":
+			if amount < 0.0:
+				play("heal")  # поел
 
 
 ## Опыт за ход боя звучит на экране победы, а не в момент удара.

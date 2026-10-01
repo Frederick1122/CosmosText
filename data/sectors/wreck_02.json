@@ -122,7 +122,6 @@
 				},
 				"floor": "ring_a",
 				"kind": "elevator",
-				"label": "Лифт",
 				"note": "Шахта к антенному ярусу",
 				"order": 30.0,
 				"target_floor": "ring_b"
@@ -143,7 +142,6 @@
 				},
 				"floor": "ring_b",
 				"kind": "elevator",
-				"label": "Лифт",
 				"note": "Шахта обратно к стыковке",
 				"order": 40.0,
 				"target_floor": "ring_a"

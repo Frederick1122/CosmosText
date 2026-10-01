@@ -23,5 +23,21 @@
     "level_base": 50,
     "level_step": 25,
     "skill_points_per_level": 1
+  },
+  "needs": {
+    "max_energy": 100,
+    "max_hunger": 100,
+    "energy_costs": { "move": 3, "elevator": 1, "action": 2, "choice": 1, "combat_turn": 2 },
+    "hunger_costs": { "move": 1, "elevator": 0.5, "action": 1, "choice": 0.5, "combat_turn": 0.5 },
+    "tired_energy": 25,
+    "tired_hit_penalty": 0.15,
+    "hungry_hunger": 75,
+    "hungry_energy_multiplier": 1.5,
+    "starving_hp": 3,
+    "sleep_hunger": 15,
+    "sleep_hp": 10,
+    "pass_out_o2": 30,
+    "pass_out_energy": 30,
+    "pass_out_hunger": 10
   }
 }

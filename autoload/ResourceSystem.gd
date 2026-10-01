@@ -11,13 +11,18 @@ extends Node
 ##   choice      — выбор варианта в ситуации;
 ##   combat_turn — ход в бою.
 ## В разгерметизированном модуле (узел карты с "sealed": false) любое действие
-## стоит дороже — множитель config.o2_unsealed_multiplier. Использование
-## предметов, подбор вещей с пола и крафт кислорода не стоят: это
-## противовес расходу, а не действие на выживание.
+## стоит дороже — множитель config.o2_unsealed_multiplier, а в модуле с
+## воздухом (локация с "breathable": true, например база) кислород не
+## тратится вовсе. Использование предметов, подбор вещей с пола и крафт
+## кислорода не стоят: это противовес расходу, а не действие на выживание.
+##
+## Каждое действие (даже бесплатное по кислороду) — сигнал action_taken:
+## по нему NeedsSystem тратит силы и копит голод.
 
 signal hp_changed(value: int)
 signal o2_changed(value: float)
 signal o2_spent(kind: String, amount: float)
+signal action_taken(kind: String)
 signal ammo_changed(value: int)
 signal resource_depleted(kind: String)  # kind: "hp" | "o2"
 
@@ -98,12 +103,10 @@ func apply_ammo_delta(v: int) -> void:
 
 
 ## Сколько кислорода стоит действие kind в узле node_id (пусто — текущий
-## модуль игрока). Незагерметизированный узел дороже.
+## модуль игрока). Незагерметизированный узел дороже, модуль с воздухом —
+## бесплатно.
 func get_o2_cost(kind: String, node_id: String = "") -> float:
-	var base := float(o2_costs.get(kind, 0.0))
-	if base <= 0.0:
-		return 0.0
-	return base * _environment_multiplier(node_id)
+	return maxf(0.0, float(o2_costs.get(kind, 0.0))) * environment_multiplier(node_id)
 
 
 ## Списывает стоимость действия. Возвращает true, если действие можно
@@ -113,10 +116,11 @@ func spend_o2(kind: String, node_id: String = "") -> bool:
 	if _died_this_run:
 		return false
 	var cost := get_o2_cost(kind, node_id)
-	if cost <= 0.0:
-		return true
-	apply_o2_delta(-cost)
-	o2_spent.emit(kind, cost)
+	if cost > 0.0:
+		apply_o2_delta(-cost)
+		o2_spent.emit(kind, cost)
+	if not _died_this_run:
+		action_taken.emit(kind)
 	return not _died_this_run
 
 
@@ -148,10 +152,15 @@ func load_save_data(data: Dictionary) -> void:
 	ammo_changed.emit(ammo)
 
 
-## Множитель среды: в модуле без давления каждое действие стоит дороже.
-func _environment_multiplier(node_id: String) -> float:
+## Множитель среды узла (пусто — текущий модуль игрока): 0 в модуле с
+## воздухом, o2_unsealed_multiplier без давления, иначе 1.
+func environment_multiplier(node_id: String = "") -> float:
 	var target := node_id if node_id != "" else LocationSystem.current_node_id
-	if target == "" or MapSystem.is_node_sealed(target):
+	if target == "":
+		return 1.0
+	if LocationSystem.is_breathable(str(MapSystem.nodes.get(target, {}).get("location_id", ""))):
+		return 0.0
+	if MapSystem.is_node_sealed(target):
 		return 1.0
 	return o2_unsealed_multiplier
 

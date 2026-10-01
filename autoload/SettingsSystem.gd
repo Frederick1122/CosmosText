@@ -3,29 +3,29 @@ extends Node
 ## забега (файл user://settings.json) и применяются сразу: UI перечитывает
 ## font_scale через UiKit.fs() и перерисовывается по сигналу changed,
 ## SoundSystem читает sound_enabled и sound_volume() при каждом звуке.
+##
+## Размер шрифта — множитель 1…2 (ползунок с якорями 1×, 1.5×, 2×: рядом с
+## якорем значение к нему притягивается), громкость — 0…100.
 
 signal changed()
 
 const PATH := "user://settings.json"
-## id → [подпись, множитель размера шрифта]
-const FONT_SIZES := {
-	"small": ["Маленький", 1.0],
-	"medium": ["Средний", 1.5],
-	"large": ["Крупный", 2.0],
-}
-const DEFAULT_FONT_SIZE := "medium"
-## id → [подпись, громкость 0..1]
-const SOUND_VOLUMES := {
-	"low": ["Тихо", 0.35],
-	"medium": ["Средне", 0.65],
-	"high": ["Громко", 1.0],
-}
-const DEFAULT_SOUND_VOLUME := "medium"
+const FONT_SCALE_MIN := 1.0
+const FONT_SCALE_MAX := 2.0
+const FONT_SCALE_ANCHORS := [1.0, 1.5, 2.0]
+## Ближе этого к якорю — значение становится якорем.
+const FONT_SCALE_SNAP := 0.08
+const DEFAULT_FONT_SCALE := 1.5
+const DEFAULT_SOUND_VOLUME := 65
+## Сейвы настроек до ползунков хранили id пресетов.
+const LEGACY_FONT_SIZES := {"small": 1.0, "medium": 1.5, "large": 2.0}
+const LEGACY_SOUND_VOLUMES := {"low": 35, "medium": 65, "high": 100}
 
-var font_size_id: String = DEFAULT_FONT_SIZE
+var font_scale_value: float = DEFAULT_FONT_SCALE
 var animations: bool = true
 var sound_enabled: bool = true
-var sound_volume_id: String = DEFAULT_SOUND_VOLUME
+## Громкость, 0…100.
+var sound_volume_percent: int = DEFAULT_SOUND_VOLUME
 
 
 func _ready() -> void:
@@ -33,19 +33,23 @@ func _ready() -> void:
 
 
 func font_scale() -> float:
-	var entry = FONT_SIZES.get(font_size_id, FONT_SIZES[DEFAULT_FONT_SIZE])
-	return float(entry[1])
+	return font_scale_value
 
 
-func font_size_title(id: String = "") -> String:
-	var entry = FONT_SIZES.get(id if id != "" else font_size_id, FONT_SIZES[DEFAULT_FONT_SIZE])
-	return str(entry[0])
+## Притянуть значение ползунка к ближайшему якорю и ограничить диапазоном.
+func snap_font_scale(value: float) -> float:
+	value = clampf(value, FONT_SCALE_MIN, FONT_SCALE_MAX)
+	for anchor in FONT_SCALE_ANCHORS:
+		if absf(value - float(anchor)) <= FONT_SCALE_SNAP:
+			return float(anchor)
+	return snappedf(value, 0.05)
 
 
-func set_font_size(id: String) -> void:
-	if not FONT_SIZES.has(id) or id == font_size_id:
+func set_font_scale(value: float) -> void:
+	value = snap_font_scale(value)
+	if is_equal_approx(value, font_scale_value):
 		return
-	font_size_id = id
+	font_scale_value = value
 	save_settings()
 	changed.emit()
 
@@ -58,13 +62,9 @@ func set_animations(enabled: bool) -> void:
 	changed.emit()
 
 
+## Громкость для AudioStreamPlayer, 0…1.
 func sound_volume() -> float:
-	var entry = SOUND_VOLUMES.get(sound_volume_id, SOUND_VOLUMES[DEFAULT_SOUND_VOLUME])
-	return float(entry[1])
-
-
-func sound_volume_title(id: String) -> String:
-	return str(SOUND_VOLUMES.get(id, SOUND_VOLUMES[DEFAULT_SOUND_VOLUME])[0])
+	return float(sound_volume_percent) / 100.0
 
 
 func set_sound_enabled(enabled: bool) -> void:
@@ -75,10 +75,11 @@ func set_sound_enabled(enabled: bool) -> void:
 	changed.emit()
 
 
-func set_sound_volume(id: String) -> void:
-	if not SOUND_VOLUMES.has(id) or id == sound_volume_id:
+func set_sound_volume(percent: int) -> void:
+	percent = clampi(percent, 0, 100)
+	if percent == sound_volume_percent:
 		return
-	sound_volume_id = id
+	sound_volume_percent = percent
 	save_settings()
 	changed.emit()
 
@@ -89,10 +90,10 @@ func save_settings() -> void:
 		push_warning("SettingsSystem: не удалось сохранить настройки")
 		return
 	f.store_string(JSON.stringify({
-		"font_size": font_size_id,
+		"font_scale": font_scale_value,
 		"animations": animations,
 		"sound": sound_enabled,
-		"sound_volume": sound_volume_id,
+		"sound_volume": sound_volume_percent,
 	}))
 
 
@@ -102,9 +103,14 @@ func load_settings() -> void:
 	var parsed = JSON.parse_string(FileAccess.get_file_as_string(PATH))
 	if not (parsed is Dictionary):
 		return
-	var id := str(parsed.get("font_size", DEFAULT_FONT_SIZE))
-	font_size_id = id if FONT_SIZES.has(id) else DEFAULT_FONT_SIZE
+	if parsed.has("font_scale"):
+		font_scale_value = snap_font_scale(float(parsed["font_scale"]))
+	else:
+		font_scale_value = float(LEGACY_FONT_SIZES.get(str(parsed.get("font_size", "")), DEFAULT_FONT_SCALE))
 	animations = bool(parsed.get("animations", true))
 	sound_enabled = bool(parsed.get("sound", true))
-	var volume_id := str(parsed.get("sound_volume", DEFAULT_SOUND_VOLUME))
-	sound_volume_id = volume_id if SOUND_VOLUMES.has(volume_id) else DEFAULT_SOUND_VOLUME
+	var volume = parsed.get("sound_volume", DEFAULT_SOUND_VOLUME)
+	if volume is String:
+		sound_volume_percent = int(LEGACY_SOUND_VOLUMES.get(volume, DEFAULT_SOUND_VOLUME))
+	else:
+		sound_volume_percent = clampi(int(volume), 0, 100)

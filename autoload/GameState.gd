@@ -113,6 +113,16 @@ func refresh_location() -> void:
 	_resume_location()
 
 
+## Сон на базе: новый день (NeedsSystem.sleep). Экран базы пишет чекпойнт
+## (_show_location → returned_to_hub) — откат вернёт к началу этого дня.
+func end_day() -> void:
+	if not LocationSystem.is_base():
+		push_warning("GameState: спать можно только на базе")
+		return
+	NeedsSystem.sleep()
+	_show_location()
+
+
 ## Игрок нажал «Продолжить» под результатом выбора (или под ситуацией без
 ## вариантов) — только теперь ситуация заканчивается.
 func finish_situation() -> void:

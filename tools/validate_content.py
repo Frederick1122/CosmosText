@@ -21,6 +21,10 @@ STATS = ("armor", "melee_damage", "ranged_damage", "hit_chance", "flee_chance", 
 O2_COST_KINDS = ("move", "elevator", "action", "choice", "combat_turn")
 # Должны совпадать с ProgressionSystem.DEFAULT_CONFIG (секция config.json → xp).
 XP_CONFIG_KEYS = ("explore", "craft", "lore", "kill", "level_base", "level_step", "skill_points_per_level")
+# Должны совпадать с NeedsSystem.DEFAULT_CONFIG (секция config.json → needs).
+NEEDS_CONFIG_KEYS = ("max_energy", "max_hunger", "energy_costs", "hunger_costs", "tired_energy",
+                     "tired_hit_penalty", "hungry_hunger", "hungry_energy_multiplier", "starving_hp",
+                     "sleep_hunger", "sleep_hp", "pass_out_o2", "pass_out_energy", "pass_out_hunger")
 # Должны совпадать с CombatSystem: типы ИИ и предел дистанции.
 ENEMY_AI_TYPES = ("brawler", "shooter", "turret")
 MAX_COMBAT_RANGE = 5
@@ -527,7 +531,7 @@ def main():
                 referenced_endings.add(ending)
                 if ending not in endings:
                     errors.append(f"{ctx}: effect 'end_run' ссылается на неизвестный финал '{ending}'")
-            elif t in ("hp_delta", "o2_delta", "ammo_delta", "flag_set", "reveal_map"):
+            elif t in ("hp_delta", "o2_delta", "ammo_delta", "hunger_delta", "flag_set", "reveal_map"):
                 pass
             elif t is None:
                 errors.append(f"{ctx}: effect-запись без 'type'")
@@ -566,6 +570,8 @@ def main():
         check_image(loc.get("image"), ctx)
         if "base" in loc and not isinstance(loc["base"], bool):
             errors.append(f"{ctx}.base: должно быть true/false")
+        if "breathable" in loc and not isinstance(loc["breathable"], bool):
+            errors.append(f"{ctx}.breathable: должно быть true/false")
         if not str(loc.get("description", "")).strip():
             warnings.append(f"{ctx}: нет базового описания (description)")
         variants = loc.get("descriptions", [])
@@ -669,6 +675,13 @@ def main():
             check_stats(item["stats"], f"{ctx}.stats")
             if slot is None:
                 warnings.append(f"{ctx}: stats действуют только у надеваемых предметов (нет equip_slot)")
+        if "firearm" in item:
+            if not isinstance(item["firearm"], bool):
+                errors.append(f"{ctx}.firearm: должно быть true/false")
+            elif item["firearm"] and slot != "arms":
+                errors.append(f"{ctx}.firearm: огнестрел должен надеваться в руки (equip_slot: arms)")
+        if item.get("category") in ("quest", "key") and item.get("slot_cost", 1) != 0:
+            errors.append(f"{ctx}.slot_cost: сюжетные предметы и ключи не занимают сумку — нужен 0")
         interactions = item.get("interactions", [])
         if not isinstance(interactions, list):
             errors.append(f"{ctx}.interactions: ожидается массив")
@@ -759,6 +772,28 @@ def main():
     multiplier = config.get("o2_unsealed_multiplier", 1.0)
     if not is_number(multiplier) or multiplier < 1.0:
         errors.append("config.json: o2_unsealed_multiplier должен быть числом не меньше 1")
+
+    needs_config = config.get("needs", {})
+    if not isinstance(needs_config, dict):
+        errors.append("config.json: needs должен быть объектом")
+    else:
+        for key, value in needs_config.items():
+            if key not in NEEDS_CONFIG_KEYS:
+                errors.append(f"config.json: needs — неизвестный ключ '{key}' (допустимы: {', '.join(NEEDS_CONFIG_KEYS)})")
+            elif key in ("energy_costs", "hunger_costs"):
+                if not isinstance(value, dict):
+                    errors.append(f"config.json: needs.{key} должен быть объектом {{действие: цена}}")
+                    continue
+                for kind, cost in value.items():
+                    if kind not in O2_COST_KINDS:
+                        errors.append(f"config.json: needs.{key} — неизвестное действие '{kind}' (допустимы: {', '.join(O2_COST_KINDS)})")
+                    elif not is_number(cost) or cost < 0:
+                        errors.append(f"config.json: needs.{key}.{kind} — неотрицательное число")
+            elif not is_number(value) or value < 0:
+                errors.append(f"config.json: needs.{key} — неотрицательное число")
+        for key in ("max_energy", "max_hunger"):
+            if key in needs_config and is_number(needs_config[key]) and needs_config[key] <= 0:
+                errors.append(f"config.json: needs.{key} должен быть больше нуля")
 
     xp_config = config.get("xp", {})
     if not isinstance(xp_config, dict):

@@ -106,6 +106,41 @@ static func card(parent: Control) -> VBoxContainer:
 	return vbox
 
 
+## Ползунок под палец: толстая дорожка, крупный круглый бегунок.
+static func slider(min_value: float, max_value: float, step: float, value: float) -> HSlider:
+	var s := HSlider.new()
+	s.min_value = min_value
+	s.max_value = max_value
+	s.step = step
+	s.value = value
+	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	s.custom_minimum_size = Vector2(0, fs(64))
+	var track := box(Color("#202733"), Color("#323d4e"), 1, 0)
+	track.content_margin_top = 7
+	track.content_margin_bottom = 7
+	s.add_theme_stylebox_override("slider", track)
+	var filled := box(Color("#1f6989"), Color("#5d91a8"), 1, 0)
+	filled.content_margin_top = 7
+	filled.content_margin_bottom = 7
+	s.add_theme_stylebox_override("grabber_area", filled)
+	s.add_theme_stylebox_override("grabber_area_highlight", filled)
+	var knob := _circle_texture(fs(40), Color("#d6f2ff"))
+	s.add_theme_icon_override("grabber", knob)
+	s.add_theme_icon_override("grabber_highlight", knob)
+	s.add_theme_icon_override("tick", _circle_texture(10, Color("#8a96ab")))
+	return s
+
+
+static func _circle_texture(side: int, color: Color) -> ImageTexture:
+	var image := Image.create(side, side, false, Image.FORMAT_RGBA8)
+	var r := float(side) * 0.5
+	for y in range(side):
+		for x in range(side):
+			var d := Vector2(float(x) + 0.5 - r, float(y) + 0.5 - r).length()
+			image.set_pixel(x, y, Color(color, clampf(r - d, 0.0, 1.0)))
+	return ImageTexture.create_from_image(image)
+
+
 # --- Пиксельный арт -------------------------------------------------------------
 # Картинки лежат в assets/art: сцены 160×96 (иллюстрация ситуации, события или
 # модуля) и иконки предметов 16×16. Масштабирование — «ближайший сосед», иначе
