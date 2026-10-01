@@ -51,6 +51,7 @@ func start_new_run() -> void:
 	ProgressionSystem.reset_for_new_run()
 	NeedsSystem.reset_for_new_run()
 	QuestSystem.reset_for_new_run()
+	ExplorationSystem.reset_for_new_run()
 	SituationEngine.reset_for_new_run()
 	LocationSystem.reset_for_new_run()
 	CombatSystem.reset_for_new_run()
@@ -70,6 +71,7 @@ func save_run() -> void:
 		"progression": ProgressionSystem.to_save_data(),
 		"needs": NeedsSystem.to_save_data(),
 		"quests": QuestSystem.to_save_data(),
+		"exploration": ExplorationSystem.to_save_data(),
 		"situation": SituationEngine.to_save_data(),
 		"locations": LocationSystem.to_save_data(),
 		"map": MapSystem.to_save_data(),
@@ -115,6 +117,7 @@ func load_run(fallback_sector_id: String = "wreck_01") -> bool:
 	ProgressionSystem.load_save_data(data.get("progression", {}))
 	NeedsSystem.load_save_data(data.get("needs", {}))
 	QuestSystem.load_save_data(data.get("quests", {}))
+	ExplorationSystem.load_save_data(data.get("exploration", {}))
 	SituationEngine.load_save_data(situation_data)
 	LocationSystem.load_save_data(data.get("locations", {}))
 	var journal_data = data.get("journal", [])

@@ -15,6 +15,10 @@
       "image": "comms_sentry_down"
     }
   ],
+  "explore": {
+    "pool": "station_tech",
+    "rolls": 2
+  },
   "events": [
     {
       "id": "sentry_wakes",
@@ -34,6 +38,8 @@
       "start": "manual",
       "label": "Снять аварийный баллон с держателя",
       "repeatable": false,
+      "discover": true,
+      "found": "У шлюза, в держателе на стене, поблёскивает аварийный баллон. Пломба цела.",
       "triggers": [
         {
           "type": "flag",
@@ -81,6 +87,8 @@
       "start": "manual",
       "label": "Разобрать обесточенные стойки",
       "repeatable": false,
+      "discover": true,
+      "found": "Дальний ряд стоек обесточен полностью. Корпуса держатся на защёлках — можно разобрать.",
       "triggers": [
         {
           "type": "flag",

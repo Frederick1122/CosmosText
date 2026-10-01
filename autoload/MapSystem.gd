@@ -138,7 +138,7 @@ func _node_map_order(node: Dictionary) -> int:
 ##   elevator — лифт; door — запертый узел (дверь под ключ);
 ##   unknown — ещё не был внутри; base — модуль-база (сохранение, склад);
 ##   hostile — встречен враг (узел dangerous); events — есть доступные
-##   действия, ждущее событие или вещи на полу; locked — остались только
+##   действия, что исследовать, ждущее событие или вещи на полу; locked — остались только
 ##   действия под ключ; empty — больше ничего нет.
 func get_node_status(node_id: String) -> String:
 	if not nodes.has(node_id) or not (nodes[node_id] is Dictionary):
@@ -159,7 +159,7 @@ func get_node_status(node_id: String) -> String:
 	if location_id == "":
 		return "empty"
 	var left := LocationSystem.peek(location_id)
-	if int(left["open"]) > 0 or bool(left["auto"]) or bool(left["stash"]):
+	if int(left["open"]) > 0 or bool(left["auto"]) or bool(left["explore"]) or bool(left["stash"]):
 		return "events"
 	if int(left["locked"]) > 0:
 		return "locked"

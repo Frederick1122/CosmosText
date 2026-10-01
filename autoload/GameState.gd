@@ -107,6 +107,24 @@ func start_location_event(event_id: String) -> void:
 	_resume_location()
 
 
+## «Исследовать» в меню модуля: стоит как действие, раскрывает спрятанное
+## событие или разыгрывает находку из пула (ExplorationSystem).
+func explore_location() -> void:
+	if not LocationSystem.is_active() or not ExplorationSystem.can_explore():
+		push_warning("GameState: в модуле нечего исследовать")
+		return
+	var cost := ResourceSystem.get_o2_cost("action")
+	if not ResourceSystem.spend_o2("action"):
+		return
+	NarrativeSystem.clear()
+	NarrativeSystem.push("choice", "Исследовать отсек")
+	EffectResolver.report_change("o2", -cost, "O2")
+	ExplorationSystem.explore()
+	if ResourceSystem.is_dead():
+		return
+	_resume_location()
+
+
 ## Перепроверить автособытия и показать локацию заново (например после
 ## использования предмета из инвентаря).
 func refresh_location() -> void:

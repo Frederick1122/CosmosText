@@ -1,0 +1,92 @@
+{
+  "capsule": [
+    { "id": "loose_panel", "weight": 5, "text": "За отошедшей обшивкой капсулы — моток изоленты, прихваченный к кабелю.", "effects": [ { "type": "item_add", "item": "duct_tape" } ] },
+    { "id": "seat_rags", "weight": 4, "text": "Чехол кресла порвался по шву. Из него выходит неплохая ветошь.", "effects": [ { "type": "item_add", "item": "cloth_rags" } ] },
+    { "id": "crumbs", "weight": 2, "text": "В кармане кресла — смятая обёртка, а под ней половина пайка. Повезло.", "effects": [ { "type": "hunger_delta", "value": -15 } ] },
+    { "id": "logbook_screen", "weight": 4, "text": "Экран бортового журнала капсулы мигает одной строкой: «Сброс выполнен вручную». Кто-то отстрелил капсулу сам — и это был не ты.", "effects": [] },
+    { "id": "sharp_edge", "weight": 3, "text": "Ты шаришь рукой за переборкой и режешься об острый край листа.", "effects": [ { "type": "hp_delta", "value": -3 } ] }
+  ],
+  "wreck_corridor": [
+    { "id": "scrap_drift", "weight": 5, "text": "В изломанном коридоре дрейфует обломок обшивки. Ловишь его — пригодится.", "effects": [ { "type": "item_add", "item": "scrap_metal" } ] },
+    { "id": "tape_roll", "weight": 4, "text": "Из разбитого ящика с инструментом выкатился моток изоленты.", "effects": [ { "type": "item_add", "item": "duct_tape" } ] },
+    { "id": "spare_bottle", "weight": 2, "text": "В стенной нише — аварийный баллон. Почти пустой, но остатка хватит на несколько вдохов.", "effects": [ { "type": "o2_delta", "value": 15 } ] },
+    { "id": "gravity_flicker", "weight": 3, "text": "Гравитация пропадает на миг и возвращается рывком. Тебя бросает плечом о переборку.", "effects": [ { "type": "hp_delta", "value": -5 } ] },
+    { "id": "scratches", "weight": 4, "text": "На переборке процарапано: «7 дней». Под цифрой — ещё одна, перечёркнутая.", "effects": [] },
+    { "id": "torn_rags", "weight": 3, "text": "Клок чьего-то комбинезона зацепился за кронштейн. Ткань ещё крепкая.", "effects": [ { "type": "item_add", "item": "cloth_rags" } ] }
+  ],
+  "cargo_hold": [
+    { "id": "spilled_scrap", "weight": 5, "text": "Из сорванного стеллажа высыпались крепёжные уголки. Набираешь пригоршню.", "effects": [ { "type": "item_add", "item": "scrap_metal" } ] },
+    { "id": "packing_rags", "weight": 5, "text": "Упаковочная ткань от груза валяется по всему отсеку. Сгодится на повязки и ремни.", "effects": [ { "type": "item_add", "item": "cloth_rags" } ] },
+    { "id": "manifest", "weight": 4, "text": "Обрывок накладной прилип к полу. Строка «Л-7» замазана маркером, но в графе «температура» стоит пометка «держать в тепле».", "effects": [] },
+    { "id": "hidden_ration", "weight": 2, "text": "Кто-то из такелажников прятал паёк за кожухом лебёдки.", "effects": [ { "type": "item_add", "item": "ration_bar" } ] },
+    { "id": "sparking_cable", "weight": 3, "text": "Ты задеваешь оборванный кабель — разряд прошивает руку до локтя.", "effects": [ { "type": "hp_delta", "value": -6 } ] },
+    { "id": "tape_stash", "weight": 3, "text": "В ящике у ворот — два мотка изоленты в заводской плёнке.", "effects": [ { "type": "item_add", "item": "duct_tape", "count": 2 } ] },
+    { "id": "drone_parts", "weight": 2, "text": "От дрона отлетела пара пластин корпуса — лёгкий и прочный металл.", "effects": [ { "type": "item_add", "item": "scrap_metal" } ] }
+  ],
+  "workshop": [
+    { "id": "bolt_tray", "weight": 5, "text": "Лоток с болтами и гайками опрокинут. Самое крупное — в сумку.", "effects": [ { "type": "item_add", "item": "scrap_metal" } ] },
+    { "id": "tape_drawer", "weight": 4, "text": "В выдвижном ящике верстака — початый моток изоленты.", "effects": [ { "type": "item_add", "item": "duct_tape" } ] },
+    { "id": "oily_rags", "weight": 4, "text": "Промасленная ветошь висит на крюке. Не самая чистая, зато много.", "effects": [ { "type": "item_add", "item": "cloth_rags" } ] },
+    { "id": "solder_burn", "weight": 3, "text": "Паяльная станция ещё под током. Ты понимаешь это, когда хватаешься за жало.", "effects": [ { "type": "hp_delta", "value": -4 } ] },
+    { "id": "shift_note", "weight": 4, "text": "На двери шкафчика смены — записка: «Трюм не вскрывать до прибытия заказчика. Заказчик — не компания».", "effects": [] }
+  ],
+  "vacuum_corridor": [
+    { "id": "frozen_scrap", "weight": 5, "text": "Вмёрзшую в иней пластину удаётся отбить от стены.", "effects": [ { "type": "item_add", "item": "scrap_metal" } ] },
+    { "id": "valve_hiss", "weight": 3, "text": "Ты открываешь не тот вентиль — шлем на секунду теряет герметичность.", "effects": [ { "type": "o2_delta", "value": -8 } ] },
+    { "id": "drifting_tank", "weight": 2, "text": "Под потолком зацепился чужой баллон. Остаток газа переливаешь в свой.", "effects": [ { "type": "o2_delta", "value": 20 } ] },
+    { "id": "frost_handprint", "weight": 4, "text": "На заиндевевшей переборке — отпечаток ладони изнутри шахты. Пальцы длиннее человеческих.", "effects": [] },
+    { "id": "cable_ties", "weight": 4, "text": "Оборванные кабели обмотаны изолентой. Снимаешь то, что ещё держится.", "effects": [ { "type": "item_add", "item": "duct_tape" } ] },
+    { "id": "debris_hit", "weight": 2, "text": "Обломок балки срывается от вибрации и задевает тебя по шлему.", "effects": [ { "type": "hp_delta", "value": -5 } ] }
+  ],
+  "reactor": [
+    { "id": "shield_plate", "weight": 5, "text": "Отслоившийся лист экранирования ещё тёплый. Металл хороший.", "effects": [ { "type": "item_add", "item": "scrap_metal" } ] },
+    { "id": "coolant_burn", "weight": 3, "text": "Из трубы контура бьёт струйка хладагента. Перчатку прожигает насквозь.", "effects": [ { "type": "hp_delta", "value": -7 } ] },
+    { "id": "tech_bag", "weight": 2, "text": "Брошенная сумка техника: внутри самодельный бинт и пустая фляга.", "effects": [ { "type": "item_add", "item": "improvised_bandage" } ] },
+    { "id": "slime_trail", "weight": 4, "text": "От вентиляции к стойке ячеек тянется высохший бледный след. Он идёт прямо к теплу.", "effects": [] },
+    { "id": "insulation", "weight": 4, "text": "Термоизоляцию с трубы можно срезать полосами — сойдёт за ветошь.", "effects": [ { "type": "item_add", "item": "cloth_rags" } ] },
+    { "id": "relief_valve", "weight": 2, "text": "Сброс давления в шкафу управления ещё держит воздух. Пара глотков в баллон.", "effects": [ { "type": "o2_delta", "value": 12 } ] }
+  ],
+  "alien": [
+    { "id": "odd_alloy", "weight": 5, "text": "Обрезок незнакомого сплава: лёгкий, почти не холодит руку.", "effects": [ { "type": "item_add", "item": "scrap_metal" } ] },
+    { "id": "foreign_ration", "weight": 2, "text": "В отсеке экипажа — плитка чужого пайка. Состав не прочесть, но пахнет едой.", "effects": [ { "type": "hunger_delta", "value": -20 } ] },
+    { "id": "strap_webbing", "weight": 4, "text": "Крепёжные ремни кресел сделаны из прочной ткани. Срезаешь пару.", "effects": [ { "type": "item_add", "item": "cloth_rags" } ] },
+    { "id": "nav_log", "weight": 4, "text": "Навигатор шаттла хранит один маршрут: сюда и к «Вехтер-9». Обратного курса в памяти нет.", "effects": [] },
+    { "id": "static_shock", "weight": 3, "text": "Панель шаттла отвечает на прикосновение статическим разрядом.", "effects": [ { "type": "hp_delta", "value": -3 } ] }
+  ],
+  "station_dock": [
+    { "id": "dock_tape", "weight": 4, "text": "На посту дежурного — моток изоленты и чей-то недопитый кофе, покрытый плёнкой.", "effects": [ { "type": "item_add", "item": "duct_tape" } ] },
+    { "id": "ammo_clip", "weight": 2, "text": "Под стойкой досмотра закатилась обойма табельных патронов.", "effects": [ { "type": "ammo_delta", "value": 2 } ] },
+    { "id": "cart_scrap", "weight": 4, "text": "Тележка погрузчика разобрана наполовину. Остатки рамы — в сумку.", "effects": [ { "type": "item_add", "item": "scrap_metal" } ] },
+    { "id": "quarantine_sign", "weight": 4, "text": "На шлюзе висит свежая табличка «Карантин». Её повесили изнутри станции, а не снаружи.", "effects": [] },
+    { "id": "wall_tank", "weight": 2, "text": "Аварийная маска у шлюза подключена к живому баллону. Делаешь несколько глубоких вдохов.", "effects": [ { "type": "o2_delta", "value": 15 } ] }
+  ],
+  "station_living": [
+    { "id": "pillow_ration", "weight": 3, "text": "Под подушкой — паёк в целой упаковке. Кто-то запасался.", "effects": [ { "type": "item_add", "item": "ration_bar" } ] },
+    { "id": "sheets", "weight": 5, "text": "Простыни с пустых коек рвутся на ровные полосы.", "effects": [ { "type": "item_add", "item": "cloth_rags", "count": 2 } ] },
+    { "id": "first_aid", "weight": 2, "text": "В тумбочке — аптечка экипажа. Пломба цела.", "effects": [ { "type": "item_add", "item": "medkit" } ] },
+    { "id": "diary", "weight": 4, "text": "Чей-то дневник открыт на последней странице: «Привезли одного с обломка. Говорит мало, ест много, всё время мёрзнет».", "effects": [] },
+    { "id": "family_photo", "weight": 4, "text": "На стене — фото семьи на фоне колонии Мейер-4. Подпись: «Через полгода домой».", "effects": [] },
+    { "id": "snack_tin", "weight": 2, "text": "Жестянка с галетами. Половина съедена, вторая — твоя.", "effects": [ { "type": "hunger_delta", "value": -15 } ] }
+  ],
+  "station_medical": [
+    { "id": "bandage_roll", "weight": 4, "text": "В выдвижном лотке — стерильный бинт. Стерильным он был до карантина.", "effects": [ { "type": "item_add", "item": "improvised_bandage" } ] },
+    { "id": "stim_vial", "weight": 2, "text": "Под кушеткой закатился инъектор стимулятора.", "effects": [ { "type": "item_add", "item": "stim_shot" } ] },
+    { "id": "broken_glass", "weight": 3, "text": "Пол усыпан битым стеклом из разнесённого бокса. Перчатка не спасает.", "effects": [ { "type": "hp_delta", "value": -4 } ] },
+    { "id": "restraints", "weight": 4, "text": "Ремни на кушетке разорваны изнутри. Металлические пряжки вывернуты.", "effects": [] },
+    { "id": "oxygen_mask", "weight": 2, "text": "Реанимационная маска ещё подключена к линии. Несколько вдохов чистого кислорода.", "effects": [ { "type": "o2_delta", "value": 20 } ] }
+  ],
+  "station_tech": [
+    { "id": "rack_scrap", "weight": 5, "text": "Из разбитой стойки выпадают направляющие — ровный, крепкий металл.", "effects": [ { "type": "item_add", "item": "scrap_metal" } ] },
+    { "id": "cable_tape", "weight": 4, "text": "Жгуты кабелей перемотаны изолентой в несколько слоёв.", "effects": [ { "type": "item_add", "item": "duct_tape" } ] },
+    { "id": "guard_ammo", "weight": 2, "text": "У поста охраны — подсумок с патронами. Хозяина рядом нет.", "effects": [ { "type": "ammo_delta", "value": 3 } ] },
+    { "id": "arc_flash", "weight": 3, "text": "Ты задеваешь шину под напряжением — вспышка, и рука немеет.", "effects": [ { "type": "hp_delta", "value": -6 } ] },
+    { "id": "last_packet", "weight": 4, "text": "Лог передатчика: последний пакет ушёл на закрытый канал. Подтверждение получения пришло через секунду — так быстро отвечают только автоматы флота.", "effects": [] },
+    { "id": "spare_canister", "weight": 1, "text": "В шкафу техника — запасной баллон для работы без давления.", "effects": [ { "type": "item_add", "item": "o2_canister" } ] }
+  ],
+  "outside": [
+    { "id": "drifting_bolt", "weight": 4, "text": "К обшивке мачты прилип оторванный кронштейн. Отдираешь его.", "effects": [ { "type": "item_add", "item": "scrap_metal" } ] },
+    { "id": "micrometeor", "weight": 3, "text": "Что-то мелкое чиркает по скафандру. Датчик утечки пищит, пока ты заклеиваешь дыру.", "effects": [ { "type": "o2_delta", "value": -10 } ] },
+    { "id": "persephone_view", "weight": 4, "text": "Отсюда видно «Персефону»: на её корме ровно мигает огонёк. Маяк, который никто не включал.", "effects": [] },
+    { "id": "tether_tape", "weight": 3, "text": "Страховочный фал обмотан изолентой у карабина. Снимаешь лишнее.", "effects": [ { "type": "item_add", "item": "duct_tape" } ] }
+  ]
+}

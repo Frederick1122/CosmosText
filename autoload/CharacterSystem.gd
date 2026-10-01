@@ -20,8 +20,10 @@ const STAT_TITLES := {
 	"flee_chance": "Шанс побега",
 	"max_hp": "Макс. HP",
 	"inventory_slots": "Слоты сумки",
+	"explore_rolls": "Поиски в отсеке",
+	"find_chance": "Шанс лишней находки",
 }
-const PERCENT_STATS := ["hit_chance", "flee_chance"]
+const PERCENT_STATS := ["hit_chance", "flee_chance", "find_chance"]
 
 var equipment: Dictionary = {}  # slot -> item_id
 var skill_levels: Dictionary = {}  # skill_id -> level

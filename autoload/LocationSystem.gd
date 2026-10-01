@@ -174,10 +174,12 @@ func next_auto_event() -> Dictionary:
 	return {}
 
 
+## Ручные события меню модуля. Спрятанные ("discover": true, ещё не найдены
+## исследованием) не показываются и не запускаются.
 func get_manual_events() -> Array:
 	var result: Array = []
 	for ev in _current().get("events", []):
-		if ev is Dictionary and str(ev.get("start", "manual")) == "manual" and _is_available(ev):
+		if ev is Dictionary and str(ev.get("start", "manual")) == "manual" and _is_available(ev) and not _is_hidden(ev):
 			result.append(ev)
 	return result
 
@@ -191,7 +193,49 @@ func find_event(event_id: String) -> Dictionary:
 
 func is_event_available(event_id: String) -> bool:
 	var ev := find_event(event_id)
-	return not ev.is_empty() and _is_available(ev)
+	return not ev.is_empty() and _is_available(ev) and not _is_hidden(ev)
+
+
+# --- Исследование (ExplorationSystem) -----------------------------------------
+
+## { pool, rolls } локации ({} — случайных находок нет).
+func get_explore(location_id: String) -> Dictionary:
+	var explore = _locations.get(location_id, {}).get("explore", {})
+	return explore if explore is Dictionary else {}
+
+
+## Спрятанные события текущего модуля, которые можно найти прямо сейчас.
+func findable_events() -> Array:
+	var result: Array = []
+	for ev in _current().get("events", []):
+		if ev is Dictionary and _is_hidden(ev) and _is_available(ev):
+			result.append(ev)
+	return result
+
+
+## Сколько событий модуля прячется под исследованием всего и сколько ещё не найдено.
+func discover_event_count(location_id: String) -> int:
+	return _discover_events(location_id).size()
+
+
+func hidden_event_count(location_id: String) -> int:
+	var count := 0
+	for ev in _discover_events(location_id):
+		if not ExplorationSystem.is_discovered(location_id, str(ev.get("id", ""))):
+			count += 1
+	return count
+
+
+func _discover_events(location_id: String) -> Array:
+	var result: Array = []
+	for ev in _locations.get(location_id, {}).get("events", []):
+		if ev is Dictionary and str(ev.get("start", "manual")) == "manual" and bool(ev.get("discover", false)):
+			result.append(ev)
+	return result
+
+
+func _is_hidden(ev: Dictionary) -> bool:
+	return bool(ev.get("discover", false)) and not ExplorationSystem.is_discovered(current_id, str(ev.get("id", "")))
 
 
 ## Замок события-ящика: { "key": "<id замка>", "consume": bool, "text": "..." }.
@@ -226,13 +270,15 @@ func add_notice(text: String) -> void:
 
 
 ## Что осталось в модуле, не входя в него (для цвета узла на карте и для
-## перехвата в пути): { open, locked, auto, combat, stash } — доступные ручные
-## события, запертые ключом, ждущее автособытие, ждущий бой и вещи на полу.
+## перехвата в пути): { open, locked, auto, combat, explore, stash } —
+## доступные ручные события, запертые ключом, ждущее автособытие, ждущий бой,
+## есть ли что исследовать, и вещи на полу.
 ## simulate_entry — проверить так, будто игрок сейчас входит: визит +1,
 ## автособытия этого визита ещё не срабатывали. Состояние не меняется:
 ## контекст текущей локации подменяется только на время проверки условий.
 func peek(location_id: String, simulate_entry: bool = false) -> Dictionary:
-	var result := {"open": 0, "locked": 0, "auto": false, "combat": false, "stash": not get_stash(location_id).is_empty()}
+	var result := {"open": 0, "locked": 0, "auto": false, "combat": false,
+		"explore": ExplorationSystem.rolls_left(location_id) > 0, "stash": not get_stash(location_id).is_empty()}
 	if not _locations.has(location_id):
 		return result
 	var saved_id := current_id
@@ -251,6 +297,8 @@ func peek(location_id: String, simulate_entry: bool = false) -> Dictionary:
 			result["auto"] = true
 			if is_combat_event(ev):
 				result["combat"] = true
+		elif _is_hidden(ev):
+			result["explore"] = true
 		elif is_event_locked(ev):
 			result["locked"] = int(result["locked"]) + 1
 		else:

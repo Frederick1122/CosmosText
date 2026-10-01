@@ -1198,8 +1198,12 @@ func _render_location() -> void:
 	_render_story()
 
 	var events := LocationSystem.get_manual_events()
-	if not events.is_empty():
+	var explore_total := ExplorationSystem.total(LocationSystem.current_id)
+	if not events.is_empty() or explore_total > 0:
 		_add_section("Действия")
+	if explore_total > 0:
+		_add_explore_button(explore_total)
+	if not events.is_empty():
 		for ev in events:
 			var event_id := str(ev.get("id", ""))
 			var label := str(ev.get("label", event_id))
@@ -1221,6 +1225,22 @@ func _render_location() -> void:
 		_add_section("Склад" if LocationSystem.is_base() else "Здесь лежит")
 		for item_id in stash.keys():
 			_add_button("✋ Взять: %s%s" % [_item_name(item_id), _count_suffix(int(stash[item_id]))], _make_stash_take_callback(item_id), "quiet")
+
+
+## «Исследовать»: сколько ещё можно найти в отсеке. Искать нечего — кнопка
+## неактивна; спрятанное, что откроется позже (нужен ключ, навык, событие),
+## держит счётчик, но сейчас не находится.
+func _add_explore_button(total: int) -> void:
+	var left := ExplorationSystem.remaining(LocationSystem.current_id)
+	var btn: Button
+	if ExplorationSystem.can_explore():
+		btn = _add_button("🔍 Исследовать отсек · осталось %d из %d" % [left, total], GameState.explore_location)
+	else:
+		var text := "🔍 Пока искать нечего · осталось %d из %d" % [left, total] if left > 0 else "🔍 Отсек исследован полностью"
+		btn = UiKit.button(text, "quiet", BUTTON_HEIGHT)
+		btn.disabled = true
+		body.add_child(btn)
+	btn.name = "ExploreButton"
 
 
 ## Модуль-база: ручное сохранение, верстак и разгрузка сумки на склад.

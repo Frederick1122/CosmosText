@@ -26,5 +26,12 @@
     "max_level": 3,
     "cost": 1,
     "per_level": { "max_hp": 10 }
+  },
+  "scavenging": {
+    "name": "Поиск",
+    "description": "Чутьё на тайники и запасы: в каждом отсеке удаётся обыскать больше, а находок бывает вдвое.",
+    "max_level": 2,
+    "cost": 1,
+    "per_level": { "explore_rolls": 1, "find_chance": 0.25 }
   }
 }

@@ -10,6 +10,7 @@
       "image": "cargo_drone_down"
     }
   ],
+  "explore": { "pool": "cargo_hold", "rolls": 3 },
   "events": [
     {
       "id": "drone_encounter",
@@ -23,6 +24,8 @@
       "start": "manual",
       "label": "Обыскать контейнеры",
       "repeatable": false,
+      "discover": true,
+      "found": "Пара контейнеров лопнула по швам при ударе. Из щелей торчат упаковки — кто-то их уже трогал, но не до конца.",
       "triggers": [ { "type": "flag", "flag": "drone_cargo_down" } ],
       "text": "В развороченных контейнерах — аптечка в целой упаковке, обрезок трубы, пара мотков изоленты, ветошь и кусок обшивки.",
       "effects": [
@@ -53,6 +56,8 @@
       "start": "manual",
       "label": "Вытащить ящик из-под погрузчика",
       "repeatable": false,
+      "discover": true,
+      "found": "Погрузчик лежит на боку. Из-под его рамы виден край ящика с эмблемой такелажников.",
       "triggers": [ { "type": "flag", "flag": "drone_cargo_down" } ],
       "situation": "sit_1_5_forklift"
     },
@@ -61,6 +66,8 @@
       "start": "manual",
       "label": "Вскрыть рундук такелажника",
       "repeatable": false,
+      "discover": true,
+      "found": "За штабелем, в нише у переборки, — рундук такелажника. На крышке магнитный замок, индикатор ещё теплится.",
       "triggers": [ { "type": "flag", "flag": "drone_cargo_down" } ],
       "lock": { "key": "rigger_locker", "consume": true, "text": "Магнитный ключ срабатывает и выгорает." },
       "text": "В рундуке — табельные патроны, стимулятор и моток изоленты.",

@@ -79,6 +79,11 @@ func _ready() -> void:
 	_expect(LocationSystem.get_image() == "base_bay" and ResourceLoader.exists("res://assets/art/scenes/base_bay.png"),
 		"у базы есть пиксельная иллюстрация")
 	var o2_before_decline := ResourceSystem.o2
+	_expect(not _has_manual("search_supply_kit") and ExplorationSystem.can_explore(),
+		"аварийный контейнер спрятан: его находят кнопкой «Исследовать»")
+	ExplorationSystem.reveal("search_supply_kit")
+	_expect(_has_manual("search_supply_kit") and _narrative_kind_last("notice").contains("Найдено"),
+		"найденное событие появилось в меню модуля")
 	GameState.start_location_event("search_supply_kit")
 	_choose("C")
 	_expect(_has_manual("search_supply_kit") and not LocationSystem.is_event_done("search_supply_kit"),
@@ -191,6 +196,7 @@ func _ready() -> void:
 		"неистраченные очки навыков держат уведомление и после просмотра персонажа")
 	_expect(not _has_manual("force_shuttle_airlock"), "шлюз недоступен без трубы")
 
+	ExplorationSystem.reveal("search_containers")
 	GameState.start_location_event("search_containers")
 	_expect(InventorySystem.count_item("duct_tape") == 2 and InventorySystem.count_item("cloth_rags") == 3
 		and InventorySystem.count_item("scrap_metal") == 2 and InventorySystem.has_item("pipe_scrap"),
@@ -258,11 +264,13 @@ func _ready() -> void:
 	_expect(GameState.current_screen == Screen.SECTOR_MAP and _node_state("maintenance_bay") == "locked",
 		"без ключа запертый узел не открывается")
 	MapSystem.travel_to("cargo_bay")
+	ExplorationSystem.reveal("search_forklift")
 	GameState.start_location_event("search_forklift")
 	_choose("B")
 	_expect(InventorySystem.has_item("hex_key") and InventorySystem.free_slots() > 0,
 		"шестигранник найден под погрузчиком и не занимает слот сумки")
 	_expect(not InventorySystem.drop_item("hex_key"), "ключ нельзя выбросить")
+	ExplorationSystem.reveal("open_rigger_locker")
 	_expect(_has_manual("open_rigger_locker") and LocationSystem.is_event_locked(LocationSystem.find_event("open_rigger_locker")),
 		"рундук такелажника виден в меню, но заперт")
 	GameState.start_location_event("open_rigger_locker")
@@ -277,6 +285,7 @@ func _ready() -> void:
 	GameState.start_location_event("open_tool_crate")
 	_expect(InventorySystem.has_item("cargo_key") and InventorySystem.has_item("hex_key"),
 		"инструментальный ящик открыт тем же ключом, внутри магнитный ключ")
+	ExplorationSystem.reveal("read_repair_log")
 	GameState.start_location_event("read_repair_log")
 	_expect(ArchiveSystem.is_unlocked("log_07"), "журнал ремонтов прочитан")
 	# Находки техотсека — на пол ниши: дальше по срезу сумка нужна свободной.
@@ -298,6 +307,7 @@ func _ready() -> void:
 	GameState.leave_location()
 	MapSystem.travel_to("alien_shuttle")
 	_expect(LocationSystem.current_id == "alien_shuttle", "открытый модуль доступен")
+	ExplorationSystem.reveal("search_cockpit")
 	GameState.start_location_event("search_cockpit")
 	_expect(CharacterSystem.equip("mag_boots") == "" and is_equal_approx(CharacterSystem.get_stat("flee_chance"), 0.15),
 		"ботинки надеты: шанс побега +15%")
@@ -331,6 +341,7 @@ func _ready() -> void:
 	_expect(InventorySystem.has_item("pilot_keycard") and InventorySystem.count_item("ration_bar") == 4,
 		"подсумки: ключ-карта и брикеты в стак")
 	_expect(MapSystem.map_revealed and InventorySystem.has_item("ship_map"), "найдена схема — туман карты снят")
+	ExplorationSystem.reveal("read_tag")
 	GameState.start_location_event("read_tag")
 	_expect(ArchiveSystem.is_unlocked("log_02"), "бирка: запись журнала")
 	GameState.start_location_event("take_canister")
@@ -377,6 +388,7 @@ func _ready() -> void:
 	GameState.start_location_event("use_keycard")
 	_expect(not InventorySystem.has_item("pilot_keycard") and SituationEngine.get_flag("reactor_unlocked") == true,
 		"ключ-карта израсходована, дверь открыта")
+	ExplorationSystem.reveal("read_reactor_log")
 	GameState.start_location_event("read_reactor_log")
 	_expect(ArchiveSystem.is_unlocked("log_03"), "журнал реактора прочитан")
 	# Выдыхаем запас баллонов: место в сумке нужно под энергоячейку.
@@ -488,6 +500,7 @@ func _ready() -> void:
 	_expect(LocationSystem.is_base() and NeedsSystem.day == day_before_quarters + 1
 		and is_equal_approx(NeedsSystem.energy, NeedsSystem.max_energy()) and not NeedsSystem.is_hungry(),
 		"каюты смены — вторая база: поели и выспались на станции")
+	ExplorationSystem.reveal("search_bunks")
 	GameState.start_location_event("search_bunks")
 	_expect(InventorySystem.has_item("medkit"), "в каютах найдена аптечка")
 	ResourceSystem.apply_hp_delta(-mini(40, ResourceSystem.hp - 1))
@@ -496,6 +509,7 @@ func _ready() -> void:
 		InventorySystem.use_item("medkit")
 	_expect(ResourceSystem.hp > hp_before and InventorySystem.free_slots() > 0,
 		"аптечки вылечили и освободили слот под находку")
+	ExplorationSystem.reveal("pry_locker")
 	GameState.start_location_event("pry_locker")
 	_expect(SituationEngine.current_id == "sit_4_1_locker" and _has_option("A") and _has_option("B"),
 		"шкафчик старшего смены: выбор карты или патронов")
@@ -507,6 +521,8 @@ func _ready() -> void:
 		"карта открыла медблок и израсходована")
 	GameState.leave_location()
 	MapSystem.travel_to("med_bay")
+	ExplorationSystem.reveal("read_med_log")
+	ExplorationSystem.reveal("tap_medical_o2")
 	GameState.start_location_event("read_med_log")
 	_expect(ArchiveSystem.is_unlocked("log_05"), "карта пациента прочитана")
 	_expect(_has_manual("tap_medical_o2"), "с Инженерией доступна медицинская линия O2")
@@ -532,6 +548,7 @@ func _ready() -> void:
 	_expect(SituationEngine.get_flag("sentry_down") == true and _node_state("comms_hall") == "cleared",
 		"турель уничтожена (раундов: %d, HP: %d)" % [rounds, ResourceSystem.hp])
 	var o2_in_hall := ResourceSystem.o2
+	ExplorationSystem.reveal("emergency_bottle")
 	GameState.start_location_event("emergency_bottle")
 	_expect(ResourceSystem.o2 >= o2_in_hall + 90.0 - ResourceSystem.get_o2_cost("action"),
 		"аварийный баллон пополнил кислород в зале связи")
@@ -597,6 +614,13 @@ func _ready() -> void:
 	GameState.choose_restart()
 	_choose("C")
 	_choose("B")
+	_expect(ExplorationSystem.total("hub") == 2 and not _has_manual("search_supply_kit"),
+		"в капсуле два поиска: спрятанный контейнер и одна случайная находка")
+	GameState.explore_location()
+	GameState.explore_location()
+	_expect(_has_manual("search_supply_kit") and ExplorationSystem.remaining("hub") == 0 and not ExplorationSystem.can_explore()
+		and _narrative_kind_last("choice") == "Исследовать отсек",
+		"исследование нашло контейнер и разыграло находку; больше искать нечего")
 	GameState.leave_location()
 	MapSystem.travel_to("lift_01_to_02")
 	MapSystem.travel_to("lift_02_to_03")
@@ -632,6 +656,17 @@ func _ready() -> void:
 	ResourceSystem.spend_o2("action")
 	_expect(ResourceSystem.hp == hp_before_starving - 3 and _narrative_kind_last("loss").contains("голод"),
 		"голод на максимуме: каждое действие отнимает здоровье")
+
+	# --- Исследование: пул без спрятанных событий и навык «Поиск» ---
+	_expect(LocationSystem.current_id == "service_corridor" and ExplorationSystem.remaining("service_corridor") == 2,
+		"в коридоре два случайных поиска")
+	GameState.explore_location()
+	GameState.explore_location()
+	_expect(ExplorationSystem.remaining("service_corridor") == 0 and not ExplorationSystem.can_explore(),
+		"поиски в коридоре кончились")
+	CharacterSystem.add_skill_points(1)
+	_expect(CharacterSystem.learn("scavenging") and ExplorationSystem.remaining("service_corridor") == 1
+		and ExplorationSystem.can_explore(), "навык «Поиск» добавляет поиск в каждом отсеке")
 
 	if _failures.is_empty():
 		print("SMOKE OK")

@@ -16,7 +16,8 @@ DATA = os.path.join(ROOT, "data")
 
 # Должны совпадать с CharacterSystem.SLOTS / STAT_TITLES.
 EQUIP_SLOTS = ("head", "body", "arms", "legs", "back")
-STATS = ("armor", "melee_damage", "ranged_damage", "hit_chance", "flee_chance", "max_hp", "inventory_slots")
+STATS = ("armor", "melee_damage", "ranged_damage", "hit_chance", "flee_chance", "max_hp", "inventory_slots",
+         "explore_rolls", "find_chance")
 # Должны совпадать с ResourceSystem.DEFAULT_O2_COSTS.
 O2_COST_KINDS = ("move", "elevator", "action", "choice", "combat_turn")
 # Должны совпадать с ProgressionSystem.DEFAULT_CONFIG (секция config.json → xp).
@@ -153,6 +154,12 @@ def main():
     except Exception as e:
         errors.append(f"quests.json: {e}")
         quests_data = {}
+
+    try:
+        explore_pools = load_json(os.path.join(DATA, "explore_pools.json"))
+    except Exception as e:
+        errors.append(f"explore_pools.json: {e}")
+        explore_pools = {}
 
     skills = load_optional("skills.json")
     recipes = load_optional("recipes.json")
@@ -578,6 +585,18 @@ def main():
             errors.append(f"{ctx}.base: должно быть true/false")
         if "breathable" in loc and not isinstance(loc["breathable"], bool):
             errors.append(f"{ctx}.breathable: должно быть true/false")
+        explore = loc.get("explore")
+        if explore is not None:
+            if not isinstance(explore, dict):
+                errors.append(f"{ctx}.explore: ожидается объект {{pool, rolls}}")
+            else:
+                if explore.get("pool") not in explore_pools:
+                    errors.append(f"{ctx}.explore.pool: неизвестный пул '{explore.get('pool')}' (explore_pools.json)")
+                rolls = explore.get("rolls", 0)
+                if not isinstance(rolls, int) or isinstance(rolls, bool) or rolls < 0:
+                    errors.append(f"{ctx}.explore.rolls: неотрицательное целое")
+                elif explore.get("pool") in explore_pools and len(explore_pools[explore["pool"]]) < rolls + 2:
+                    warnings.append(f"{ctx}.explore: в пуле '{explore['pool']}' меньше rolls+2 событий — навыку «Поиск» не хватит находок")
         if not str(loc.get("description", "")).strip():
             warnings.append(f"{ctx}: нет базового описания (description)")
         variants = loc.get("descriptions", [])
@@ -609,6 +628,13 @@ def main():
                 errors.append(f"{ev_ctx}: у ручного события нужен label (текст пункта меню)")
             if "repeatable" in ev and not isinstance(ev["repeatable"], bool):
                 errors.append(f"{ev_ctx}: repeatable должен быть true/false")
+            if "discover" in ev:
+                if not isinstance(ev["discover"], bool):
+                    errors.append(f"{ev_ctx}.discover: должно быть true/false")
+                elif ev["discover"] and start != "manual":
+                    errors.append(f"{ev_ctx}.discover: прятать под исследованием можно только ручные события")
+                elif ev["discover"] and not str(ev.get("found", "")).strip():
+                    warnings.append(f"{ev_ctx}: у спрятанного события нет текста находки (found)")
             check_requires(ev.get("triggers", []), f"{ev_ctx}.triggers", lid)
             check_effects(ev.get("effects", []), ev_ctx)
             check_image(ev.get("image"), ev_ctx)
@@ -637,6 +663,38 @@ def main():
             errors.append(f"{ctx}: нет текста финала (text)")
         if end_id not in referenced_endings:
             warnings.append(f"{ctx}: финал недостижим — ни один effect 'end_run' на него не ссылается")
+
+    # Пулы случайных находок исследования (ExplorationSystem).
+    allowed_pool_effects = ("item_add", "o2_delta", "hp_delta", "hunger_delta", "ammo_delta")
+    for pool_id, entries in explore_pools.items():
+        pctx = f"explore_pools/{pool_id}"
+        if not isinstance(entries, list) or not entries:
+            errors.append(f"{pctx}: нужен непустой массив событий")
+            continue
+        seen_entries = set()
+        for entry in entries:
+            entry_id = entry.get("id", "") if isinstance(entry, dict) else ""
+            ectx = f"{pctx}#{entry_id or '?'}"
+            if not entry_id:
+                errors.append(f"{ectx}: нужен id")
+                continue
+            if entry_id in seen_entries:
+                errors.append(f"{ectx}: дублирующийся id")
+            seen_entries.add(entry_id)
+            if not str(entry.get("text", "")).strip():
+                errors.append(f"{ectx}: нужен text")
+            weight = entry.get("weight", 1)
+            if not is_positive_int(weight):
+                errors.append(f"{ectx}.weight: положительное целое")
+            check_requires(entry.get("requires", []), ectx)
+            check_effects(entry.get("effects", []), ectx)
+            for eff in entry.get("effects", []):
+                if isinstance(eff, dict) and eff.get("type") not in allowed_pool_effects:
+                    errors.append(f"{ectx}: в пуле допустимы только {', '.join(allowed_pool_effects)}")
+    used_pools = {loc.get("explore", {}).get("pool") for loc in locations.values() if isinstance(loc.get("explore"), dict)}
+    for pool_id in explore_pools:
+        if pool_id not in used_pools:
+            warnings.append(f"explore_pools/{pool_id}: пул не привязан ни к одной локации")
 
     # Цели и мысли героя (QuestSystem).
     thoughts = quests_data.get("thoughts", [])

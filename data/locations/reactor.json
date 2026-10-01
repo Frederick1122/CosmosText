@@ -13,6 +13,7 @@
       "text": "Реакторный отсек. Реактор заглушен, стойки управления мигают аварийным светом. В центральной стойке — энергоячейка, ещё тёплая."
     }
   ],
+  "explore": { "pool": "reactor", "rolls": 2 },
   "events": [
     {
       "id": "use_keycard",
@@ -33,6 +34,8 @@
       "start": "manual",
       "label": "Прочитать журнал реактора",
       "repeatable": false,
+      "discover": true,
+      "found": "Одна из стоек управления ещё светится. На панели висит незакрытый журнал.",
       "triggers": [ { "type": "flag", "flag": "reactor_unlocked" } ],
       "text": "На панели — последняя запись перед остановкой. Запись добавлена в журнал.",
       "effects": [ { "type": "unlock_lore", "id": "log_03" } ]
@@ -63,6 +66,8 @@
       "start": "manual",
       "label": "Вскрыть нишу с боекомплектом",
       "repeatable": false,
+      "discover": true,
+      "found": "Панель управления у стены сидит неровно. За ней угадывается ниша, и маркировка на крышке — оружейная.",
       "triggers": [
         { "type": "flag", "flag": "reactor_unlocked" },
         { "type": "flag", "flag": "ammo_cache_taken", "value": false }
