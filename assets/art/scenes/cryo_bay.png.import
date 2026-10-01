@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cmwt8tqdbqicv"
-path="res://.godot/imported/base_bay.png-f8cf10106a067947806c9f520661ba66.ctex"
+uid="uid://do3trfcs2kh5m"
+path="res://.godot/imported/cryo_bay.png-80dbcc255373a4d58acf1e4972eaef71.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/scenes/base_bay.png"
-dest_files=["res://.godot/imported/base_bay.png-f8cf10106a067947806c9f520661ba66.ctex"]
+source_file="res://assets/art/scenes/cryo_bay.png"
+dest_files=["res://.godot/imported/cryo_bay.png-80dbcc255373a4d58acf1e4972eaef71.ctex"]
 
 [params]
 

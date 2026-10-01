@@ -115,7 +115,7 @@ func load_save_data(data: Dictionary) -> void:
 	changed.emit()
 
 
-## Первый вход в модуль — разведка. База (капсула) — дом, а не находка.
+## Первый вход в модуль — разведка. База (отсек гибернации, каюты) — дом, а не находка.
 func _on_location_entered(location_id: String) -> void:
 	if LocationSystem.get_visits(location_id) == 1 and not LocationSystem.is_base(location_id):
 		add_xp(reward("explore"))

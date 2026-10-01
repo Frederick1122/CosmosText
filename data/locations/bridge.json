@@ -1,0 +1,86 @@
+{
+  "id": "bridge",
+  "image": "bridge",
+  "title": "Рубка",
+  "description": "Рубка «Персефоны». Обзорное стекло пошло трещинами и заклеено аварийной плёнкой, за ним медленно поворачиваются звёзды. Пульты мертвы, кроме одного: маршрутный дисплей упрямо держит курс, которого не было в контракте. Где-то здесь, за креслами, пищит маячок скафандра.",
+  "descriptions": [
+    {
+      "requires": [
+        { "type": "event_done", "event": "take_helmet" },
+        { "type": "event_done", "event": "search_pockets" },
+        { "type": "flag", "flag": "pilot_canister_taken" }
+      ],
+      "text": "Рубка «Персефоны». Второй пилот лежит за креслами, где ты его нашёл; всё, что могло пригодиться, ты уже забрал. Маршрутный дисплей всё так же держит чужой курс."
+    },
+    {
+      "requires": [ { "type": "flag", "flag": "pilot_found" } ],
+      "text": "Рубка «Персефоны». За сорванным креслом лежит второй пилот, маячок на его плече погас. Маршрутный дисплей держит курс, которого не было в контракте."
+    }
+  ],
+  "explore": { "pool": "bridge", "rolls": 2 },
+  "events": [
+    {
+      "id": "first_look",
+      "start": "auto",
+      "repeatable": false,
+      "triggers": [],
+      "text": "Писк маячка становится громче, стоит переступить порог. Источник где-то здесь, но в полумраке рубки его не видно — придётся искать."
+    },
+    {
+      "id": "find_pilot",
+      "start": "manual",
+      "label": "Подойти к скафандру за креслами",
+      "repeatable": false,
+      "discover": true,
+      "found": "За сорванным креслом второго пилота — скафандр, прижатый к пульту. Маячок на плече мигает всё реже.",
+      "triggers": [],
+      "text": "Это второй пилот. Скафандр пробит на плече, на визоре иней. Маячок гаснет под твоей ладонью — сигнал держался до последнего, будто ждал. На поясе подсумки, за спиной баллон с сорванным вентилем.",
+      "effects": [ { "type": "flag_set", "flag": "pilot_found" } ]
+    },
+    {
+      "id": "take_helmet",
+      "start": "manual",
+      "label": "Снять шлем с пилота",
+      "repeatable": false,
+      "triggers": [ { "type": "flag", "flag": "pilot_found" } ],
+      "text": "Защёлки поддаются не сразу. Визор в трещинах, но шлем держит давление.",
+      "effects": [ { "type": "item_add", "item": "cracked_helmet" } ]
+    },
+    {
+      "id": "search_pockets",
+      "start": "manual",
+      "label": "Обыскать подсумки пилота",
+      "repeatable": false,
+      "triggers": [ { "type": "flag", "flag": "pilot_found" } ],
+      "text": "В подсумках — ключ-карта экипажа, схема палуб и пара пищевых брикетов.",
+      "effects": [
+        { "type": "item_add", "item": "pilot_keycard" },
+        { "type": "item_add", "item": "ship_map" },
+        { "type": "item_add", "item": "ration_bar", "count": 2 },
+        { "type": "reveal_map" }
+      ]
+    },
+    {
+      "id": "read_tag",
+      "start": "manual",
+      "label": "Прочитать бирку на скафандре",
+      "repeatable": false,
+      "discover": true,
+      "found": "Ты стираешь иней с нагрудной пластины пилота. Под ним — тканевая бирка, и на ней что-то дописано от руки.",
+      "triggers": [ { "type": "flag", "flag": "pilot_found" } ],
+      "text": "На бирке — имя и приписка маркером. Запись добавлена в журнал.",
+      "effects": [ { "type": "unlock_lore", "id": "log_02" } ]
+    },
+    {
+      "id": "take_canister",
+      "start": "manual",
+      "label": "Снять кислородный баллон",
+      "repeatable": true,
+      "triggers": [
+        { "type": "flag", "flag": "pilot_found" },
+        { "type": "flag", "flag": "pilot_canister_taken", "value": false }
+      ],
+      "situation": "sit_2_1_canister"
+    }
+  ]
+}

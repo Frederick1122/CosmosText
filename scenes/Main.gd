@@ -22,7 +22,7 @@ func _ready() -> void:
 	_delete_save(SaveManager.META_PATH)
 	ArchiveSystem.load_save_data([])
 
-	# --- Палуба 01: капсула ---
+	# --- Палуба 01: отсек гибернации ---
 	GameState.start_new_game()
 	_expect(GameState.current_screen == Screen.SITUATION and SituationEngine.current_id == "sit_1_1_capsule",
 		"новая игра: автособытие пробуждения в капсуле")
@@ -43,16 +43,16 @@ func _ready() -> void:
 		and _narrative_count("choice") == 0 and _narrative_count("result") == 0,
 		"после «Продолжить» событие заменено описанием локации")
 	_expect(QuestSystem.is_step_done("escape_persephone", "leave_capsule") and not QuestSystem.is_completed("escape_persephone")
-		and NotificationSystem.has_journal_alert() and QuestSystem.get_thoughts().contains("ничего не помню"),
-		"цели: побег с обломка начат, первый шаг засчитан, мысли о пробуждении, (!) у журнала")
+		and NotificationSystem.has_journal_alert() and QuestSystem.get_thoughts().contains("Я пассажир."),
+		"цели: побег с обломка начат, первый шаг засчитан, мысли пассажира после пробуждения, (!) у журнала")
 	var escape: Dictionary = QuestSystem.get_quests()[0]
 	_expect(escape["steps"].size() == 2 and bool(escape["steps"][1]["current"]),
 		"видны засчитанные шаги и один текущий, дальше цель не раскрывается")
 	_expect(MapSystem.get_known_floor_ids() == ["deck_01"] and MapSystem.player_node_id == "hub",
-		"игрок стоит в капсуле, палубы за лифтом на карте не видны")
+		"игрок стоит в отсеке гибернации, палубы за лифтом на карте не видны")
 	_expect(MapSystem.is_node_explored("hub") and MapSystem.is_node_fog_visible("lift_01_to_02")
 		and not MapSystem.is_node_fog_visible("cargo_bay"), "туман скрывает дальние отсеки")
-	_expect(not MapSystem.is_node_fog_visible("copilot_body"),
+	_expect(not MapSystem.is_node_fog_visible("bridge"),
 		"неоткрытая действием локация полностью скрыта")
 	_expect(InventorySystem.has_item("broken_datapad"), "планшет в инвентаре")
 	_expect(FileAccess.file_exists(SaveManager.CHECKPOINT_PATH), "в хабе записан чекпойнт")
@@ -75,8 +75,8 @@ func _ready() -> void:
 	_expect(_has_manual("follow_signal"), "после вступления доступен сигнал скафандра")
 
 	# --- База: склад, верстак, ручной чекпойнт ---
-	_expect(LocationSystem.is_base(), "капсула помечена как модуль-база")
-	_expect(LocationSystem.get_image() == "base_bay" and ResourceLoader.exists("res://assets/art/scenes/base_bay.png"),
+	_expect(LocationSystem.is_base(), "отсек гибернации помечен как модуль-база")
+	_expect(LocationSystem.get_image() == "cryo_bay" and ResourceLoader.exists("res://assets/art/scenes/cryo_bay.png"),
 		"у базы есть пиксельная иллюстрация")
 	var o2_before_decline := ResourceSystem.o2
 	_expect(not _has_manual("search_supply_kit") and ExplorationSystem.can_explore(),
@@ -321,19 +321,25 @@ func _ready() -> void:
 		"взят пистолет и патроны, баллоны остались в запертом шкафу")
 	_expect(CharacterSystem.learn("survival") and ResourceSystem.max_hp == 110, "Выживание: макс. HP 110")
 
-	# --- Палуба 01: тело второго пилота ---
+	# --- Палуба 01: рубка и второй пилот ---
 	GameState.leave_location()
 	MapSystem.travel_to("lift_02_to_01")
 	MapSystem.travel_to("hub")
 	GameState.start_location_event("follow_signal")
-	_expect(_node_state("copilot_body") == "available"
-		and MapSystem.is_node_fog_visible("copilot_body")
-		and _notice_contains("[Открыта новая локация \"Тело второго пилота\"]"),
-		"событие показало узел пилота и выделило открытие")
+	_expect(_node_state("bridge") == "available"
+		and MapSystem.is_node_fog_visible("bridge")
+		and _notice_contains("[Открыта новая локация \"Рубка\"]"),
+		"маячок показал рубку и выделил открытие")
 	GameState.leave_location()
-	MapSystem.travel_to("copilot_body")
-	_expect(LocationSystem.current_id == "copilot_body" and _notice_contains("Метка скафандра"),
-		"первое посещение: автосообщение")
+	MapSystem.travel_to("bridge")
+	_expect(LocationSystem.current_id == "bridge" and _notice_contains("Писк маячка")
+		and not _has_manual("find_pilot") and not _has_manual("search_pockets"),
+		"первое посещение рубки: пилота ещё надо найти исследованием")
+	ExplorationSystem.reveal("find_pilot")
+	GameState.start_location_event("find_pilot")
+	_expect(SituationEngine.get_flag("pilot_found") == true and _has_manual("search_pockets")
+		and LocationSystem.get_description().contains("маячок на его плече погас"),
+		"пилот найден: его подсумки и снаряжение доступны, описание рубки сменилось")
 	GameState.start_location_event("take_helmet")
 	_expect(CharacterSystem.equip("cracked_helmet") == "" and CharacterSystem.get_stat("armor") == 4.0,
 		"шлем надет: броня 4")

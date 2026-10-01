@@ -389,12 +389,12 @@ python tools/validate_content.py
 
 ```json
 {
-  "capsule": [
+  "cryo_bay": [
     { "id": "loose_panel", "weight": 5,
-      "text": "За отошедшей обшивкой капсулы — моток изоленты, прихваченный к кабелю.",
+      "text": "За отошедшей панелью обслуживания капсул — моток изоленты, прихваченный к кабелю.",
       "effects": [ { "type": "item_add", "item": "duct_tape" } ] },
-    { "id": "crumbs", "weight": 2,
-      "text": "В кармане кресла — смятая обёртка, а под ней половина пайка. Повезло.",
+    { "id": "revival_pack", "weight": 2,
+      "text": "В лотке у изголовья капсулы — питательный гель «для первого часа после пробуждения». Он ещё не замёрз.",
       "effects": [ { "type": "hunger_delta", "value": -15 } ] }
   ]
 }
@@ -413,7 +413,7 @@ python tools/validate_content.py
 - Скрывать (`discover`) стоит находки — «обыскать», «прочитать», «разобрать», «вскрыть шкафчик». Сюжетные действия (двери, ключ-карты, шлюз, завал, консоль, тарелка, установка элемента, стыковка спасения) оставляйте видимыми, иначе игрок не поймёт, куда идти. У скрытого события пишите `found`.
 - Пул делайте больше `rolls` хотя бы на 2 (иначе предупреждение валидатора): навык «Поиск» добавляет броски, и выбор должен оставаться случайным.
 - Смешивайте находки, опасности (`hp_delta`, `o2_delta` с минусом), небольшие пополнения O2 и атмосферные записи без эффектов — тексты о прошлом корабля и загадках сектора.
-- Сейчас 12 пулов: `capsule`, `wreck_corridor`, `cargo_hold`, `workshop`, `vacuum_corridor`, `reactor`, `alien`, `station_dock`, `station_living`, `station_medical`, `station_tech`, `outside`; `explore` есть у всех 12 локаций.
+- Сейчас 12 пулов: `cryo_bay`, `bridge`, `cargo_hold`, `workshop`, `vacuum_corridor`, `reactor`, `alien`, `station_dock`, `station_living`, `station_medical`, `station_tech`, `outside`; `explore` есть у всех 12 локаций.
 
 ## Рецепты — `recipes.json`
 
@@ -584,7 +584,7 @@ python tools/validate_content.py
 {
   "thoughts": [
     { "requires": [{ "type": "flag", "flag": "left_persephone" }], "text": "«Персефона» осталась позади." },
-    { "requires": [], "text": "Сначала выбраться из капсулы." }
+    { "requires": [], "text": "Сначала выбраться из капсулы гибернации." }
   ],
   "quests": [
     {

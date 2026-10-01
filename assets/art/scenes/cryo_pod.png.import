@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://csii2r2f78v2d"
-path="res://.godot/imported/wreckage.png-746ecd237b080a969735a2fdeafe0a36.ctex"
+uid="uid://bdiubjo7hfdtt"
+path="res://.godot/imported/cryo_pod.png-be48bd25dfe82ba3e33806ccb7d731a0.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/scenes/wreckage.png"
-dest_files=["res://.godot/imported/wreckage.png-746ecd237b080a969735a2fdeafe0a36.ctex"]
+source_file="res://assets/art/scenes/cryo_pod.png"
+dest_files=["res://.godot/imported/cryo_pod.png-be48bd25dfe82ba3e33806ccb7d731a0.ctex"]
 
 [params]
 

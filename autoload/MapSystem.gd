@@ -600,7 +600,7 @@ func load_save_data(data: Dictionary, fallback_sector_id: String = "wreck_01") -
 				_explored_nodes[str(node_id)] = true
 	else:
 		# Старые сохранения не знали о тумане: восстановим посещённые узлы
-		# по состоянию и всегда оставим стартовую капсулу видимой.
+		# по состоянию и всегда оставим стартовый отсек (хаб) видимым.
 		for node_id in nodes.keys():
 			if str(node_id) == hub_node_id or str(nodes[node_id].get("state", "locked")) != "locked":
 				_explored_nodes[str(node_id)] = true

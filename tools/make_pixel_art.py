@@ -294,161 +294,434 @@ def draw_room(c, box, tones, seam):
 # Сцены 160x96
 # ----------------------------------------------------------------------------
 
-def scene_capsule(c, rng):
-    """Спасательная капсула изнутри: треснувший иллюминатор, аварийная лампа, пульт."""
-    p = {
-        "void": VOID,
-        "hull_d": (22, 27, 36),
-        "hull": (34, 42, 55),
-        "hull_l": (52, 63, 80),
-        "rim": (78, 92, 112),
-        "glass": (13, 19, 34),
-        "star": STAR,
-        "crack": (150, 163, 185),
-        "red_d": (104, 30, 40),
-        "red": RED,
-        "red_l": RED_LIT,
-        "panel": (26, 33, 44),
-        "cyan": CYAN,
-        "amber": AMBER,
-    }
-    c.fill(p["hull"])
-    # изогнутый потолок и пол капсулы
-    c.fill_rect(0, 0, 159, 11, p["hull_d"])
-    c.dither_rect(0, 12, 159, 15, p["hull_d"], p["hull"])
-    c.fill_rect(0, 82, 159, 95, p["hull_d"])
-    c.dither_rect(0, 78, 159, 81, p["hull"], p["hull_d"], 1)
-    # боковые рёбра корпуса
-    for x in (6, 14, 145, 153):
-        c.vline(x, 8, 84, p["hull_l"])
-        c.vline(x + 1, 8, 84, p["hull_d"])
-    for y in range(12, 82, 8):
-        c.pixel(10, y, p["rim"])
-        c.pixel(149, y, p["rim"])
-    # иллюминатор
-    cx, cy, r = 80, 41, 27
-    c.circle(cx, cy, r + 4, p["hull_l"])
-    c.ring(cx, cy, r, r + 4, p["rim"])
-    c.circle(cx, cy, r, p["glass"])
-    c.specks_on(rng, cx - r, cy - r, cx + r, cy + r, p["glass"], p["star"], 90)
-    c.specks_on(rng, cx - r, cy - r, cx + r, cy + r, p["glass"], STAR_DIM, 70)
-    # планета за стеклом: красим только пиксели «неба», чтобы не выйти за обод
-    ox, oy, orr = cx + 13, cy + 18, 16
-    sky = (rgba(p["glass"]), rgba(p["star"]), rgba(STAR_DIM))
-    for y in range(oy - orr, oy + orr + 1):
-        for x in range(ox - orr, ox + orr + 1):
-            d = (x - ox) ** 2 + (y - oy) ** 2
-            if d > orr * orr or c.get(x, y) not in sky:
-                continue
-            if (x - ox) + (y - oy) < -10:
-                col = p["crack"]
-            elif d > (orr - 3) ** 2:
-                col = p["hull_d"]
-            elif (y - oy) % 5 == 0:
-                col = p["hull_l"]
-            else:
-                col = p["rim"]
-            c.pixel(x, y, col)
-    # трещины от края стекла
-    c.line(cx - 26, cy - 6, cx + 4, cy + 3, p["crack"])
-    c.line(cx + 4, cy + 3, cx + 18, cy - 10, p["crack"])
-    c.line(cx + 4, cy + 3, cx + 12, cy + 17, p["crack"])
-    c.line(cx - 8, cy - 1, cx - 12, cy + 16, p["crack"])
-    c.line(cx - 2, cy + 1, cx + 9, cy - 19, p["crack"])
-    # заклёпки по ободу
-    for k in range(12):
-        a = k * 3.14159 * 2.0 / 12.0
-        c.pixel(int(cx + (r + 2) * _cos(a)), int(cy + (r + 2) * _sin(a)), p["hull_d"])
-    # аварийная лампа слева сверху
-    c.dither_disc(24, 20, 13, p["red_d"], 1)
-    c.circle(24, 20, 5, p["red"])
-    c.circle(24, 19, 2, p["red_l"])
-    c.fill_rect(21, 12, 27, 14, p["hull_l"])
-    # отсвет лампы на потолке и стене
-    c.dither_over(8, 8, 46, 12, p["red_d"])
-    # пульт управления
-    c.fill_rect(16, 66, 143, 95, p["panel"])
-    c.hline(16, 143, 66, p["hull_l"])
-    c.hline(16, 143, 67, p["hull_d"])
-    c.fill_rect(22, 71, 62, 89, p["glass"])
-    c.rect(21, 70, 63, 90, p["hull_l"])
-    for i, yy in enumerate(range(74, 88, 4)):
-        c.hline(25, 25 + 8 + i * 9, yy, p["cyan"])
-    c.hline(25, 58, 86, p["amber"])
-    for row, yy in enumerate((73, 80, 87)):
-        for i in range(7):
-            xx = 74 + i * 9
-            col = p["amber"] if (i + row) % 3 == 0 else (p["cyan"] if (i + row) % 3 == 1 else p["red"])
-            c.fill_rect(xx, yy, xx + 4, yy + 3, col)
-            c.hline(xx, xx + 4, yy + 4, p["hull_d"])
-    # рукоятка катапульты
-    c.fill_rect(130, 40, 136, 64, p["hull_l"])
-    c.fill_rect(127, 36, 139, 41, p["red"])
-    c.noise_specks(rng, 0, 84, 159, 95, p["hull"], 40)
+def _poly(c, pts, col, phase=None):
+    """Заливка многоугольника по строкам (правило чёт-нечет), вершины — float.
+    phase=None — сплошная заливка, иначе шахматный налёт с этой фазой."""
+    ys = [pt[1] for pt in pts]
+    n = len(pts)
+    for y in range(max(0, int(min(ys))), min(c.h - 1, int(max(ys)) + 1) + 1):
+        yc = y + 0.5
+        xs = []
+        for i in range(n):
+            ax, ay = pts[i]
+            bx, by = pts[(i + 1) % n]
+            if (ay <= yc < by) or (by <= yc < ay):
+                xs.append(ax + (yc - ay) * (bx - ax) / (by - ay))
+        xs.sort()
+        for k in range(0, len(xs) - 1, 2):
+            for x in range(int(xs[k] + 0.5), int(xs[k + 1] + 0.5)):
+                if phase is None or (x + y + phase) % 2 == 0:
+                    c.pixel(x, y, col)
 
 
-def scene_wreckage(c, rng):
-    """Разорванный коридор корабля: обломки дрейфуют, за пробоиной звёзды."""
-    p = {
-        "d0": (39, 47, 60), "d1": (28, 35, 45), "d2": (20, 25, 33),
-        "f0": (38, 44, 54), "f1": (29, 34, 43), "f2": (20, 25, 33),
-        "w0": (52, 61, 76), "w1": (39, 47, 60), "w2": (28, 35, 45),
-        "far": (18, 23, 31),
-        "seam": (14, 18, 24),
-        "hot": (86, 98, 118),
-        "void": VOID,
-        "star": STAR,
-        "amber": AMBER,
-        "red": RED,
-        "cyan": CYAN,
-    }
-    draw_room(c, (58, 30, 100, 64),
+# Отсек гибернации строится в настоящей перспективе: глаз в центре кадра,
+# X — поперёк (-1 левая стена, 1 правая), v — по высоте (-1 потолок, 1 пол),
+# z — глубина (1 — край кадра, BAY_FAR — дальняя стена).
+BAY_FAR = 3.6
+BAY_SLOTS = ((1.0, 1.5), (1.65, 2.15), (2.3, 2.8), (2.95, 3.45))
+
+
+def _bay_pt(x, v, z):
+    """Проекция точки отсека на экран 160x96."""
+    return (79.5 + x * 79.5 / z, 47.5 + v * 47.5 / z)
+
+
+def _bay_box(c, x0, x1, v0, v1, z0, z1, front, side, cap, phase=None):
+    """Брусок в отсеке: видимые грани — торец к зрителю, бок к проходу
+    и верх (если брусок ниже глаза). x0 < x1, v0 < v1 (v0 — верх), z0 < z1."""
+    P = _bay_pt
+    if x1 < 0:
+        _poly(c, [P(x1, v0, z0), P(x1, v0, z1), P(x1, v1, z1), P(x1, v1, z0)], side, phase)
+    elif x0 > 0:
+        _poly(c, [P(x0, v0, z0), P(x0, v0, z1), P(x0, v1, z1), P(x0, v1, z0)], side, phase)
+    if v0 > 0:
+        _poly(c, [P(x0, v0, z0), P(x1, v0, z0), P(x1, v0, z1), P(x0, v0, z1)], cap, phase)
+    _poly(c, [P(x0, v0, z0), P(x1, v0, z0), P(x1, v1, z0), P(x0, v1, z0)], front, phase)
+
+
+def _cryo_pod(c, p, side, za, zb, state):
+    """Капсула гибернации в ряду у стены: side -1 слева, 1 справа;
+    state 'closed' — крышка из тёмного заиндевевшего стекла, 'open' — крышка поднята."""
+    P = _bay_pt
+    wall, aisle = sorted((side * 1.0, side * 0.42))
+    _bay_box(c, wall, aisle, 0.6, 1.0, za, zb, p["pod_front"], p["pod_side"], p["pod_top"])
+    # кромка корпуса и индикатор на торце
+    fx = side * 0.42
+    c.line(*[int(t) for t in P(wall, 0.6, za) + P(aisle, 0.6, za)], p["pod_edge"])
+    c.line(*[int(t) for t in P(fx, 0.6, za) + P(fx, 0.6, zb)], p["pod_edge"])
+    lx, ly = P(side * 0.55, 0.78, za)
+    lamp = p["lamp_open"] if state == "open" else p["lamp"]
+    c.pixel(int(lx), int(ly), lamp)
+    c.pixel(int(lx) + side, int(ly), lamp)
+    gx0, gx1 = sorted((side * 0.92, side * 0.5))
+    if state == "closed":
+        _bay_box(c, gx0, gx1, 0.48, 0.6, za + 0.05, zb - 0.05,
+                 p["glass_d"], p["glass_s"], p["glass"])
+        # иней по стеклу и блик вдоль кромки к проходу
+        gin, gout = sorted((side * 0.82, side * 0.58))
+        _poly(c, [P(gin, 0.48, za + 0.1), P(gout, 0.48, za + 0.1),
+                  P(gout, 0.48, zb - 0.12), P(gin, 0.48, zb - 0.12)], p["frost"], 1)
+        c.line(*[int(t) for t in P(side * 0.52, 0.48, za + 0.07) + P(side * 0.52, 0.48, zb - 0.1)],
+               p["frost_l"])
+        return
+    # открытая: светящееся ложе внутри и поднятая крышка на петлях у стены
+    _poly(c, [P(gx0, 0.6, za + 0.05), P(gx1, 0.6, za + 0.05),
+              P(gx1, 0.6, zb - 0.05), P(gx0, 0.6, zb - 0.05)], p["bed"])
+    hx0, hx1 = sorted((side * 0.86, side * 0.56))
+    _poly(c, [P(hx0, 0.6, za + 0.1), P(hx1, 0.6, za + 0.1),
+              P(hx1, 0.6, zb - 0.1), P(hx0, 0.6, zb - 0.1)], p["bed_l"])
+    # свет поднимается из ложа столбом, шахматным налётом
+    _bay_box(c, hx0, hx1, 0.05, 0.6, za + 0.1, zb - 0.1, p["bed"], p["bed"], p["bed"], 1)
+    hinge, free = side * 0.94, side * 0.76
+    lid = [P(hinge, 0.5, za + 0.05), P(hinge, 0.5, zb - 0.05),
+           P(free, -0.2, zb - 0.05), P(free, -0.2, za + 0.05)]
+    _poly(c, lid, p["glass"])
+    _poly(c, lid, p["glass_d"], 0)
+    for a, b in ((0, 1), (1, 2), (2, 3), (3, 0)):
+        c.line(*[int(t) for t in lid[a] + lid[b]], p["pod_edge"])
+    c.line(*[int(t) for t in lid[2] + lid[3]], p["frost_l"])
+
+
+def _cryo_bay_room(c, p, left, right):
+    """Отсек гибернации: коробка, ряды капсул вдоль стен (по слотам BAY_SLOTS,
+    состояния 'closed' / 'open' / None — пусто), трубы и аварийные лампы."""
+    P = _bay_pt
+    fx0, fy0 = P(-1, -1, BAY_FAR)
+    fx1, fy1 = P(1, 1, BAY_FAR)
+    draw_room(c, (int(fx0), int(fy0), int(fx1), int(fy1)),
               {"ceil": (p["d0"], p["d1"], p["d2"]),
                "floor": (p["f0"], p["f1"], p["f2"]),
                "left": (p["w0"], p["w1"], p["w2"]),
                "right": (p["w0"], p["w1"], p["w2"]),
                "far": p["far"]}, p["seam"])
-    # рёбра жёсткости на левой стене
-    for k, xx in enumerate((6, 22, 40)):
-        top = 6 + k * 6
-        bot = 89 - k * 6
-        c.vline(xx, top, bot, p["hot"])
-        c.vline(xx + 1, top, bot, p["seam"])
-    # дальний проём с тусклым светом
-    c.fill_rect(70, 40, 88, 64, p["w2"])
-    c.rect(70, 40, 88, 64, p["hot"])
-    c.dither_over(72, 42, 86, 50, p["cyan"], 1)
-    # пробоина: рваный край справа
-    edge = 96
-    for y in range(0, 96):
-        edge += rng.randint(-3, 3)
-        edge = max(92, min(118, edge))
-        if 8 <= y <= 86:
-            c.hline(edge, 159, y, p["void"])
-            c.pixel(edge - 1, y, p["hot"])
-    c.specks_on(rng, 96, 8, 159, 86, p["void"], p["star"], 110)
-    c.specks_on(rng, 96, 8, 159, 86, p["void"], STAR_DIM, 80)
-    # загнутые лепестки обшивки по краю пробоины
-    for y0 in (14, 34, 58, 76):
-        c.line(96, y0, 108, y0 - 6, p["hot"])
-        c.line(108, y0 - 6, 112, y0 + 2, p["w1"])
-        c.line(96, y0, 112, y0 + 2, p["w2"])
-    # дрейфующие обломки
-    for (bx, by, bw, bh) in ((118, 22, 9, 5), (132, 46, 7, 7), (104, 68, 11, 4),
-                             (140, 14, 5, 9), (126, 70, 6, 5), (148, 58, 6, 4)):
-        c.fill_rect(bx, by, bx + bw, by + bh, p["w1"])
-        c.hline(bx, bx + bw, by, p["hot"])
-        c.rect(bx - 1, by - 1, bx + bw + 1, by + bh + 1, p["seam"])
-    # оборванные кабели с искрами
-    c.line(30, 4, 34, 26, p["seam"])
-    c.line(34, 26, 28, 38, p["seam"])
-    c.line(48, 4, 52, 20, p["seam"])
-    c.pixel(28, 39, p["amber"])
-    c.noise_specks(rng, 24, 36, 34, 44, p["amber"], 6)
-    c.noise_specks(rng, 46, 18, 56, 26, p["red"], 4)
-    # мусор на полу
-    c.noise_specks(rng, 4, 74, 92, 95, p["w2"], 50)
-    c.noise_specks(rng, 4, 78, 92, 95, p["hot"], 18)
+    # герметичный люк в торце и красная лампа над ним
+    hx0, hy0 = P(-0.3, -0.55, BAY_FAR)
+    hx1, hy1 = P(0.3, 1.0, BAY_FAR)
+    c.fill_rect(int(hx0), int(hy0), int(hx1), int(hy1), p["w2"])
+    c.rect(int(hx0), int(hy0), int(hx1), int(hy1), p["seam"])
+    c.vline(80, int(hy0) + 1, int(hy1), p["seam"])
+    c.dither_disc(80, int(hy0) - 3, 6, p["red_d"], 1)
+    c.fill_rect(78, int(hy0) - 4, 81, int(hy0) - 2, p["red"])
+    for s in (-1, 1):
+        # трубы вдоль стен над капсулами
+        for v in (-0.38, -0.3):
+            c.line(*[int(t) for t in P(s, v, 1.0) + P(s, v, BAY_FAR)], p["pipe"])
+        # рёбра стены между капсулами
+        for za, zb in BAY_SLOTS:
+            x, ya = P(s, -1, zb + 0.07)
+            _, yb = P(s, 1, zb + 0.07)
+            c.vline(int(x), int(ya), int(yb), p["rib"])
+        # аварийные лампы под потолком над каждым слотом и отсвет по стене
+        for za, zb in BAY_SLOTS:
+            z0, z1 = za + 0.1, zb - 0.1
+            _poly(c, [P(s, -0.95, z0 - 0.05), P(s, -0.95, z1 + 0.05),
+                      P(s, -0.45, z1 + 0.05), P(s, -0.45, z0 - 0.05)], p["red_d"], 1)
+            c.line(*[int(t) for t in P(s, -0.72, z0) + P(s, -0.72, z1)], p["red"])
+            c.line(*[int(t) for t in P(s, -0.7, z0) + P(s, -0.7, z1)], p["red"])
+    # капсулы от дальних к ближним
+    for k in range(len(BAY_SLOTS) - 1, -1, -1):
+        za, zb = BAY_SLOTS[k]
+        for s, row in ((-1, left), (1, right)):
+            if row[k]:
+                _cryo_pod(c, p, s, za, zb, row[k])
+
+
+CRYO_PALETTE = {
+    "d0": (30, 36, 48), "d1": (23, 28, 38), "d2": (17, 21, 29),
+    "f0": (36, 40, 49), "f1": (27, 30, 38), "f2": (19, 22, 29),
+    "w0": (42, 50, 63), "w1": (32, 38, 49), "w2": (23, 28, 37),
+    "far": (16, 20, 27),
+    "seam": (11, 14, 19),
+    "rib": (52, 62, 78),
+    "pipe": (58, 68, 84),
+    "pod_front": (50, 60, 74), "pod_side": (64, 76, 92), "pod_top": (86, 100, 118),
+    "pod_edge": (118, 134, 154),
+    "glass": (26, 46, 60), "glass_s": (20, 36, 48), "glass_d": (14, 26, 36),
+    "frost": (100, 146, 166), "frost_l": (176, 214, 228),
+    "bed": (70, 112, 130), "bed_l": (150, 204, 222),
+    "lamp": (60, 150, 170), "lamp_open": AMBER,
+    "red": RED, "red_d": (88, 26, 34),
+}
+
+
+def scene_cryo_pod(c, rng):
+    """Взгляд из капсулы гибернации: близкая выпуклая крышка, затянутая инеем
+    и треснувшая; сквозь неё — тёмный отсек, мигает красная аварийная лампа,
+    на стекле горит красное предупреждение."""
+    p = dict(CRYO_PALETTE)
+    p.update({
+        "shell_d": (12, 16, 23), "shell": (20, 26, 35), "shell_l": (30, 38, 50),
+        "gasket": (64, 84, 100), "gasket_l": (110, 136, 154),
+        "frost_m": (130, 176, 196), "frost_r": (168, 112, 128), "frost_rl": (226, 170, 182),
+        "crack": (226, 240, 248), "crack_d": (40, 58, 72),
+        "red_l": RED_LIT,
+    })
+    # отсек за стеклом рисуется на отдельном холсте и потом «замораживается»
+    bay = Canvas(c.w, c.h, VOID)
+    _cryo_bay_room(bay, p, ("closed",) * 4, ("closed",) * 4)
+    lamp_x, lamp_y = 112, 20
+    bay.dither_disc(lamp_x, lamp_y, 18, p["red_d"], 0)
+    bay.circle(lamp_x, lamp_y, 5, p["red"])
+    bay.circle(lamp_x, lamp_y - 1, 2, p["red_l"])
+    # грубый шум 8x8 для неровной кромки инея
+    grid = [[rng.random() for _ in range(22)] for _ in range(14)]
+
+    def noise(x, y):
+        gx, gy = x / 8.0, y / 8.0
+        ix, iy = int(gx), int(gy)
+        tx, ty = gx - ix, gy - iy
+        a = grid[iy][ix] * (1 - tx) + grid[iy][ix + 1] * tx
+        b = grid[iy + 1][ix] * (1 - tx) + grid[iy + 1][ix + 1] * tx
+        return a * (1 - ty) + b * ty
+
+    cx, cy, rx, ry = 79.5, 46.5, 70.0, 41.0
+    for y in range(c.h):
+        for x in range(c.w):
+            d = (abs(x - cx) / rx) ** 3 + (abs(y - cy) / ry) ** 3
+            r = d ** (1.0 / 3.0)
+            if r >= 1.0:
+                # обшивка капсулы вокруг крышки: уплотнитель и мягкие сегменты
+                if r < 1.035:
+                    col = p["gasket_l"] if y < cy else p["gasket"]
+                elif r < 1.07:
+                    col = p["seam"]
+                elif r < 1.18:
+                    col = p["shell_l"]
+                elif r < 1.3:
+                    col = p["shell"]
+                else:
+                    col = p["shell_d"]
+                c.px[y * c.w + x] = rgba(col)
+                continue
+            f = (r - 0.55) / 0.45 + (noise(x, y) - 0.5) * 0.7
+            red = (x - lamp_x) ** 2 + (y - lamp_y) ** 2 < 26 * 26
+            frost_l = p["frost_rl"] if red else p["frost_l"]
+            frost = p["frost_r"] if red else p["frost_m"]
+            if f > 0.92:
+                col = frost_l
+            elif f > 0.72:
+                col = frost
+            elif f > 0.5 and (x + y) % 2 == 0:
+                col = frost
+            elif f > 0.3 and x % 2 == 0 and y % 2 == 0:
+                col = frost
+            else:
+                # стекло холодит отсек: чуть синее и темнее
+                br, bg, bb, _ = bay.px[y * c.w + x]
+                col = (int(br * 0.75), int(bg * 0.85) + 4, int(bb * 0.9) + 10)
+            c.px[y * c.w + x] = rgba(col)
+    # кристаллы инея у кромки
+    for _ in range(40):
+        x = rng.randint(10, 150)
+        y = rng.randint(6, 88)
+        d = (abs(x - cx) / rx) ** 3 + (abs(y - cy) / ry) ** 3
+        if not 0.55 < d < 0.95:
+            continue
+        col = p["crack"] if rng.random() < 0.5 else p["frost_l"]
+        c.pixel(x, y, col)
+        for ox, oy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            c.pixel(x + ox, y + oy, col)
+        if rng.random() < 0.5:
+            for ox, oy in ((2, 2), (-2, -2), (2, -2), (-2, 2)):
+                c.pixel(x + ox, y + oy, p["frost_l"])
+    # выпуклость стекла: дугообразный блик сверху слева (кривая Безье)
+    for i in range(40):
+        t = i / 39.0
+        u = 1.0 - t
+        x = int(u * u * 28 + 2 * u * t * 34 + t * t * 70)
+        y = int(u * u * 40 + 2 * u * t * 14 + t * t * 13)
+        if i % 9 < 7:
+            c.pixel(x, y, p["crack"])
+            c.pixel(x + 1, y + 1, p["frost_m"])
+    # мигающая аварийная лампа просвечивает сквозь иней размытым пятном
+    c.dither_disc(lamp_x, lamp_y, 8, p["red"], 1)
+    c.circle(lamp_x, lamp_y, 3, p["red"])
+    c.circle(lamp_x, lamp_y, 1, p["red_l"])
+    # трещина от точки удара с отростками
+    ix, iy = 46, 52
+    for (x1, y1), (x2, y2) in (((ix, iy), (18, 36)), ((ix, iy), (30, 76)),
+                               ((ix, iy), (74, 40)), ((74, 40), (98, 44)),
+                               ((74, 40), (82, 24)), ((ix, iy), (66, 70)),
+                               ((30, 76), (22, 84)), ((18, 36), (12, 30))):
+        c.line(x1, y1 + 1, x2, y2 + 1, p["crack_d"])
+        c.line(x1, y1, x2, y2, p["crack"])
+    c.ring(ix, iy, 3, 4, p["crack"])
+    c.pixel(ix, iy, p["crack"])
+    # красное предупреждение, выведенное на стекло крышки
+    c.dither_disc(80, 72, 13, p["red_d"], 1)
+    for i in range(7):
+        c.hline(80 - i, 80 + i, 64 + i, p["red"])
+    c.vline(80, 66, 68, p["seam"])
+    c.pixel(80, 70, p["seam"])
+    for k, w in enumerate((22, 14)):
+        y = 74 + k * 3
+        for x in range(80 - w // 2, 80 + w // 2):
+            if (x * 7 + k) % 5:
+                c.pixel(x, y, p["red"])
+    # капли талой воды на нижней кромке
+    c.noise_specks(rng, 30, 82, 130, 86, p["frost_l"], 10)
+
+
+def scene_bridge(c, rng):
+    """Рубка грузовика: широкий треснувший обзорный экран, залатанный аварийной
+    плёнкой, за ним звёзды; мёртвые пульты, живой только янтарный экран маршрута;
+    одно кресло пилота сорвано, за креслами в тени осела фигура в скафандре."""
+    p = {
+        "hull_d": (16, 19, 26), "hull": (26, 31, 40), "hull_l": (40, 47, 59),
+        "frame": (50, 58, 72), "frame_l": (84, 96, 114),
+        "void": VOID, "star": STAR,
+        "planet": (46, 62, 84), "planet_l": (96, 124, 150), "planet_d": (30, 40, 56),
+        "crack": (196, 212, 228),
+        "film": (64, 60, 44), "film_l": (120, 112, 80),
+        "tape": (196, 182, 136), "tape_d": (120, 108, 76),
+        "con_top": (46, 52, 64), "con_front": (30, 35, 45), "con_edge": (70, 78, 94),
+        "screen": (14, 17, 22), "glare": (52, 60, 72),
+        "amber": AMBER, "amber_d": (92, 66, 26), "amber_bg": (40, 28, 12),
+        "amber_l": (252, 220, 150),
+        "seat": (50, 52, 60), "seat_m": (42, 44, 51), "seat_d": (28, 29, 35),
+        "seat_l": (76, 78, 88),
+        "cable": (120, 70, 46),
+        "f0": (30, 33, 40), "f1": (22, 25, 31),
+        "suit": (37, 38, 44), "suit_l": (48, 49, 55),
+        "red": RED,
+    }
+    c.fill(p["hull"])
+    # потолок с потухшей панелью
+    c.fill_rect(0, 0, 159, 4, p["hull_d"])
+    for x in range(20, 140, 6):
+        c.pixel(x, 2, p["hull_l"])
+    # обзорный экран: рама и стекло
+    _poly(c, [(2, 4), (158, 4), (142, 50), (18, 50)], p["frame"])
+    glass = [(8, 7), (152, 7), (138, 47), (22, 47)]
+    _poly(c, glass, p["void"])
+    c.specks_on(rng, 8, 7, 152, 47, p["void"], p["star"], 70)
+    c.specks_on(rng, 8, 7, 152, 47, p["void"], STAR_DIM, 90)
+    # край холодной планеты внизу справа — только по пикселям неба
+    sky = (rgba(p["void"]), rgba(p["star"]), rgba(STAR_DIM))
+    ox, oy, orr = 132, 96, 60
+    for y in range(7, 48):
+        for x in range(70, 153):
+            d = (x - ox) ** 2 + (y - oy) ** 2
+            if d > orr * orr or c.get(x, y) not in sky:
+                continue
+            if d > (orr - 2) ** 2:
+                col = p["planet_l"]
+            elif (y + x // 3) % 7 == 0:
+                col = p["planet_d"]
+            else:
+                col = p["planet"]
+            c.pixel(x, y, col)
+    # стойки-переплёты между секциями экрана
+    for (x1, x2) in ((56, 60), (104, 100)):
+        for o in (-1, 0, 1):
+            c.line(x1 + o, 7, x2 + o, 47, p["frame"])
+        c.line(x1 - 1, 7, x2 - 1, 47, p["frame_l"])
+    c.line(8, 7, 152, 7, p["frame_l"])
+    # трещины на левой секции
+    ix, iy = 36, 24
+    for x2, y2 in ((12, 12), (24, 44), (52, 14), (54, 36), (14, 30), (40, 46)):
+        c.line(ix, iy, x2, y2, p["crack"])
+    c.ring(ix, iy, 2, 3, p["crack"])
+    # аварийная плёнка поверх трещин: тусклый налёт, блик, рамка и крест из ленты
+    patch = [(20, 13), (52, 11), (54, 37), (24, 40)]
+    _poly(c, patch, p["film"], 0)
+    c.line(26, 34, 46, 15, p["film_l"])
+    c.line(29, 35, 48, 17, p["film_l"])
+    for a, b in ((0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 3)):
+        c.line(int(patch[a][0]), int(patch[a][1]), int(patch[b][0]), int(patch[b][1]), p["tape"])
+    for a, b in ((0, 1), (3, 2)):
+        c.line(int(patch[a][0]), int(patch[a][1]) + 1, int(patch[b][0]), int(patch[b][1]) + 1,
+               p["tape_d"])
+    patch2 = [(112, 26), (130, 24), (128, 40), (110, 42)]
+    c.line(118, 28, 126, 38, p["crack"])
+    c.line(120, 33, 113, 38, p["crack"])
+    _poly(c, patch2, p["film"], 1)
+    c.line(114, 38, 124, 28, p["film_l"])
+    for a, b in ((0, 1), (1, 2), (2, 3), (3, 0)):
+        c.line(int(patch2[a][0]), int(patch2[a][1]), int(patch2[b][0]), int(patch2[b][1]), p["tape"])
+    # приборная доска: наклонная крышка и лицевая панель
+    _poly(c, [(14, 50), (146, 50), (158, 62), (2, 62)], p["con_top"])
+    c.hline(14, 146, 50, p["con_edge"])
+    c.fill_rect(0, 62, 159, 69, p["con_front"])
+    c.hline(0, 159, 62, p["con_edge"])
+    # мёртвые экраны с бликом
+    for (x0, x1) in ((18, 38), (42, 60), (100, 118), (122, 142)):
+        c.fill_rect(x0, 52, x1, 59, p["screen"])
+        c.rect(x0 - 1, 51, x1 + 1, 60, p["hull_d"])
+        c.line(x0 + 2, 58, x0 + 7, 53, p["glare"])
+    # единственный живой экран — маршрут янтарём
+    c.dither_disc(80, 56, 16, p["amber_d"], 1)
+    c.fill_rect(65, 51, 95, 60, p["amber_bg"])
+    c.rect(64, 50, 96, 61, p["hull_d"])
+    for x in range(67, 94, 4):
+        c.vline(x, 52, 59, p["amber_d"])
+    route = ((68, 58), (74, 55), (80, 57), (86, 53), (92, 54))
+    for (x1, y1), (x2, y2) in zip(route, route[1:]):
+        c.line(x1, y1, x2, y2, p["amber"])
+    for x, y in route[:-1]:
+        c.pixel(x, y, p["amber_l"])
+    c.rect(91, 53, 93, 55, p["amber_l"])
+    # редкие живые огоньки на пульте
+    for x, y, col in ((10, 65, p["amber_d"]), (150, 65, p["red"]), (46, 65, p["amber_d"])):
+        c.pixel(x, y, col)
+    # палуба
+    c.dither_rect(0, 70, 159, 95, p["f0"], p["f1"])
+    c.fill_rect(0, 88, 159, 95, p["f1"])
+    c.hline(0, 159, 70, p["hull_d"])
+    # левое кресло пилота, вид со спины: подголовник, спинка с боковинами
+    c.fill_rect(40, 84, 46, 95, p["seat_d"])
+    c.ellipse(43, 61, 14, 6, p["seat_d"])
+    c.fill_rect(29, 61, 57, 87, p["seat_d"])
+    c.ellipse(43, 61, 13, 5, p["seat"])
+    c.fill_rect(30, 61, 56, 86, p["seat"])
+    c.fill_rect(34, 60, 52, 84, p["seat_m"])
+    for y in (66, 72, 78):
+        c.hline(35, 51, y, p["seat_d"])
+    c.fill_rect(41, 52, 45, 56, p["seat_d"])
+    c.ellipse(43, 48, 8, 5, p["seat_d"])
+    c.ellipse(43, 48, 7, 4, p["seat"])
+    # янтарный экран подсвечивает правую кромку кресла
+    for x, y in ((47, 44), (48, 44), (49, 45), (50, 46), (50, 47)):
+        c.pixel(x, y, p["amber_d"])
+    c.vline(56, 62, 86, p["amber_d"])
+    c.hline(45, 54, 56, p["amber_d"])
+    c.hline(36, 44, 44, p["seat_l"])
+    c.hline(32, 44, 56, p["seat_l"])
+    # правое кресло сорвано: обломок стойки с рваным краем, кабель, спинка на боку
+    c.fill_rect(100, 82, 106, 95, p["seat_d"])
+    for x, h in ((100, 80), (101, 77), (102, 80), (103, 76), (104, 79), (105, 78), (106, 81)):
+        c.vline(x, h, 82, p["seat_d"])
+    c.pixel(103, 76, p["seat_l"])
+    c.pixel(101, 77, p["seat_l"])
+    c.fill_rect(98, 92, 108, 95, p["hull_d"])
+    c.line(104, 80, 112, 76, p["cable"])
+    c.line(112, 76, 118, 80, p["cable"])
+    c.pixel(103, 75, p["amber"])
+    back = [(126, 60), (154, 72), (146, 95), (116, 86)]
+    _poly(c, back, p["seat_d"])
+    _poly(c, [(127, 62), (151, 73), (144, 93), (118, 85)], p["seat"])
+    _poly(c, [(129, 66), (147, 74), (141, 89), (123, 83)], p["seat_m"])
+    c.line(126, 60, 154, 72, p["seat_l"])
+    c.line(125, 76, 145, 84, p["seat_d"])
+    _poly(c, [(134, 52), (150, 59), (146, 68), (130, 61)], p["seat_d"])
+    _poly(c, [(135, 54), (148, 60), (145, 66), (132, 60)], p["seat"])
+    c.line(134, 52, 150, 59, p["seat_l"])
+    # за креслами в тени осел второй пилот: шлем склонён на грудь, рука на палубе
+    c.ellipse(79, 86, 12, 9, p["suit"])
+    c.ellipse(80, 80, 11, 6, p["suit"])
+    _suit_limb(c, ((88, 84, 3), (96, 89, 3), (104, 93, 2)), p["suit"], p["suit_l"])
+    _suit_limb(c, ((70, 82, 3), (66, 89, 3), (64, 94, 2)), p["suit"], p["suit_l"])
+    c.circle(77, 71, 7, p["hull_d"])
+    c.circle(77, 71, 6, p["suit"])
+    c.ellipse(80, 74, 4, 2, p["hull_d"])
+    # кромку шлема и плеч ловит отсвет экрана, в визоре — янтарная искра
+    for x, y in ((71, 67), (72, 66), (74, 65), (76, 64), (78, 64), (80, 65), (82, 66)):
+        c.pixel(x, y, p["amber_d"])
+    for x, y in ((84, 74), (86, 75), (88, 76), (90, 78)):
+        c.pixel(x, y, p["suit_l"])
+    c.pixel(81, 75, p["amber"])
+    c.noise_specks(rng, 0, 76, 159, 95, p["hull_d"], 40)
+    c.noise_specks(rng, 60, 70, 110, 80, p["amber_d"], 4)
 
 
 def _cargo_bay(c):
@@ -1097,80 +1370,70 @@ def scene_antenna_mast(c, rng):
     c.pixel(104, 86, p["amber"])
 
 
-def scene_base_bay(c, rng):
-    """Обжитой модуль-база: верстак, ящики-склад, лампа, спальник."""
-    p = {
-        "d0": (45, 40, 36), "d1": (33, 30, 27), "d2": (25, 23, 23),
-        "f0": (52, 45, 38), "f1": (40, 35, 30), "f2": (25, 23, 23),
-        "w0": (58, 52, 46), "w1": (45, 40, 36), "w2": (33, 30, 27),
-        "far": (24, 22, 22),
-        "seam": (16, 14, 14),
-        "wood": (126, 92, 52),
-        "wood_d": (80, 58, 34),
-        "metal": (120, 128, 142),
-        "metal_d": (62, 68, 80),
-        "amber": AMBER,
-        "lamp": (252, 226, 168),
-        "cloth": (92, 116, 132),
-        "cyan": CYAN,
-    }
-    draw_room(c, (44, 22, 118, 70),
-              {"ceil": (p["d0"], p["d1"], p["d2"]),
-               "floor": (p["f0"], p["f1"], p["f2"]),
-               "left": (p["w0"], p["w1"], p["w2"]),
-               "right": (p["w0"], p["w1"], p["w2"]),
-               "far": p["far"]}, p["seam"])
-    # подвесная лампа и конус света
-    c.vline(80, 0, 8, p["metal_d"])
-    c.fill_rect(72, 8, 88, 12, p["metal"])
-    c.hline(72, 88, 13, p["lamp"])
-    for i in range(1, 22):
-        half = 8 + i * 2
-        if (i % 2) == 0:
-            c.dither_over(80 - half, 13 + i, 80 + half, 13 + i, p["amber"], i)
-    c.dither_disc(80, 14, 12, p["lamp"], 0)
-    # верстак справа
-    c.fill_rect(96, 52, 150, 58, p["wood"])
-    c.hline(96, 150, 52, p["amber"])
-    c.hline(96, 150, 58, p["seam"])
-    c.fill_rect(100, 58, 104, 78, p["wood_d"])
-    c.fill_rect(142, 58, 146, 78, p["wood_d"])
-    c.hline(100, 146, 68, p["wood_d"])
-    # инструменты на щите за верстаком
-    c.fill_rect(98, 28, 150, 50, p["w2"])
-    c.rect(98, 28, 150, 50, p["seam"])
-    for i in range(6):
-        xx = 104 + i * 8
-        c.vline(xx, 32, 40 + (i % 3) * 3, p["metal"])
-        c.pixel(xx, 31, p["metal_d"])
-        c.fill_rect(xx - 1, 41 + (i % 3) * 3, xx + 1, 44 + (i % 3) * 3, p["metal_d"])
-    c.fill_rect(108, 46, 122, 52, p["metal_d"])
-    c.fill_rect(128, 44, 138, 52, p["wood_d"])
-    # ящики-склад слева
-    for (bx, by, bw, bh) in ((6, 44, 26, 22), (6, 66, 26, 22), (34, 56, 20, 32)):
-        c.fill_rect(bx, by, bx + bw, by + bh, p["wood"])
-        c.rect(bx, by, bx + bw, by + bh, p["seam"])
-        c.hline(bx + 1, bx + bw - 1, by + 1, p["amber"])
-        c.hline(bx, bx + bw, by + bh // 2, p["wood_d"])
-        c.fill_rect(bx + 4, by + 4, bx + 10, by + 8, p["wood_d"])
-    # спальник на полу слева
-    c.ellipse(34, 88, 26, 7, p["cloth"])
-    c.ellipse(34, 87, 24, 5, p["cyan"])
-    c.ellipse(12, 87, 6, 5, p["lamp"])
-    c.hline(16, 56, 90, p["seam"])
-    # канистры и бочка у дальней стены
-    c.fill_rect(58, 56, 68, 70, p["metal_d"])
-    c.rect(58, 56, 68, 70, p["seam"])
-    c.hline(59, 67, 60, p["metal"])
-    c.fill_rect(72, 60, 80, 70, p["wood_d"])
-    c.rect(72, 60, 80, 70, p["seam"])
-    # табличка-экран у двери
-    c.fill_rect(120, 34, 134, 42, p["seam"])
-    c.rect(120, 34, 134, 42, p["metal_d"])
-    c.hline(122, 130, 37, p["cyan"])
-    c.hline(122, 127, 39, p["cyan"])
-    c.noise_specks(rng, 0, 74, 159, 95, p["f2"], 36)
-    c.noise_specks(rng, 56, 74, 120, 95, p["wood_d"], 14)
+def scene_cryo_bay(c, rng):
+    """Отсек гибернации — база выжившего: два ряда капсул вдоль стен, одна открыта
+    и светится; аварийный свет; верстак из сорванной сервисной панели и ящики-склад."""
+    p = dict(CRYO_PALETTE)
+    p.update({
+        "panel": (98, 108, 122), "panel_l": (150, 160, 176), "panel_d": (60, 66, 78),
+        "hole": (10, 12, 16), "cable": (120, 70, 46),
+        "crate": (112, 86, 44), "crate_l": (150, 118, 62), "crate_d": (72, 54, 28),
+        "amber": AMBER, "lamp_glow": (110, 84, 40), "lamp_l": (252, 226, 168),
+        "metal": (128, 140, 160), "metal_d": (62, 72, 90),
+    })
+    P = _bay_pt
+    _cryo_bay_room(c, p, (None, "closed", "closed", "closed"), (None, "open", "closed", "closed"))
+    # дыра в стене, откуда сорвана сервисная панель, и свисающие кабели
+    hole = [P(-1, -0.6, 1.08), P(-1, -0.6, 1.42), P(-1, 0.12, 1.42), P(-1, 0.12, 1.08)]
+    _poly(c, hole, p["hole"])
+    for a, b in ((0, 1), (1, 2), (3, 0)):
+        c.line(int(hole[a][0]), int(hole[a][1]), int(hole[b][0]), int(hole[b][1]), p["panel_d"])
+    for x0, y0, x1, y1, col in ((12, 22, 14, 44, p["cable"]), (20, 24, 18, 40, p["metal_d"]),
+                                (26, 25, 29, 36, p["cable"])):
+        c.line(x0, y0, x1, y1, col)
+    c.pixel(14, 45, p["amber"])
+    # верстак: панель лежит на двух ножках, кромка к проходу рваная
+    for z0 in (1.04, 1.36):
+        _bay_box(c, -0.56, -0.5, 0.58, 1.0, z0, z0 + 0.04, p["metal_d"], p["seam"], p["metal_d"])
+    _bay_box(c, -1.0, -0.4, 0.52, 0.58, 1.0, 1.46, p["panel_d"], p["panel_d"], p["panel"])
+    for k in range(1, 6):
+        x = -1.0 + k * 0.1
+        c.line(*[int(t) for t in P(x, 0.52, 1.0) + P(x, 0.52, 1.46)], p["panel_d"])
+    c.line(*[int(t) for t in P(-1.0, 0.52, 1.0) + P(-0.4, 0.52, 1.0)], p["panel_l"])
+    jx, jy = P(-0.4, 0.52, 1.0)
+    kx, ky = P(-0.4, 0.52, 1.46)
+    n = 9
+    for i in range(n + 1):
+        t = i / float(n)
+        x = int(jx + (kx - jx) * t)
+        y = int(jy + (ky - jy) * t)
+        dent = (0, 2, 1, 3, 0, 2, 1, 0, 2, 1)[i]
+        c.fill_rect(x - dent, y - 1, x, y + 1, p["panel_l"] if dent == 0 else p["seam"])
+    # на верстаке: лампа с тёплым отсветом, ключ и энергоячейка
+    lx, ly = [int(t) for t in P(-0.82, 0.52, 1.28)]
+    c.dither_disc(lx, ly - 6, 9, p["lamp_glow"], 1)
+    c.vline(lx, ly - 7, ly, p["metal_d"])
+    c.fill_rect(lx - 3, ly - 10, lx + 3, ly - 8, p["metal"])
+    c.hline(lx - 3, lx + 3, ly - 7, p["lamp_l"])
+    c.fill_rect(lx - 2, ly, lx + 2, ly + 1, p["metal_d"])
+    wx, wy = [int(t) for t in P(-0.62, 0.52, 1.08)]
+    c.line(wx - 6, wy + 2, wx + 4, wy - 2, p["metal"])
+    c.fill_rect(wx + 3, wy - 4, wx + 5, wy - 2, p["metal"])
+    ex, ey = [int(t) for t in P(-0.92, 0.52, 1.1)]
+    c.fill_rect(ex, ey - 4, ex + 5, ey, p["metal_d"])
+    c.hline(ex + 1, ex + 4, ey - 2, p["amber"])
+    # ящики-склад справа: два больших и один сверху
+    for x0, x1, v0, v1, z0, z1 in ((0.66, 1.0, 0.58, 1.0, 1.0, 1.42),
+                                   (0.7, 1.0, 0.26, 0.58, 1.02, 1.32),
+                                   (0.76, 0.98, 0.04, 0.26, 1.06, 1.24)):
+        _bay_box(c, x0, x1, v0, v1, z0, z1, p["crate"], p["crate_d"], p["crate_l"])
+        ax, ay = P(x0, v0, z0)
+        bx, by = P(x1, v1, z0)
+        c.rect(int(ax), int(ay), int(bx), int(by), p["crate_d"])
+        c.hline(int(ax) + 1, int(bx) - 1, int((ay + by) / 2), p["crate_d"])
+        c.fill_rect(int(ax) + 3, int(ay) + 3, int(ax) + 8, int(ay) + 6, p["crate_d"])
+    c.noise_specks(rng, 30, 80, 130, 95, p["f2"], 30)
+    c.noise_specks(rng, 50, 70, 110, 95, p["seam"], 12)
 
 
 def _suit_limb(c, pts, dark, lit):
@@ -1335,8 +1598,8 @@ def scene_death_hp(c, rng):
 
 
 SCENES = (
-    ("capsule", scene_capsule),
-    ("wreckage", scene_wreckage),
+    ("cryo_pod", scene_cryo_pod),
+    ("bridge", scene_bridge),
     ("cargo_drone", scene_cargo_drone),
     ("shuttle_bay", scene_shuttle_bay),
     ("reactor_core", scene_reactor_core),
@@ -1344,7 +1607,7 @@ SCENES = (
     ("dock_bay", scene_dock_bay),
     ("comms_sentry", scene_comms_sentry),
     ("antenna_mast", scene_antenna_mast),
-    ("base_bay", scene_base_bay),
+    ("cryo_bay", scene_cryo_bay),
     # экран смерти: своя картинка на каждую причину (GameState.last_death_cause)
     ("death_o2", scene_death_o2),
     ("death_hp", scene_death_hp),
@@ -1919,7 +2182,7 @@ def icon_broken_datapad(c):
 
 
 def icon_flight_suit(c):
-    """Лётный комбинезон."""
+    """Комбинезон пассажира гибернации."""
     c.fill_rect(5, 3, 10, 9, CLOTH_D)
     c.fill_rect(6, 4, 9, 8, (78, 96, 120))
     c.fill_rect(3, 4, 4, 9, CLOTH_D)

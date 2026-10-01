@@ -102,30 +102,30 @@
 			"state": "locked",
 			"title": "Технический отсек"
 		},
-		"copilot_body": {
+		"bridge": {
 			"connections": [
 				"hub"
 			],
-			"location_id": "copilot_body",
+			"location_id": "bridge",
 			"map": {
 				"cell": {
 					"x": 3.0,
 					"y": 4.0
 				},
 				"floor": "deck_01",
-				"label": "Пилот",
-				"note": "Метка скафандра едва отвечает",
+				"label": "Рубка",
+				"note": "Маячок скафандра экипажа едва отвечает",
 				"order": 30.0,
 				"hidden_until_open": true
 			},
 			"sealed": true,
 			"state": "locked",
-			"title": "Тело второго пилота"
+			"title": "Рубка"
 		},
 		"hub": {
 			"connections": [
 				"lift_01_to_02",
-				"copilot_body"
+				"bridge"
 			],
 			"location_id": "hub",
 			"map": {
@@ -134,13 +134,13 @@
 					"y": 3.0
 				},
 				"floor": "deck_01",
-				"label": "Капсула",
-				"note": "Точка сбора и чекпойнт",
+				"label": "Гибернация",
+				"note": "Твоя капсула, сон и склад",
 				"order": 10.0
 			},
 			"sealed": true,
 			"state": "available",
-			"title": "Капсула / место сборки"
+			"title": "Отсек гибернации"
 		},
 		"lift_01_to_02": {
 			"connections": [
@@ -174,7 +174,7 @@
 				},
 				"floor": "deck_02",
 				"kind": "elevator",
-				"note": "Вернуться к капсуле",
+				"note": "Вернуться в отсек гибернации",
 				"order": 40.0,
 				"target_floor": "deck_01"
 			},

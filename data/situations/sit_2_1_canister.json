@@ -9,7 +9,7 @@
       "requires": [ { "type": "has_item", "item": "pipe_scrap" } ],
       "effects": [
         { "type": "item_add", "item": "o2_canister" },
-        { "type": "flag_set", "flag": "copilot_canister_taken" }
+        { "type": "flag_set", "flag": "pilot_canister_taken" }
       ],
       "next": ""
     },
@@ -21,7 +21,7 @@
       "effects": [
         { "type": "hp_delta", "value": -10 },
         { "type": "item_add", "item": "o2_canister" },
-        { "type": "flag_set", "flag": "copilot_canister_taken" }
+        { "type": "flag_set", "flag": "pilot_canister_taken" }
       ],
       "next": ""
     },

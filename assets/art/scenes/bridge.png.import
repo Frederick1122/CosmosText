@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dfflfx4d7dvxl"
-path="res://.godot/imported/capsule.png-73c7a6883b09eb1cc97e217363780105.ctex"
+uid="uid://cx8qqnpuvya44"
+path="res://.godot/imported/bridge.png-86182a65647766068f15ee55d336f30d.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/scenes/capsule.png"
-dest_files=["res://.godot/imported/capsule.png-73c7a6883b09eb1cc97e217363780105.ctex"]
+source_file="res://assets/art/scenes/bridge.png"
+dest_files=["res://.godot/imported/bridge.png-86182a65647766068f15ee55d336f30d.ctex"]
 
 [params]
 
