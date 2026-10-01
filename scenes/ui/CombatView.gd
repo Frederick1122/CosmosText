@@ -1,7 +1,8 @@
 extends VBoxContainer
-## Экран боя в духе Neo Scavenger. Экран прижат к низу, под большой палец:
-## сверху журнал схватки, ниже — две карточки участников (состояние, оружие,
-## последний манёвр) и дистанция, в самом низу — расходники и сетка манёвров.
+## Экран боя в духе Neo Scavenger. Во время схватки экран прижат к низу:
+## сверху журнал, ниже карточки участников и дистанция, у нижнего края —
+## расходники и манёвры. После победы карточки и дистанция исчезают:
+## остаются журнал сверху и финальная панель.
 ## Логики боя не содержит: читает CombatSystem.get_state() и сообщает
 ## выбранный манёвр наружу.
 ##
@@ -82,8 +83,6 @@ func setup(combat_state: Dictionary, fresh: bool = false) -> void:
 	_fresh = fresh
 	_animate = fresh and SettingsSystem.animations
 	_rebuild()
-	if not _animate and str(state.get("outcome", "")) == "won":
-		_sides["enemy"]["panel"].modulate = _defeated_tint()
 	if _fresh:
 		_play_turn()
 
@@ -94,11 +93,15 @@ func _rebuild() -> void:
 		child.queue_free()
 	_sides.clear()
 
-	# Журнал — сверху; распорка прижимает карточки и манёвры к низу экрана.
+	# Журнал — сверху. При победе под ним остаётся только финальная панель.
 	_build_log()
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(spacer)
+	var outcome := str(state.get("outcome", ""))
+	if outcome == "won":
+		_build_victory()
+		return
 
 	var row := HBoxContainer.new()
 	row.name = "CombatSides"
@@ -130,10 +133,7 @@ func _rebuild() -> void:
 
 	add_child(_range_card())
 
-	var outcome := str(state.get("outcome", ""))
-	if outcome == "won":
-		_build_victory()
-	elif outcome != "":
+	if outcome != "":
 		_build_fled()
 	elif int(CombatSystem.state) != CombatSystem.State.PLAYER_TURN:
 		add_child(UiKit.text("…", 24, UiKit.MUTED_COLOR))

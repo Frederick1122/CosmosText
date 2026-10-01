@@ -10,7 +10,7 @@
       "image": "cargo_drone_down"
     }
   ],
-  "explore": { "pool": "cargo_hold", "rolls": 3 },
+  "explore": { "pool": "cargo_hold", "rolls": 3, "duration": [3, 5] },
   "events": [
     {
       "id": "drone_encounter",

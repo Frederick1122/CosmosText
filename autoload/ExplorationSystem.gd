@@ -8,13 +8,12 @@ extends Node
 ## событие пула — не больше раза за модуль). Всего исследований в модуле —
 ## спрятанные события плюс rolls плюс бонус навыка (stat explore_rolls).
 ##
-## Каждое исследование (GameState.explore_location) стоит как действие и
-## даёт одно из двух: раскрывает спрятанное событие, чьи triggers сейчас
-## выполнены, или разыгрывает событие пула. Если доступно и то и другое —
-## выбор случайный, пропорционально числу оставшихся. Предметы из пула
-## с шансом stat find_chance выпадают на один больше. Когда искать нечего —
-## кнопка неактивна; спрятанное событие, чьи triggers ещё не выполнены,
-## станет находкой позже.
+## GameState запрашивает план находки заранее, затем показывает несколько
+## тактов поиска и списывает кислород за каждый. Число тактов задаётся полем
+## explore.duration: [min, max] у локации. После анимации resolve() раскрывает
+## событие или разыгрывает находку. Предметы из пула с шансом stat find_chance
+## выпадают на один больше. Когда искать нечего — кнопка неактивна; спрятанное
+## событие, чьи triggers ещё не выполнены, станет находкой позже.
 ##
 ## Состояние забега: reset_for_new_run / to_save_data / load_save_data.
 
@@ -69,20 +68,35 @@ func can_explore() -> bool:
 	return location_id != "" and (not LocationSystem.findable_events().is_empty() or not _pool_candidates(location_id).is_empty())
 
 
-## Одно исследование текущего модуля: текст в ленту и последствия. Цену
-## действия списывает GameState.explore_location; искать нечего — ничего.
-func explore() -> void:
+## Выбирает результат и длительность, но пока не меняет состояние. План
+## фиксируется на всё время анимации, чтобы итог не сменился между тактами.
+func prepare() -> Dictionary:
 	var location_id := LocationSystem.current_id
 	var findable := LocationSystem.findable_events()
 	var candidates := _pool_candidates(location_id)
 	if findable.is_empty() and candidates.is_empty():
-		return
+		return {}
+	var steps := _duration_steps(location_id)
 	var reveal_event := candidates.is_empty() or (not findable.is_empty()
 		and randi_range(1, findable.size() + rolls_left(location_id)) <= findable.size())
 	if reveal_event:
-		reveal(str(findable[randi_range(0, findable.size() - 1)].get("id", "")))
+		return {
+			"kind": "event",
+			"event_id": str(findable[randi_range(0, findable.size() - 1)].get("id", "")),
+			"steps": steps,
+		}
+	return {"kind": "pool", "entry": _pick(candidates), "steps": steps}
+
+
+## Применяет заранее выбранный план после анимации исследования.
+func resolve(plan: Dictionary) -> void:
+	if str(plan.get("kind", "")) == "event":
+		reveal(str(plan.get("event_id", "")))
 		return
-	var entry := _pick(candidates)
+	if str(plan.get("kind", "")) != "pool":
+		return
+	var entry: Dictionary = plan.get("entry", {})
+	var location_id := LocationSystem.current_id
 	var drawn: Array = _drawn.get(location_id, [])
 	drawn.append(str(entry.get("id", "")))
 	_drawn[location_id] = drawn
@@ -114,6 +128,15 @@ func load_save_data(data: Dictionary) -> void:
 			_discovered[str(key)] = true
 	var drawn = data.get("drawn", {})
 	_drawn = drawn.duplicate(true) if drawn is Dictionary else {}
+
+
+func _duration_steps(location_id: String) -> int:
+	var duration = LocationSystem.get_explore(location_id).get("duration", [3, 3])
+	if not (duration is Array) or duration.size() != 2:
+		return 3
+	var minimum := maxi(1, int(duration[0]))
+	var maximum := maxi(minimum, int(duration[1]))
+	return randi_range(minimum, maximum)
 
 
 func _rolls_total(location_id: String) -> int:

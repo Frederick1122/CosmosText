@@ -11,6 +11,8 @@ const BAD_COLOR := Color("#f0b0b9")
 const GOOD_COLOR := Color("#a7e3c4")
 ## Цвет завершающих действий: выход из модуля, конец события, финал забега.
 const EXIT_COLOR := Color("#e0b153")
+## Выделение понятий, у которых есть запись в справочнике.
+const CODEX_COLOR := Color("#d7a8ff")
 
 const SCENE_ART_DIR := "res://assets/art/scenes/"
 const ITEM_ART_DIR := "res://assets/art/items/"
@@ -31,6 +33,24 @@ static func text(value: String, font_size: int = 24, color: Color = TEXT_COLOR) 
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lbl.add_theme_font_size_override("font_size", fs(font_size))
 	lbl.add_theme_color_override("font_color", color)
+	return lbl
+
+
+## Текст с цветными упоминаниями из CodexSystem. RichTextLabel нужен только
+## там, где в одной строке смешиваются обычный текст и понятия справочника.
+static func codex_text(value: String, font_size: int = 24, color: Color = TEXT_COLOR) -> RichTextLabel:
+	var lbl := RichTextLabel.new()
+	lbl.bbcode_enabled = false
+	lbl.fit_content = true
+	lbl.scroll_active = false
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.add_theme_font_size_override("normal_font_size", fs(font_size))
+	for segment in CodexSystem.highlighted_segments(value):
+		lbl.push_color(CODEX_COLOR if bool(segment.get("highlighted", false)) else color)
+		lbl.add_text(str(segment.get("text", "")))
+		lbl.pop()
 	return lbl
 
 

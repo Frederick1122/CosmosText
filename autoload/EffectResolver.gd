@@ -5,7 +5,8 @@ extends Node
 ## switch по типу эффекта в нескольких системах. Справочник типов — docs/CONTENT.md.
 
 ## Изменение показано в ленте. kind: "hp" | "o2" | "ammo" | "item" | "xp" | "hunger";
-## amount — фактическое изменение (со знаком). Слушает SoundSystem.
+## amount — фактическое изменение (со знаком). Слушает SoundSystem; звук
+## получения предмета вместо него запускает Game при появлении строки ленты.
 signal change_reported(kind: String, amount: float)
 ## Замок открыт подходящим ключом (узел карты или событие-ящик).
 signal lock_opened(lock_id: String)
@@ -97,8 +98,9 @@ func report_change(kind: String, amount: float, what: String, less_is_better: bo
 		return
 	var shown := maxi(1, roundi(absf(amount)))
 	var increased := amount > 0.0
+	var sound := "pickup" if increased and (kind == "item" or kind == "ammo") else ""
 	NarrativeSystem.push("gain" if increased != less_is_better else "loss",
-		"[%s%d %s]" % ["+" if increased else "−", shown, what])
+		"[%s%d %s]" % ["+" if increased else "−", shown, what], "", sound)
 	change_reported.emit(kind, amount)
 
 

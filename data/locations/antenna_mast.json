@@ -9,7 +9,7 @@
       "text": "Мачта дальней связи. Тарелка наведена, маяк бьёт узким лучом в сторону колонии. Ответа пока нет."
     }
   ],
-  "explore": { "pool": "outside", "rolls": 1 },
+  "explore": { "pool": "outside", "rolls": 1, "duration": [2, 3] },
   "events": [
     {
       "id": "align_dish",

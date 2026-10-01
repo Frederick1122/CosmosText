@@ -9,6 +9,7 @@
     "move": 5,
     "elevator": 3,
     "action": 3,
+    "explore_tick": 1,
     "choice": 2,
     "combat_turn": 3
   },

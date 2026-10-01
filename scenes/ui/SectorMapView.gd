@@ -864,7 +864,7 @@ func _style(node: Dictionary) -> Dictionary:
 ## та же метка, что на кнопке палубы.
 func _node_label(node: Dictionary) -> String:
 	var cfg := _node_map(node)
-	if _is_unknown_room(node):
+	if _is_unknown_room(node) and not bool(node.get("title_known", false)):
 		return "Неизвестно"
 	if str(node.get("state", "locked")) == "locked" and not bool(cfg.get("reveal_title_when_locked", true)):
 		return "Неизвестно"
@@ -874,6 +874,8 @@ func _node_label(node: Dictionary) -> String:
 
 
 func _node_icon_text(node: Dictionary) -> String:
+	if _is_unknown_room(node) and bool(node.get("title_known", false)):
+		return "📍"
 	if str(node.get("status", "")) == "door" and bool(node.get("unlockable", false)):
 		return "🔑"
 	return str(_style(node)["icon"])
@@ -885,7 +887,7 @@ func _node_text_color(node: Dictionary) -> Color:
 
 func _node_tooltip(node: Dictionary) -> String:
 	var status := str(node.get("status", "unknown"))
-	if _is_unknown_room(node):
+	if _is_unknown_room(node) and not bool(node.get("title_known", false)):
 		return "Неизвестный отсек\nПалуба: " + _floor_title(_node_floor_id(node))
 	var cfg := _node_map(node)
 	var lines := [

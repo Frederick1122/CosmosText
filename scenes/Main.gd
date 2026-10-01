@@ -21,6 +21,7 @@ func _ready() -> void:
 	_delete_save(SaveManager.CHECKPOINT_PATH)
 	_delete_save(SaveManager.META_PATH)
 	ArchiveSystem.load_save_data([])
+	CodexSystem.load_save_data([])
 
 	# --- Палуба 01: отсек гибернации ---
 	GameState.start_new_game()
@@ -36,15 +37,16 @@ func _ready() -> void:
 	_expect(SituationEngine.current_id == "sit_1_2_wreckage"
 		and _narrative_count("result") == 0 and _narrative_count("text") == 1,
 		"следующее событие очистило текст предыдущего")
-	_choose("B")
+	_choose("C")
 	_expect(GameState.current_screen == Screen.LOCATION and LocationSystem.current_id == "hub",
 		"после вступления игрок на экране локации hub")
 	_expect(_narrative_count("scene") == 1 and _narrative_count("text") == 1
 		and _narrative_count("choice") == 0 and _narrative_count("result") == 0,
 		"после «Продолжить» событие заменено описанием локации")
 	_expect(QuestSystem.is_step_done("escape_persephone", "leave_capsule") and not QuestSystem.is_completed("escape_persephone")
-		and NotificationSystem.has_journal_alert() and QuestSystem.get_thoughts().contains("Я пассажир."),
-		"цели: побег с обломка начат, первый шаг засчитан, мысли пассажира после пробуждения, (!) у журнала")
+		and NotificationSystem.has_journal_alert() and NotificationSystem.has_new_codex()
+		and QuestSystem.get_thoughts().contains("Я пассажир."),
+		"цели и справочник: шаг побега засчитан, мысли пассажира, (!) у журнала")
 	var escape: Dictionary = QuestSystem.get_quests()[0]
 	_expect(escape["steps"].size() == 2 and bool(escape["steps"][1]["current"]),
 		"видны засчитанные шаги и один текущий, дальше цель не раскрывается")
@@ -52,15 +54,21 @@ func _ready() -> void:
 		"игрок стоит в отсеке гибернации, палубы за лифтом на карте не видны")
 	_expect(MapSystem.is_node_explored("hub") and MapSystem.is_node_fog_visible("lift_01_to_02")
 		and not MapSystem.is_node_fog_visible("cargo_bay"), "туман скрывает дальние отсеки")
-	_expect(not MapSystem.is_node_fog_visible("bridge"),
-		"неоткрытая действием локация полностью скрыта")
-	_expect(InventorySystem.has_item("broken_datapad"), "планшет в инвентаре")
+	_expect(not MapSystem.is_node_fog_visible("bridge") and not MapSystem.is_node_title_known("bridge"),
+		"неоткрытая действием локация полностью скрыта и не выдаёт название")
+	_expect(not InventorySystem.has_item("broken_datapad") and _has_manual("take_datapad"),
+		"оставленный планшет лежит у соседней капсулы")
+	GameState.start_location_event("take_datapad")
+	_expect(InventorySystem.has_item("broken_datapad") and not _has_manual("take_datapad"),
+		"планшет попадает в сумку только после отдельного подбора")
 	_expect(FileAccess.file_exists(SaveManager.CHECKPOINT_PATH), "в хабе записан чекпойнт")
 
 	_expect(InventorySystem.get_interactions("broken_datapad").size() == 1, "у планшета есть взаимодействие «Прочитать»")
 	InventorySystem.interact("broken_datapad", "read")
 	_expect(ArchiveSystem.is_unlocked("log_01") and InventorySystem.get_interactions("broken_datapad").is_empty(),
 		"взаимодействие открыло запись журнала и скрылось")
+	_expect(CodexSystem.is_unlocked("persephone") and CodexSystem.is_unlocked("meyer_4")
+		and CodexSystem.is_unlocked("anabiosis"), "упомянутые корабль, место и термин открылись в справочнике")
 	_expect(not InventorySystem.drop_item("broken_datapad"), "сюжетный предмет нельзя выбросить")
 	_expect(ProgressionSystem.level == 1 and ProgressionSystem.xp == ProgressionSystem.reward("lore"),
 		"прочитанная запись дала опыт, вход в базу — нет (опыт: %d)" % ProgressionSystem.xp)
@@ -327,9 +335,9 @@ func _ready() -> void:
 	MapSystem.travel_to("hub")
 	GameState.start_location_event("follow_signal")
 	_expect(_node_state("bridge") == "available"
-		and MapSystem.is_node_fog_visible("bridge")
+		and MapSystem.is_node_fog_visible("bridge") and MapSystem.is_node_title_known("bridge")
 		and _notice_contains("[Открыта новая локация \"Рубка\"]"),
-		"маячок показал рубку и выделил открытие")
+		"маячок показал название рубки и выделил открытие")
 	GameState.leave_location()
 	MapSystem.travel_to("bridge")
 	_expect(LocationSystem.current_id == "bridge" and _notice_contains("Писк маячка")
@@ -420,11 +428,13 @@ func _ready() -> void:
 	# --- Сохранение ---
 	var progression_before_save := ProgressionSystem.to_save_data()
 	var quests_before_save := QuestSystem.to_save_data()
+	var codex_before_save := CodexSystem.to_save_data()
 	SaveManager.save_run()
 	SaveManager.load_run()
 	_expect(ProgressionSystem.to_save_data() == progression_before_save and ProgressionSystem.level >= 2,
 		"уровень и опыт переживают сохранение (уровень %d, опыт %d)" % [ProgressionSystem.level, ProgressionSystem.xp])
 	_expect(QuestSystem.to_save_data() == quests_before_save, "цели и засчитанные шаги переживают сохранение")
+	_expect(CodexSystem.to_save_data() == codex_before_save, "открытые статьи справочника переживают сохранение")
 	_expect(LocationSystem.is_event_done("cargo_bay/search_containers") and LocationSystem.get_visits("cargo_bay") == 5,
 		"состояние событий и визитов переживает сохранение (визитов: %d)" % LocationSystem.get_visits("cargo_bay"))
 	_expect(CharacterSystem.get_equipped("back") == "makeshift_backpack" and InventorySystem.max_slots == 9
@@ -444,8 +454,10 @@ func _ready() -> void:
 		"в сейв записана версия формата")
 	_expect(not FileAccess.file_exists(SaveManager.RUN_PATH + ".tmp"),
 		"после записи не остаётся временного файла")
-	_expect(FileAccess.file_exists(SaveManager.META_PATH) and _read_save(SaveManager.META_PATH).get("archive", []).has("log_01"),
-		"лор попал в meta.json сразу, без смерти")
+	_expect(FileAccess.file_exists(SaveManager.META_PATH)
+		and _read_save(SaveManager.META_PATH).get("archive", []).has("log_01")
+		and _read_save(SaveManager.META_PATH).get("codex", []).has("persephone"),
+		"лор и справочник попали в meta.json сразу, без смерти")
 
 	_write_save(SaveManager.RUN_PATH, "{\"version\": 1, \"resources\"")  # обрыв записи
 	_expect(not SaveManager.load_run(), "обрезанный сейв не загружается")
@@ -622,8 +634,8 @@ func _ready() -> void:
 	_choose("B")
 	_expect(ExplorationSystem.total("hub") == 2 and not _has_manual("search_supply_kit"),
 		"в капсуле два поиска: спрятанный контейнер и одна случайная находка")
-	GameState.explore_location()
-	GameState.explore_location()
+	await GameState.explore_location()
+	await GameState.explore_location()
 	_expect(_has_manual("search_supply_kit") and ExplorationSystem.remaining("hub") == 0 and not ExplorationSystem.can_explore()
 		and _narrative_kind_last("choice") == "Исследовать отсек",
 		"исследование нашло контейнер и разыграло находку; больше искать нечего")
@@ -666,10 +678,22 @@ func _ready() -> void:
 	# --- Исследование: пул без спрятанных событий и навык «Поиск» ---
 	_expect(LocationSystem.current_id == "service_corridor" and ExplorationSystem.remaining("service_corridor") == 2,
 		"в коридоре два случайных поиска")
-	GameState.explore_location()
-	GameState.explore_location()
-	_expect(ExplorationSystem.remaining("service_corridor") == 0 and not ExplorationSystem.can_explore(),
-		"поиски в коридоре кончились")
+	var exploration_probe := {"runs": 0, "steps": 0, "spent": 0.0}
+	var capture_exploration := func(step: int, total: int, spent: float) -> void:
+		if step == total:
+			exploration_probe["runs"] = int(exploration_probe["runs"]) + 1
+			exploration_probe["steps"] = int(exploration_probe["steps"]) + total
+			exploration_probe["spent"] = float(exploration_probe["spent"]) + spent
+	GameState.exploration_progressed.connect(capture_exploration)
+	var exploration_tick_cost := ResourceSystem.get_o2_cost("explore_tick")
+	await GameState.explore_location()
+	await GameState.explore_location()
+	GameState.exploration_progressed.disconnect(capture_exploration)
+	_expect(ExplorationSystem.remaining("service_corridor") == 0 and not ExplorationSystem.can_explore()
+		and int(exploration_probe["runs"]) == 2 and int(exploration_probe["steps"]) >= 4
+		and int(exploration_probe["steps"]) <= 6
+		and is_equal_approx(float(exploration_probe["spent"]), int(exploration_probe["steps"]) * exploration_tick_cost),
+		"два поиска заняли по 2–3 такта и поэтапно списали O2")
 	CharacterSystem.add_skill_points(1)
 	_expect(CharacterSystem.learn("scavenging") and ExplorationSystem.remaining("service_corridor") == 1
 		and ExplorationSystem.can_explore(), "навык «Поиск» добавляет поиск в каждом отсеке")

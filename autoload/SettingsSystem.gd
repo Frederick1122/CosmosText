@@ -1,11 +1,11 @@
 extends Node
-## Настройки интерфейса: размер шрифта, плавные переходы и звук. Живут вне
-## забега (файл user://settings.json) и применяются сразу: UI перечитывает
-## font_scale через UiKit.fs() и перерисовывается по сигналу changed,
+## Настройки интерфейса: размер шрифта, плавные переходы, скорость появления
+## текста и звук. Живут вне забега (`user://settings.json`) и применяются
+## сразу: UI перечитывает значения и перерисовывается по сигналу `changed`,
 ## SoundSystem читает sound_enabled и sound_volume() при каждом звуке.
 ##
-## Размер шрифта — множитель 1…2 (ползунок с якорями 1×, 1.5×, 2×: рядом с
-## якорем значение к нему притягивается), громкость — 0…100.
+## Размер шрифта — множитель 1…2, скорость текста — знаки в секунду,
+## громкость — 0…100.
 
 signal changed()
 
@@ -17,12 +17,17 @@ const FONT_SCALE_ANCHORS := [1.0, 1.5, 2.0]
 const FONT_SCALE_SNAP := 0.08
 const DEFAULT_FONT_SCALE := 1.5
 const DEFAULT_SOUND_VOLUME := 65
+const TEXT_SPEED_MIN := 30
+const TEXT_SPEED_MAX := 180
+const TEXT_SPEED_STEP := 10
+const DEFAULT_TEXT_SPEED := 90
 ## Сейвы настроек до ползунков хранили id пресетов.
 const LEGACY_FONT_SIZES := {"small": 1.0, "medium": 1.5, "large": 2.0}
 const LEGACY_SOUND_VOLUMES := {"low": 35, "medium": 65, "high": 100}
 
 var font_scale_value: float = DEFAULT_FONT_SCALE
 var animations: bool = true
+var text_speed_cps: int = DEFAULT_TEXT_SPEED
 var sound_enabled: bool = true
 ## Громкость, 0…100.
 var sound_volume_percent: int = DEFAULT_SOUND_VOLUME
@@ -62,6 +67,15 @@ func set_animations(enabled: bool) -> void:
 	changed.emit()
 
 
+func set_text_speed(value: int) -> void:
+	value = clampi(snappedi(value, TEXT_SPEED_STEP), TEXT_SPEED_MIN, TEXT_SPEED_MAX)
+	if value == text_speed_cps:
+		return
+	text_speed_cps = value
+	save_settings()
+	changed.emit()
+
+
 ## Громкость для AudioStreamPlayer, 0…1.
 func sound_volume() -> float:
 	return float(sound_volume_percent) / 100.0
@@ -92,6 +106,7 @@ func save_settings() -> void:
 	f.store_string(JSON.stringify({
 		"font_scale": font_scale_value,
 		"animations": animations,
+		"text_speed": text_speed_cps,
 		"sound": sound_enabled,
 		"sound_volume": sound_volume_percent,
 	}))
@@ -108,6 +123,8 @@ func load_settings() -> void:
 	else:
 		font_scale_value = float(LEGACY_FONT_SIZES.get(str(parsed.get("font_size", "")), DEFAULT_FONT_SCALE))
 	animations = bool(parsed.get("animations", true))
+	text_speed_cps = clampi(snappedi(int(parsed.get("text_speed", DEFAULT_TEXT_SPEED)), TEXT_SPEED_STEP),
+		TEXT_SPEED_MIN, TEXT_SPEED_MAX)
 	sound_enabled = bool(parsed.get("sound", true))
 	var volume = parsed.get("sound_volume", DEFAULT_SOUND_VOLUME)
 	if volume is String:

@@ -9,7 +9,7 @@
       "text": "Узкий коридор вдоль реакторной шахты. Давления нет. Балки оттащены в сторону — проход к реактору свободен."
     }
   ],
-  "explore": { "pool": "vacuum_corridor", "rolls": 2 },
+  "explore": { "pool": "vacuum_corridor", "rolls": 2, "duration": [2, 3] },
   "events": [
     {
       "id": "vacuum_warning",

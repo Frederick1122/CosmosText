@@ -155,6 +155,7 @@ func save_meta() -> void:
 	var data := {
 		"version": SAVE_VERSION,
 		"archive": ArchiveSystem.to_save_data(),
+		"codex": CodexSystem.to_save_data(),
 		"chronicle": ChronicleSystem.to_save_data(),
 		"economy": EconomyManager.to_save_data(),
 	}
@@ -166,6 +167,7 @@ func load_meta() -> void:
 	if data.is_empty():
 		return
 	ArchiveSystem.load_save_data(data.get("archive", []))
+	CodexSystem.load_save_data(data.get("codex", []))
 	ChronicleSystem.load_save_data(data.get("chronicle", {}))
 	EconomyManager.load_save_data(data.get("economy", {}))
 

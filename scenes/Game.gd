@@ -50,6 +50,7 @@ var settings_open: bool = false
 var workbench_open: bool = false
 var character_tab: String = "items"
 var journal_tab: String = "goals"
+var codex_tab: String = "terms"
 
 var _drag_armed: bool = false
 var _drag_scrolling: bool = false
@@ -64,6 +65,7 @@ var _ad_result_pending: bool = false
 var _death_message: String = ""
 ## Сколько записей ленты уже показано: новые проявляются анимацией.
 var _story_shown: int = 0
+var _story_render_queued: bool = false
 ## Боковые вырезы экрана (слева + справа) — сужают тело экрана.
 var _side_insets: float = 0.0
 ## Последний ход боя, чьи эффекты ударов уже показаны (0 — ни одного).
@@ -182,6 +184,7 @@ func _build_static_layout() -> void:
 
 func _connect_signals() -> void:
 	GameState.screen_changed.connect(_on_screen_changed)
+	GameState.exploration_progressed.connect(_on_exploration_progressed)
 	ResourceSystem.hp_changed.connect(_on_resource_changed)
 	ResourceSystem.o2_changed.connect(_on_resource_changed)
 	ResourceSystem.ammo_changed.connect(_on_resource_changed)
@@ -197,6 +200,7 @@ func _connect_signals() -> void:
 	SettingsSystem.changed.connect(_on_settings_changed)
 	SituationEngine.option_resolved.connect(_on_situation_option_resolved)
 	NarrativeSystem.entries_added.connect(_on_story_entries_added)
+	NarrativeSystem.cleared.connect(_on_story_cleared)
 	ProgressionSystem.xp_gained.connect(_on_xp_gained)
 	ProgressionSystem.changed.connect(_update_hud)
 	NeedsSystem.changed.connect(_update_hud)
@@ -388,6 +392,43 @@ func _fade_in(node: CanvasItem, delay: float) -> void:
 	tween.tween_interval(minf(delay, 0.3))
 	tween.tween_property(node, "modulate:a", 1.0, 0.2).set_trans(Tween.TRANS_SINE)
 
+## Новая запись печатается с постоянной скоростью. Картинка той же записи
+## проявляется параллельно, а привязанный звук запускается с первым знаком.
+## Возвращает время начала следующей записи, чтобы строки шли по очереди.
+func _reveal_story_entry(entry: Dictionary, nodes: Array, start: float) -> float:
+	var sound_id := str(entry.get("sound", ""))
+	if not SettingsSystem.animations:
+		if sound_id != "":
+			SoundSystem.play(sound_id)
+		return start
+	var text := str(entry.get("text", ""))
+	var duration := maxf(0.08, float(text.length()) / float(SettingsSystem.text_speed_cps))
+	for node in nodes:
+		if node is RichTextLabel:
+			var rich := node as RichTextLabel
+			rich.visible_ratio = 0.0
+			var text_tween := rich.create_tween()
+			text_tween.tween_interval(start)
+			text_tween.tween_property(rich, "visible_ratio", 1.0, duration).set_trans(Tween.TRANS_LINEAR)
+		elif node is Label:
+			var label := node as Label
+			label.visible_ratio = 0.0
+			var text_tween := label.create_tween()
+			text_tween.tween_interval(start)
+			text_tween.tween_property(label, "visible_ratio", 1.0, duration).set_trans(Tween.TRANS_LINEAR)
+		else:
+			node.modulate.a = 0.0
+			var fade: Tween = (node as Node).create_tween()
+			fade.tween_interval(start)
+			fade.tween_property(node, "modulate:a", 1.0, 0.2).set_trans(Tween.TRANS_SINE)
+	if sound_id != "" and not nodes.is_empty():
+		var sound_tween: Tween = (nodes[0] as Node).create_tween()
+		sound_tween.tween_interval(maxf(0.01, start))
+		sound_tween.tween_callback(SoundSystem.play.bind(sound_id))
+	return start + duration + 0.08
+
+
+
 
 # --- Реакция на системы ---------------------------------------------------------
 
@@ -449,10 +490,28 @@ func _on_situation_option_resolved(_option_id: String) -> void:
 	if GameState.current_screen == GameState.Screen.SITUATION:
 		_render_current_screen()
 
-
-## Лента пополнилась, пока игрок на повествовательном экране — дорисовываем.
+## Лента пополнилась — откладываем перерисовку до конца кадра. Событие часто
+## добавляет текст и несколько находок подряд; одна общая раскладка не обрывает
+## анимацию предыдущей строки и сохраняет последовательный ритм.
 func _on_story_entries_added(_count: int) -> void:
-	if _is_story_screen() and not _any_overlay_open():
+	if not _is_story_screen() or _any_overlay_open() or _story_render_queued:
+		return
+	_story_render_queued = true
+	_render_story_deferred.call_deferred()
+
+
+func _render_story_deferred() -> void:
+	_story_render_queued = false
+	if _is_story_screen() and not _any_overlay_open() and _story_shown != NarrativeSystem.size():
+		_render_current_screen()
+
+
+func _on_story_cleared() -> void:
+	_story_shown = 0
+
+
+func _on_exploration_progressed(_step: int, _total: int, _o2_spent: float) -> void:
+	if GameState.current_screen == GameState.Screen.LOCATION and not _any_overlay_open():
 		_render_current_screen()
 
 
@@ -675,6 +734,7 @@ func _update_nav_buttons() -> void:
 	var blocked := (
 		MapSystem.current_sector_id == ""
 		or MapSystem.is_travelling()
+		or GameState.is_exploring()
 		or GameState.current_screen == GameState.Screen.MAIN_MENU
 		or GameState.current_screen == GameState.Screen.COMBAT
 		or GameState.current_screen == GameState.Screen.VICTORY
@@ -683,7 +743,7 @@ func _update_nav_buttons() -> void:
 	map_button.disabled = blocked
 	character_button.disabled = blocked
 	journal_button.disabled = blocked
-	settings_button.disabled = GameState.current_screen == GameState.Screen.COMBAT or MapSystem.is_travelling()
+	settings_button.disabled = GameState.current_screen == GameState.Screen.COMBAT or MapSystem.is_travelling() or GameState.is_exploring()
 	_set_nav_label(map_button, "🗺️", "Карта", false)
 	_set_nav_label(character_button, "🧑‍🚀", "Персонаж", NotificationSystem.has_character_alert())
 	_set_nav_label(journal_button, "📓", "Журнал", NotificationSystem.has_journal_alert())
@@ -1143,9 +1203,10 @@ func _route_warnings(path: Array, cost: float) -> Array:
 	return warnings
 
 
-## Подпись узла как на карте; неисследованный отсек не выдаёт своего имени.
+## Подпись узла как на карте: явно открытый сюжетным действием отсек уже
+## называется, даже если игрок пока не был внутри.
 func _map_node_name(node_id: String) -> String:
-	if MapSystem.get_node_status(node_id) == "unknown":
+	if not MapSystem.is_node_title_known(node_id):
 		return "Неизвестно"
 	var node: Dictionary = MapSystem.nodes.get(node_id, {})
 	var cfg = node.get("map", {})
@@ -1177,16 +1238,18 @@ func _continue_situation() -> void:
 	GameState.finish_situation()
 
 
-## Текущий контекст: новые записи проявляются и подматываются вниз.
+## Текущий контекст: новые записи печатаются по очереди и подматываются вниз.
 func _render_story() -> void:
 	var entries := NarrativeSystem.get_entries()
 	var fresh_from := _story_shown if _story_shown <= entries.size() else 0
+	var reveal_at := 0.0
 	for i in range(entries.size()):
 		var entry: Dictionary = entries[i]
-		for node in _story_nodes(entry):
+		var nodes := _story_nodes(entry)
+		for node in nodes:
 			body.add_child(node)
-			if i >= fresh_from:
-				_fade_in(node, 0.05 * float(i - fresh_from))
+		if i >= fresh_from:
+			reveal_at = _reveal_story_entry(entry, nodes, reveal_at)
 	_story_shown = entries.size()
 	_scroll_to_bottom()
 
@@ -1204,21 +1267,21 @@ func _story_nodes(entry: Dictionary) -> Array:
 		return nodes
 	match str(entry.get("kind", "text")):
 		"scene":
-			nodes.append(UiKit.text(text, 32, UiKit.TITLE_COLOR))
+			nodes.append(UiKit.codex_text(text, 32, UiKit.TITLE_COLOR))
 		"choice":
-			nodes.append(UiKit.text("— " + text, 24, UiKit.EXIT_COLOR))
+			nodes.append(UiKit.codex_text("— " + text, 24, UiKit.EXIT_COLOR))
 		"result":
-			nodes.append(UiKit.text(text, 24, UiKit.TEXT_COLOR))
+			nodes.append(UiKit.codex_text(text, 24, UiKit.TEXT_COLOR))
 		"notice":
-			nodes.append(UiKit.text(text, 22, UiKit.ACCENT_COLOR))
+			nodes.append(UiKit.codex_text(text, 22, UiKit.ACCENT_COLOR))
 		"gain":
-			nodes.append(UiKit.text(text, 22, UiKit.GOOD_COLOR))
+			nodes.append(UiKit.codex_text(text, 22, UiKit.GOOD_COLOR))
 		"loss":
-			nodes.append(UiKit.text(text, 22, UiKit.BAD_COLOR))
+			nodes.append(UiKit.codex_text(text, 22, UiKit.BAD_COLOR))
 		"system":
-			nodes.append(UiKit.text(text, 22, UiKit.MUTED_COLOR))
+			nodes.append(UiKit.codex_text(text, 22, UiKit.MUTED_COLOR))
 		_:
-			nodes.append(UiKit.text(text, 24, UiKit.TEXT_COLOR))
+			nodes.append(UiKit.codex_text(text, 24, UiKit.TEXT_COLOR))
 	return nodes
 
 
@@ -1228,6 +1291,9 @@ func _make_option_callback(opt_id: String) -> Callable:
 
 func _render_location() -> void:
 	_render_story()
+	if GameState.is_exploring():
+		_render_exploration_progress()
+		return
 
 	var events := LocationSystem.get_manual_events()
 	var explore_total := ExplorationSystem.total(LocationSystem.current_id)
@@ -1257,6 +1323,31 @@ func _render_location() -> void:
 		_add_section("Склад" if LocationSystem.is_base() else "Здесь лежит")
 		for item_id in stash.keys():
 			_add_button("✋ Взять: %s%s" % [_item_name(item_id), _count_suffix(int(stash[item_id]))], _make_stash_take_callback(item_id), "quiet")
+
+
+## Промежуточное состояние длительного поиска: одна строка и тонкая шкала
+## меняются каждые полсекунды, остальные действия и HUD-кнопки заблокированы.
+func _render_exploration_progress() -> void:
+	var progress := GameState.get_exploration_progress()
+	var step := int(progress.get("step", 0))
+	var total := maxi(1, int(progress.get("total", 1)))
+	var spent := float(progress.get("o2_spent", 0.0))
+	var dots := ".".repeat(1 + step % 3)
+	var caption := "Исследование%s · %d/%d" % [dots, step, total]
+	if spent > 0.0:
+		caption += " · −%d O2" % roundi(spent)
+	elif is_zero_approx(ResourceSystem.get_o2_cost("explore_tick")):
+		caption += " · воздух отсека"
+	var card := UiKit.card(body)
+	card.name = "ExplorationProgress"
+	card.add_child(UiKit.text(caption, 23, UiKit.ACCENT_COLOR))
+	var bar := ProgressBar.new()
+	bar.name = "ExplorationProgressBar"
+	bar.max_value = total
+	bar.value = step
+	bar.show_percentage = false
+	bar.custom_minimum_size.y = UiKit.fs(12)
+	card.add_child(bar)
 
 
 ## «Исследовать»: сколько ещё можно найти в отсеке. Искать нечего — кнопка
@@ -1522,10 +1613,14 @@ func _on_rollback_ad_completed(success: bool) -> void:
 		_render_current_screen()
 
 
-## Журнал — три вкладки: «Цели» (мысли героя и задачи, QuestSystem),
-## «Хроника» (что уже произошло в забеге, JournalSystem) и «Архив»
-## (найденные лор-фрагменты, ArchiveSystem). Закрывает журнал кнопка HUD.
-const JOURNAL_TABS := [["goals", "🎯 Цели"], ["log", "📜 Хроника"], ["lore", "🗄️ Архив"]]
+## Журнал — четыре вкладки: цели, хроника забега, найденные документы и
+## справочник мира с подвкладками. Закрывает журнал кнопка HUD.
+const JOURNAL_TABS := [
+	["goals", "🎯 Цели"], ["log", "📜 Хроника"], ["lore", "🗄️ Архив"], ["codex", "📚 Справочник"],
+]
+const CODEX_TABS := [
+	["places", "Места"], ["people", "Люди"], ["ships", "Корабли"], ["terms", "Термины"],
+]
 const JOURNAL_COLORS := {
 	"move": UiKit.ACCENT_COLOR,
 	"combat": UiKit.BAD_COLOR,
@@ -1547,7 +1642,11 @@ func _render_journal() -> void:
 	for entry in JOURNAL_TABS:
 		var tab_id := str(entry[0])
 		var label := str(entry[1])
-		if (tab_id == "lore" and NotificationSystem.has_new_lore()) or (tab_id == "goals" and NotificationSystem.has_new_goals()):
+		if (
+			(tab_id == "lore" and NotificationSystem.has_new_lore())
+			or (tab_id == "codex" and NotificationSystem.has_new_codex())
+			or (tab_id == "goals" and NotificationSystem.has_new_goals())
+		):
 			label += " (!)"
 		var btn := UiKit.button(label, "tab_active" if tab_id == journal_tab else "quiet", 58)
 		btn.name = "JournalTab_%s" % tab_id
@@ -1558,6 +1657,8 @@ func _render_journal() -> void:
 	body.add_child(tabs)
 
 	match journal_tab:
+		"codex":
+			_render_journal_codex()
 		"lore":
 			_render_journal_archive()
 		"log":
@@ -1573,7 +1674,7 @@ func _render_journal_goals() -> void:
 	if thoughts != "":
 		var thoughts_card := UiKit.card(body)
 		thoughts_card.add_child(UiKit.text("💭 Мысли", 24, UiKit.ACCENT_COLOR))
-		thoughts_card.add_child(UiKit.text(thoughts, 22))
+		thoughts_card.add_child(UiKit.codex_text(thoughts, 22))
 	var quests := QuestSystem.get_quests()
 	var active := quests.filter(func(q: Dictionary) -> bool: return not bool(q["completed"]))
 	var completed := quests.filter(func(q: Dictionary) -> bool: return bool(q["completed"]))
@@ -1629,12 +1730,45 @@ func _render_journal_archive() -> void:
 	for id in ids:
 		var card := UiKit.card(body)
 		card.add_child(UiKit.text(ArchiveSystem.get_title(str(id)), 26, UiKit.TITLE_COLOR))
-		card.add_child(UiKit.text(ArchiveSystem.get_text(str(id)), 22))
+		card.add_child(UiKit.codex_text(ArchiveSystem.get_text(str(id)), 22))
+
+## Справочник: четыре категории знаний, открывающиеся при первом упоминании
+## в повествовании. Заголовок записи окрашен тем же цветом, что понятие в ленте.
+func _render_journal_codex() -> void:
+	var tabs := HBoxContainer.new()
+	tabs.name = "CodexTabs"
+	tabs.add_theme_constant_override("separation", 8)
+	for entry in CODEX_TABS:
+		var category := str(entry[0])
+		var btn := UiKit.button(str(entry[1]), "tab_active" if category == codex_tab else "quiet", 52)
+		btn.name = "CodexTab_%s" % category
+		btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.add_theme_font_size_override("font_size", UiKit.fs(18))
+		btn.pressed.connect(_select_codex_tab.bind(category))
+		tabs.add_child(btn)
+	body.add_child(tabs)
+	var ids := CodexSystem.get_unlocked(codex_tab)
+	if ids.is_empty():
+		_add_text("В этой категории пока нет записей.")
+		return
+	_add_section("%s · записей: %d" % [CodexSystem.get_category_title(codex_tab), ids.size()])
+	for id in ids:
+		var card := UiKit.card(body)
+		card.add_child(UiKit.text(CodexSystem.get_title(str(id)), 26, UiKit.CODEX_COLOR))
+		card.add_child(UiKit.codex_text(CodexSystem.get_text(str(id)), 22))
 
 
-## Настройки интерфейса: размер шрифта и громкость — ползунки, плавные
-## переходы и звук — переключатели. В игре настройки закрывает кнопка HUD;
-## в главном меню HUD нет, поэтому там внизу «В меню».
+func _select_codex_tab(category: String) -> void:
+	codex_tab = category
+	_scroll_to_top()
+	_render_current_screen()
+
+
+
+## Настройки интерфейса: размер шрифта, скорость текста и громкость —
+## ползунки, плавные переходы и звук — переключатели. В игре настройки
+## закрывает кнопка HUD; в главном меню HUD нет, поэтому там внизу «В меню».
 func _render_settings() -> void:
 	_add_title("Настройки")
 	var font_caption := UiKit.section("")
@@ -1662,6 +1796,17 @@ func _render_settings() -> void:
 	anim_btn.name = "AnimationsToggle"
 	anim_btn.pressed.connect(func(): SettingsSystem.set_animations(not SettingsSystem.animations))
 	body.add_child(anim_btn)
+	var speed_caption := UiKit.section("")
+	body.add_child(speed_caption)
+	var speed_slider := UiKit.slider(SettingsSystem.TEXT_SPEED_MIN, SettingsSystem.TEXT_SPEED_MAX,
+		SettingsSystem.TEXT_SPEED_STEP, SettingsSystem.text_speed_cps)
+	speed_slider.name = "TextSpeedSlider"
+	speed_slider.editable = SettingsSystem.animations
+	body.add_child(speed_slider)
+	_bind_settings_slider(speed_slider, speed_caption,
+		func(value: float) -> String: return "Скорость текста: %d зн./с%s" % [
+			roundi(value), "" if SettingsSystem.animations else " · анимации выключены"],
+		func(value: float) -> void: SettingsSystem.set_text_speed(roundi(value)))
 	_add_section("Звук")
 	var sound_btn := UiKit.button(
 		"Звук: включён" if SettingsSystem.sound_enabled else "Звук: выключен",

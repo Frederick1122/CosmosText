@@ -106,8 +106,8 @@ func get_current_floor_id() -> String:
 	return current_floor_id
 
 
-## Узлы для UI: данные контента + explored, unlockable, fog_visible и status
-## (см. get_node_status).
+## Узлы для UI: данные контента + explored, unlockable, fog_visible, title_known
+## и status (см. get_node_status).
 func get_map_nodes(include_locked: bool = true) -> Array:
 	var result: Array = []
 	for node_id in nodes.keys():
@@ -121,6 +121,7 @@ func get_map_nodes(include_locked: bool = true) -> Array:
 		entry["explored"] = is_node_explored(str(node_id))
 		entry["unlockable"] = can_unlock_node(str(node_id))
 		entry["fog_visible"] = is_node_fog_visible(str(node_id))
+		entry["title_known"] = is_node_title_known(str(node_id))
 		entry["status"] = get_node_status(str(node_id))
 		result.append(entry)
 	result.sort_custom(func(a, b): return _node_map_order(a) < _node_map_order(b))
@@ -164,6 +165,18 @@ func get_node_status(node_id: String) -> String:
 	if int(left["locked"]) > 0:
 		return "locked"
 	return "empty"
+
+## Название известно после посещения или явного открытия скрытого узла
+## сюжетным действием. Обычный соседний отсек остаётся «Неизвестно».
+func is_node_title_known(node_id: String) -> bool:
+	if not nodes.has(node_id) or not (nodes[node_id] is Dictionary):
+		return false
+	if is_node_explored(node_id):
+		return true
+	var node: Dictionary = nodes[node_id]
+	var cfg := _node_map(node)
+	return bool(cfg.get("hidden_until_open", false)) and str(node.get("state", "locked")) != "locked"
+
 
 
 # --- Маршруты и перемещение -----------------------------------------------------

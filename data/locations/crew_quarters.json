@@ -10,7 +10,7 @@
       "text": "Каюты смены. Шкафчики пусты, дверь медблока напротив больше не мигает красным."
     }
   ],
-  "explore": { "pool": "station_living", "rolls": 3 },
+  "explore": { "pool": "station_living", "rolls": 3, "duration": [2, 3] },
   "events": [
     {
       "id": "first_look",

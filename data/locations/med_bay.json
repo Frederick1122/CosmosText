@@ -2,7 +2,7 @@
   "id": "med_bay",
   "title": "Медицинский блок",
   "description": "Смотровая на два места. Карантинная лампа гаснет, когда дверь открывается. Шкаф с препаратами цел, кушетка — нет: кто-то вставал с неё рывком.",
-  "explore": { "pool": "station_medical", "rolls": 2 },
+  "explore": { "pool": "station_medical", "rolls": 2, "duration": [2, 4] },
   "events": [
     {
       "id": "quarantine_note",

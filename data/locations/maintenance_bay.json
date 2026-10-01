@@ -9,7 +9,7 @@
       "text": "Технический отсек. Стеллаж разобран, инструментальный ящик открыт и пуст. Пахнет горелой изоляцией."
     }
   ],
-  "explore": { "pool": "workshop", "rolls": 2 },
+  "explore": { "pool": "workshop", "rolls": 2, "duration": [2, 4] },
   "events": [
     {
       "id": "first_look",

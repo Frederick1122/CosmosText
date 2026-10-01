@@ -3,7 +3,7 @@ extends Node
 ## локацией и событием буфер очищается: на экране всегда только текущий
 ## контекст, без описания предыдущей локации или завершённого события.
 ##
-## Запись: { "kind": ..., "text": ..., "image": ... }
+## Запись: { "kind": ..., "text": ..., "image": ..., "sound": ... }
 ##   scene  — заголовок новой сцены (вход в модуль, начало ситуации);
 ##   text   — описание, текст события или ситуации;
 ##   choice — выбор игрока («— Выбить крышку плечом»);
@@ -38,11 +38,11 @@ func push_scene(title: String, image: String = "") -> void:
 	push("scene", title, image)
 
 
-func push(kind: String, text: String, image: String = "") -> void:
+func push(kind: String, text: String, image: String = "", sound: String = "") -> void:
 	var trimmed := text.strip_edges()
 	if trimmed == "" and image == "":
 		return
-	entries.append({"kind": kind, "text": trimmed, "image": image})
+	entries.append({"kind": kind, "text": trimmed, "image": image, "sound": sound})
 	if entries.size() > MAX_ENTRIES:
 		entries = entries.slice(entries.size() - MAX_ENTRIES)
 	entries_added.emit(1)
@@ -79,5 +79,6 @@ func load_save_data(data: Array) -> void:
 			"kind": str(entry.get("kind", "text")),
 			"text": str(entry.get("text", "")),
 			"image": str(entry.get("image", "")),
+			"sound": "",
 		})
 	cleared.emit()

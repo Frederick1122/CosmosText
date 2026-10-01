@@ -4,11 +4,14 @@ extends Node
 ## ничего не решают за пользовательский интерфейс.
 
 signal screen_changed(screen: int)
+## Такт исследования: номер, всего тактов, уже потрачено O2.
+signal exploration_progressed(step: int, total: int, o2_spent: float)
 
 enum Screen { MAIN_MENU, SECTOR_MAP, SITUATION, COMBAT, DEATH, LOCATION, VICTORY }
 
 ## Предохранитель от цепочек автособытий, зацикленных контентом.
 const MAX_AUTO_EVENTS_PER_STEP := 32
+const EXPLORE_STEP_SECONDS := 0.5
 
 var current_screen: int = Screen.MAIN_MENU
 var last_death_cause: String = ""
@@ -18,6 +21,8 @@ var last_ending_id: String = ""
 ## Событие локации считается выполненным только после завершающего выбора.
 var _active_location_event_id: String = ""
 var _active_event_completes_on_win: bool = true
+var _exploring: bool = false
+var _exploration_progress: Dictionary = {}
 
 func _ready() -> void:
 	EventBus.player_died.connect(_on_player_died)
@@ -29,6 +34,8 @@ func _ready() -> void:
 func start_new_game(sector_id: String = "", opening_situation_id: String = "") -> void:
 	_active_location_event_id = ""
 	_active_event_completes_on_win = true
+	_exploring = false
+	_exploration_progress.clear()
 	if sector_id == "":
 		sector_id = SaveManager.get_start_sector_id()
 	if opening_situation_id == "":
@@ -107,22 +114,54 @@ func start_location_event(event_id: String) -> void:
 	_resume_location()
 
 
-## «Исследовать» в меню модуля: стоит как действие, раскрывает спрятанное
-## событие или разыгрывает находку из пула (ExplorationSystem).
+## «Исследовать» в меню модуля: результат выбирается сразу, затем 2–5 тактов
+## показывают поиск и по одному списывают O2. Длительность берётся из контента.
 func explore_location() -> void:
+	if _exploring:
+		return
 	if not LocationSystem.is_active() or not ExplorationSystem.can_explore():
 		push_warning("GameState: в модуле нечего исследовать")
 		return
-	var cost := ResourceSystem.get_o2_cost("action")
-	if not ResourceSystem.spend_o2("action"):
+	var plan := ExplorationSystem.prepare()
+	if plan.is_empty():
 		return
+	var total := maxi(1, int(plan.get("steps", 1)))
+	var spent := 0.0
+	_exploring = true
+	_exploration_progress = {"step": 0, "total": total, "o2_spent": spent}
 	NarrativeSystem.clear()
 	NarrativeSystem.push("choice", "Исследовать отсек")
-	EffectResolver.report_change("o2", -cost, "O2")
-	ExplorationSystem.explore()
+	exploration_progressed.emit(0, total, spent)
+	for step in range(1, total + 1):
+		if SettingsSystem.animations:
+			await get_tree().create_timer(EXPLORE_STEP_SECONDS).timeout
+		var before := ResourceSystem.o2
+		if not ResourceSystem.spend_o2("explore_tick", "", false):
+			_exploring = false
+			_exploration_progress.clear()
+			return
+		spent += before - ResourceSystem.o2
+		_exploration_progress = {"step": step, "total": total, "o2_spent": spent}
+		exploration_progressed.emit(step, total, spent)
+	if not ResourceSystem.finish_action("action"):
+		_exploring = false
+		_exploration_progress.clear()
+		return
+	EffectResolver.report_change("o2", -spent, "O2")
+	ExplorationSystem.resolve(plan)
+	_exploring = false
+	_exploration_progress.clear()
 	if ResourceSystem.is_dead():
 		return
 	_resume_location()
+
+
+func is_exploring() -> bool:
+	return _exploring
+
+
+func get_exploration_progress() -> Dictionary:
+	return _exploration_progress.duplicate()
 
 
 ## Перепроверить автособытия и показать локацию заново (например после

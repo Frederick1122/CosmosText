@@ -32,6 +32,7 @@ const DEFAULT_O2_COSTS := {
 	"move": 6.0,
 	"elevator": 4.0,
 	"action": 4.0,
+	"explore_tick": 1.0,
 	"choice": 3.0,
 	"combat_turn": 4.0,
 }
@@ -109,18 +110,26 @@ func get_o2_cost(kind: String, node_id: String = "") -> float:
 	return maxf(0.0, float(o2_costs.get(kind, 0.0))) * environment_multiplier(node_id)
 
 
-## Списывает стоимость действия. Возвращает true, если действие можно
-## продолжать: false означает, что кислород кончился и игрок уже мёртв
-## (экран смерти выставит EventBus.player_died).
-func spend_o2(kind: String, node_id: String = "") -> bool:
+## Списывает стоимость действия. count_action=false нужен для промежуточных
+## тактов длительного действия: силы и голод списываются один раз в конце.
+## Возвращает false, если кислород кончился и игрок уже мёртв.
+func spend_o2(kind: String, node_id: String = "", count_action: bool = true) -> bool:
 	if _died_this_run:
 		return false
 	var cost := get_o2_cost(kind, node_id)
 	if cost > 0.0:
 		apply_o2_delta(-cost)
 		o2_spent.emit(kind, cost)
-	if not _died_this_run:
+	if not _died_this_run and count_action:
 		action_taken.emit(kind)
+	return not _died_this_run
+
+
+## Завершает длительное действие после всех кислородных тактов.
+func finish_action(kind: String) -> bool:
+	if _died_this_run:
+		return false
+	action_taken.emit(kind)
 	return not _died_this_run
 
 

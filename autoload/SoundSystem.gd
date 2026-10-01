@@ -6,8 +6,8 @@ extends Node
 ## CombatView). Включение и громкость — SettingsSystem.
 ##
 ## Что звучит по сигналам:
-##   EffectResolver.change_reported — урон, лечение, кислород, находки;
-##   EffectResolver.lock_opened / MapSystem.node_blocked — замки;
+##   EffectResolver.change_reported — урон, лечение и пополнение кислорода;
+##   получение предметов запускает Game синхронно с появлением строки ленты;
 ##   LocationSystem.location_entered / MapSystem.elevator_used / player_moved — перемещение;
 ##   ArchiveSystem.fragment_unlocked, CraftingSystem.crafted;
 ##   ProgressionSystem.xp_gained — опыт и новый уровень (в бою их озвучивает
@@ -95,8 +95,7 @@ func _on_change_reported(kind: String, amount: float) -> void:
 			if amount > 0.0:
 				play("o2_refill")
 		"item", "ammo":
-			if amount > 0.0:
-				play("pickup")
+			pass  # Game проиграет pickup, когда соответствующая строка станет видимой.
 		"hunger":
 			if amount < 0.0:
 				play("heal")  # поел

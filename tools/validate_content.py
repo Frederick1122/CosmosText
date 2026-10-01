@@ -19,7 +19,7 @@ EQUIP_SLOTS = ("head", "body", "arms", "legs", "back")
 STATS = ("armor", "melee_damage", "ranged_damage", "hit_chance", "flee_chance", "max_hp", "inventory_slots",
          "explore_rolls", "find_chance")
 # Должны совпадать с ResourceSystem.DEFAULT_O2_COSTS.
-O2_COST_KINDS = ("move", "elevator", "action", "choice", "combat_turn")
+O2_COST_KINDS = ("move", "elevator", "action", "explore_tick", "choice", "combat_turn")
 # Должны совпадать с ProgressionSystem.DEFAULT_CONFIG (секция config.json → xp).
 XP_CONFIG_KEYS = ("explore", "craft", "lore", "kill", "level_base", "level_step", "skill_points_per_level")
 # Должны совпадать с NeedsSystem.DEFAULT_CONFIG (секция config.json → needs).
@@ -148,6 +148,12 @@ def main():
     except Exception as e:
         errors.append(f"lore.json: {e}")
         lore = {}
+
+    try:
+        codex = load_json(os.path.join(DATA, "codex.json"))
+    except Exception as e:
+        errors.append(f"codex.json: {e}")
+        codex = {}
 
     try:
         quests_data = load_json(os.path.join(DATA, "quests.json"))
@@ -577,6 +583,24 @@ def main():
                 if sector_id not in sectors:
                     errors.append(f"{opt_ctx}: next='map:{sector_id}' ссылается на неизвестный сектор")
 
+    # Справочник мира (CodexSystem): четыре фиксированные категории.
+    codex_categories = {"places", "people", "ships", "terms"}
+    for entry_id, entry in codex.items():
+        ctx = f"codex/{entry_id}"
+        if not isinstance(entry, dict):
+            errors.append(f"{ctx}: ожидается объект")
+            continue
+        if entry.get("category") not in codex_categories:
+            errors.append(f"{ctx}.category: допустимы places, people, ships, terms")
+        if not str(entry.get("title", "")).strip():
+            errors.append(f"{ctx}: нужен непустой title")
+        if not str(entry.get("text", "")).strip():
+            errors.append(f"{ctx}: нужен непустой text")
+        aliases = entry.get("aliases", [])
+        if not isinstance(aliases, list) or not aliases or any(not str(alias).strip() for alias in aliases):
+            errors.append(f"{ctx}.aliases: нужен непустой массив непустых строк")
+
+
     events_total = 0
     for lid, loc in locations.items():
         ctx = f"locations/{lid}"
@@ -588,7 +612,7 @@ def main():
         explore = loc.get("explore")
         if explore is not None:
             if not isinstance(explore, dict):
-                errors.append(f"{ctx}.explore: ожидается объект {{pool, rolls}}")
+                errors.append(f"{ctx}.explore: ожидается объект {{pool, rolls, duration}}")
             else:
                 if explore.get("pool") not in explore_pools:
                     errors.append(f"{ctx}.explore.pool: неизвестный пул '{explore.get('pool')}' (explore_pools.json)")
@@ -597,6 +621,11 @@ def main():
                     errors.append(f"{ctx}.explore.rolls: неотрицательное целое")
                 elif explore.get("pool") in explore_pools and len(explore_pools[explore["pool"]]) < rolls + 2:
                     warnings.append(f"{ctx}.explore: в пуле '{explore['pool']}' меньше rolls+2 событий — навыку «Поиск» не хватит находок")
+                duration = explore.get("duration", [])
+                if (not isinstance(duration, list) or len(duration) != 2
+                        or any(not isinstance(v, int) or isinstance(v, bool) or v <= 0 for v in duration)
+                        or (len(duration) == 2 and duration[0] > duration[1])):
+                    errors.append(f"{ctx}.explore.duration: нужны два положительных целых [min, max]")
         if not str(loc.get("description", "")).strip():
             warnings.append(f"{ctx}: нет базового описания (description)")
         variants = loc.get("descriptions", [])
@@ -935,7 +964,7 @@ def main():
     print(f"Локаций: {len(locations)} (событий: {events_total}) | Ситуаций: {len(situations)} | "
           f"Секторов: {len(sectors)} | Предметов: {len(items)} | Навыков: {len(skills)} | "
           f"Рецептов: {len(recipes)} | Врагов: {len(enemies)} | Лор-фрагментов: {len(lore)} | "
-          f"Финалов: {len(endings)}")
+          f"Записей справочника: {len(codex)} | Финалов: {len(endings)}")
 
     if warnings:
         print(f"\nПредупреждения ({len(warnings)}):")
