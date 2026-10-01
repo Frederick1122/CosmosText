@@ -42,7 +42,8 @@ func _ready() -> void:
 	_expect(_narrative_count("scene") == 1 and _narrative_count("text") == 1
 		and _narrative_count("choice") == 0 and _narrative_count("result") == 0,
 		"после «Продолжить» событие заменено описанием локации")
-	_expect(not GameState.has_left_capsule, "экран персонажа заблокирован внутри капсулы")
+	_expect(MapSystem.get_known_floor_ids() == ["deck_01"] and MapSystem.player_node_id == "hub",
+		"игрок стоит в капсуле, палубы за лифтом на карте не видны")
 	_expect(MapSystem.is_node_explored("hub") and MapSystem.is_node_fog_visible("lift_01_to_02")
 		and not MapSystem.is_node_fog_visible("cargo_bay"), "туман скрывает дальние отсеки")
 	_expect(not MapSystem.is_node_fog_visible("copilot_body"),
@@ -90,20 +91,29 @@ func _ready() -> void:
 
 	# --- Палуба 02: грузовой отсек ---
 	GameState.leave_location()
-	_expect(GameState.has_left_capsule and MapSystem.get_explored_floor_ids().has("deck_01"),
-		"после выхода из капсулы открыты карта и персонаж")
-	MapSystem.select_node("lift_01_to_02")
-	_expect(MapSystem.current_floor_id == "deck_02", "лифт перевёз на палубу 02")
+	_expect(GameState.current_screen == Screen.SECTOR_MAP and MapSystem.player_node_id == "hub",
+		"после выхода из модуля игрок стоит в его узле на карте")
+	MapSystem.travel_to("lift_01_to_02")
+	_expect(MapSystem.current_floor_id == "deck_02" and MapSystem.player_node_id == "lift_02_to_01"
+		and MapSystem.get_known_floor_ids() == ["deck_01", "deck_02"],
+		"лифт перевёз на палубу 02, она появилась на карте")
 
-	MapSystem.select_node("cargo_bay")
+	MapSystem.travel_to("cargo_bay")
 	_expect(SituationEngine.current_id == "sit_1_3_drone", "вход в грузовой отсек запускает автособытие дрона")
 	_choose("B")
-	_expect(GameState.current_screen == Screen.SECTOR_MAP and _node_state("cargo_bay") == "dangerous",
-		"отступление: карта, узел опасен")
+	_expect(GameState.current_screen == Screen.SECTOR_MAP and _node_state("cargo_bay") == "dangerous"
+		and MapSystem.player_node_id == "lift_02_to_01",
+		"отступление: карта, узел опасен, игрок вернулся к лифту")
 
-	MapSystem.select_node("cargo_bay")
-	_expect(SituationEngine.current_id == "sit_1_3_drone" and GameState.current_screen == Screen.SITUATION,
-		"повторяемое автособытие срабатывает при новом визите")
+	var route := MapSystem.plan_route("lift_02_to_03")
+	_expect(bool(route["ok"]) and route["path"] == ["cargo_bay", "lift_02_to_03", "lift_03_to_02"]
+		and is_equal_approx(float(route["cost"]),
+			ResourceSystem.get_o2_cost("move", "cargo_bay") + ResourceSystem.get_o2_cost("elevator", "lift_02_to_03")),
+		"маршрут к нижнему лифту идёт через грузовой отсек, цена — переход и поездка")
+	MapSystem.travel_to("lift_02_to_03")
+	_expect(SituationEngine.current_id == "sit_1_3_drone" and GameState.current_screen == Screen.SITUATION
+		and MapSystem.player_node_id == "cargo_bay" and not MapSystem.is_travelling(),
+		"дрон перехватывает игрока в пути через грузовой отсек")
 	ResourceSystem.apply_ammo_delta(10)  # чит для детерминированной победы
 	_choose("A")
 	_expect(GameState.current_screen == Screen.COMBAT, "начат бой")
@@ -130,6 +140,9 @@ func _ready() -> void:
 	_expect(_notice_contains("[+1 Металлолом]"),
 		"трофей боя показан в ленте модуля строкой в скобках")
 	_expect(CharacterSystem.skill_points == 2, "on_win выдал очко навыка")
+	NotificationSystem.mark_character_seen()
+	_expect(NotificationSystem.has_character_alert() and NotificationSystem.unspent_skill_points() == 2,
+		"неистраченные очки навыков держат уведомление и после просмотра персонажа")
 	_expect(not _has_manual("force_shuttle_airlock"), "шлюз недоступен без трубы")
 
 	GameState.start_location_event("search_containers")
@@ -180,7 +193,7 @@ func _ready() -> void:
 		"действие показало шаттл и выделило открытие")
 
 	GameState.leave_location()
-	MapSystem.select_node("cargo_bay")
+	MapSystem.travel_to("cargo_bay")
 	_expect(GameState.current_screen == Screen.LOCATION and LocationSystem.get_visits() == 3
 		and int(LocationSystem.get_stash().get("cloth_rags", 0)) == 1,
 		"возврат в пройденный модуль без повторного боя, вещи на полу на месте")
@@ -189,10 +202,10 @@ func _ready() -> void:
 	GameState.leave_location()
 	_expect(_node_state("maintenance_bay") == "locked" and not MapSystem.can_unlock_node("maintenance_bay"),
 		"техотсек заперт, ключа нет")
-	MapSystem.select_node("maintenance_bay")
+	MapSystem.travel_to("maintenance_bay")
 	_expect(GameState.current_screen == Screen.SECTOR_MAP and _node_state("maintenance_bay") == "locked",
 		"без ключа запертый узел не открывается")
-	MapSystem.select_node("cargo_bay")
+	MapSystem.travel_to("cargo_bay")
 	GameState.start_location_event("search_forklift")
 	_choose("B")
 	_expect(InventorySystem.has_item("hex_key") and InventorySystem.free_slots() > 0,
@@ -206,7 +219,7 @@ func _ready() -> void:
 
 	GameState.leave_location()
 	_expect(MapSystem.can_unlock_node("maintenance_bay"), "с шестигранником узел подсвечен как открываемый")
-	MapSystem.select_node("maintenance_bay")
+	MapSystem.travel_to("maintenance_bay")
 	_expect(LocationSystem.current_id == "maintenance_bay" and _node_state("maintenance_bay") == "available"
 		and InventorySystem.has_item("hex_key"), "ключ открыл служебную панель и не израсходовался")
 	GameState.start_location_event("open_tool_crate")
@@ -221,7 +234,7 @@ func _ready() -> void:
 		"лишние находки сложены на полу техотсека")
 
 	GameState.leave_location()
-	MapSystem.select_node("cargo_bay")
+	MapSystem.travel_to("cargo_bay")
 	var ammo_in_locker := ResourceSystem.ammo
 	GameState.start_location_event("open_rigger_locker")
 	_expect(ResourceSystem.ammo == ammo_in_locker + 6 and not InventorySystem.has_item("cargo_key"),
@@ -231,7 +244,7 @@ func _ready() -> void:
 
 	# --- Шаттл: выбор одного из двух ---
 	GameState.leave_location()
-	MapSystem.select_node("alien_shuttle")
+	MapSystem.travel_to("alien_shuttle")
 	_expect(LocationSystem.current_id == "alien_shuttle", "открытый модуль доступен")
 	GameState.start_location_event("search_cockpit")
 	_expect(CharacterSystem.equip("mag_boots") == "" and is_equal_approx(CharacterSystem.get_stat("flee_chance"), 0.15),
@@ -248,15 +261,15 @@ func _ready() -> void:
 
 	# --- Палуба 01: тело второго пилота ---
 	GameState.leave_location()
-	MapSystem.select_node("lift_02_to_01")
-	MapSystem.select_node("hub")
+	MapSystem.travel_to("lift_02_to_01")
+	MapSystem.travel_to("hub")
 	GameState.start_location_event("follow_signal")
 	_expect(_node_state("copilot_body") == "available"
 		and MapSystem.is_node_fog_visible("copilot_body")
 		and _notice_contains("[Открыта новая локация \"Тело второго пилота\"]"),
 		"событие показало узел пилота и выделило открытие")
 	GameState.leave_location()
-	MapSystem.select_node("copilot_body")
+	MapSystem.travel_to("copilot_body")
 	_expect(LocationSystem.current_id == "copilot_body" and _notice_contains("Метка скафандра"),
 		"первое посещение: автосообщение")
 	GameState.start_location_event("take_helmet")
@@ -278,10 +291,10 @@ func _ready() -> void:
 
 	# --- Палуба 03: коридор и реактор ---
 	GameState.leave_location()
-	MapSystem.select_node("lift_01_to_02")
-	MapSystem.select_node("lift_02_to_03")
+	MapSystem.travel_to("lift_01_to_02")
+	MapSystem.travel_to("lift_02_to_03")
 	var o2_before_move := ResourceSystem.o2
-	MapSystem.select_node("service_corridor")
+	MapSystem.travel_to("service_corridor")
 	var unsealed_move_cost: float = float(ResourceSystem.o2_costs["move"]) * ResourceSystem.o2_unsealed_multiplier
 	_expect(LocationSystem.current_id == "service_corridor"
 		and is_equal_approx(o2_before_move - ResourceSystem.o2, unsealed_move_cost),
@@ -301,7 +314,7 @@ func _ready() -> void:
 
 	GameState.leave_location()
 	o2_before_move = ResourceSystem.o2
-	MapSystem.select_node("reactor")
+	MapSystem.travel_to("reactor")
 	_expect(LocationSystem.current_id == "reactor"
 		and is_equal_approx(o2_before_move - ResourceSystem.o2, float(ResourceSystem.o2_costs["move"])),
 		"реакторный отсек за гермодверью — переход по базовой цене")
@@ -319,11 +332,12 @@ func _ready() -> void:
 	_expect(InventorySystem.has_item("power_cell") and SituationEngine.current_id == "sit_3_2_strain",
 		"ячейка взята — автособытие Штамма сработало сразу (сумка %d/%d: %s)" % [InventorySystem.used_slots(), InventorySystem.max_slots, str(InventorySystem.get_slots())])
 	_choose("B")
-	_expect(GameState.current_screen == Screen.SECTOR_MAP and _node_state("reactor") == "dangerous", "побег от Штамма")
+	_expect(GameState.current_screen == Screen.SECTOR_MAP and _node_state("reactor") == "dangerous"
+		and MapSystem.player_node_id == "service_corridor", "побег от Штамма: игрок отошёл в коридор")
 
 	_expect(CharacterSystem.equip("service_pistol") == "" and InventorySystem.has_item("pipe_scrap"),
 		"пистолет надет вместо трубы")
-	MapSystem.select_node("reactor")
+	MapSystem.travel_to("reactor")
 	_expect(SituationEngine.current_id == "sit_3_2_strain", "Штамм ждёт при повторном входе")
 	_choose("A")
 	rounds = _fight()
@@ -340,7 +354,8 @@ func _ready() -> void:
 		"снаряжение, навыки и бонусы переживают сохранение")
 	_expect(int(LocationSystem.get_stash("cargo_bay").get("cloth_rags", 0)) == 1, "вещи на полу переживают сохранение")
 	_expect(MapSystem.map_revealed and MapSystem.is_node_explored("reactor")
-		and GameState.has_left_capsule, "туман и прогресс выхода переживают сохранение")
+		and MapSystem.player_node_id == "reactor" and MapSystem.get_known_floor_ids().size() == 3,
+		"туман, палубы и место игрока переживают сохранение")
 	_expect(NotificationSystem.has_character_alert() and NotificationSystem.has_new_lore(),
 		"уведомления персонажа и журнала переживают сохранение")
 	_expect(_journal_has("Переход: Грузовой отсек") and _journal_has("Победа в бою.")
@@ -362,7 +377,7 @@ func _ready() -> void:
 	_expect(SaveManager.load_run(), "после перезаписи сейв снова читается")
 
 	# Автосохранение: бой — не точка записи, экран модуля — точка.
-	MapSystem.select_node("service_corridor")
+	MapSystem.travel_to("service_corridor")
 	_expect(GameState.current_screen == Screen.LOCATION and LocationSystem.current_id == "service_corridor",
 		"после загрузки сейва игрок снова входит в коридор")
 	_delete_save(SaveManager.RUN_PATH)
@@ -381,8 +396,8 @@ func _ready() -> void:
 
 	# --- Перелёт на «Вехтер-9» ---
 	GameState.leave_location()
-	MapSystem.select_node("lift_03_to_02")
-	MapSystem.select_node("alien_shuttle")
+	MapSystem.travel_to("lift_03_to_02")
+	MapSystem.travel_to("alien_shuttle")
 	_expect(LocationSystem.current_id == "alien_shuttle" and _has_manual("install_power_cell"),
 		"с энергоячейкой в шаттле доступна установка")
 	GameState.start_location_event("install_power_cell")
@@ -397,11 +412,11 @@ func _ready() -> void:
 	_expect(FileAccess.file_exists(SaveManager.CHECKPOINT_PATH), "переход между секторами пишет чекпойнт")
 
 	# --- «Вехтер-9»: стыковка, каюты, медблок ---
-	MapSystem.select_node("dock_bay")
+	MapSystem.travel_to("dock_bay")
 	_expect(LocationSystem.current_id == "dock_bay" and ArchiveSystem.is_unlocked("log_04")
 		and SituationEngine.get_flag("docked_wechter") == true, "прибытие: автособытие и запись журнала")
 	GameState.leave_location()
-	MapSystem.select_node("crew_quarters")
+	MapSystem.travel_to("crew_quarters")
 	GameState.start_location_event("search_bunks")
 	_expect(InventorySystem.has_item("medkit"), "в каютах найдена аптечка")
 	ResourceSystem.apply_hp_delta(-40)
@@ -420,7 +435,7 @@ func _ready() -> void:
 	_expect(_node_state("med_bay") == "available" and not InventorySystem.has_item("station_keycard"),
 		"карта открыла медблок и израсходована")
 	GameState.leave_location()
-	MapSystem.select_node("med_bay")
+	MapSystem.travel_to("med_bay")
 	GameState.start_location_event("read_med_log")
 	_expect(ArchiveSystem.is_unlocked("log_05"), "карта пациента прочитана")
 	_expect(_has_manual("tap_medical_o2"), "с Инженерией доступна медицинская линия O2")
@@ -430,9 +445,9 @@ func _ready() -> void:
 
 	# --- «Вехтер-9»: турель и маяк ---
 	GameState.leave_location()
-	MapSystem.select_node("lift_a_to_b")
+	MapSystem.travel_to("lift_a_to_b")
 	_expect(MapSystem.current_floor_id == "ring_b", "лифт поднял на антенный ярус")
-	MapSystem.select_node("comms_hall")
+	MapSystem.travel_to("comms_hall")
 	_expect(SituationEngine.current_id == "sit_4_2_sentry" and not MapSystem.is_node_sealed("comms_hall"),
 		"зал связи без давления: турель и удвоенная цена действий")
 	_choose("A")
@@ -457,7 +472,7 @@ func _ready() -> void:
 		and _notice_contains("[Открыта новая локация \"Мачта дальней связи\"]"),
 		"консоль показала мачту и выделила открытие")
 	GameState.leave_location()
-	MapSystem.select_node("antenna_mast")
+	MapSystem.travel_to("antenna_mast")
 	GameState.start_location_event("align_dish")
 	_expect(SituationEngine.current_id == "sit_4_3_beacon", "на мачте открыт выбор адресата")
 	_choose("A")
@@ -474,8 +489,8 @@ func _ready() -> void:
 
 	# --- Финал забега ---
 	var victories_before := ChronicleSystem.victories
-	MapSystem.select_node("lift_b_to_a")
-	MapSystem.select_node("dock_bay")
+	MapSystem.travel_to("lift_b_to_a")
+	MapSystem.travel_to("dock_bay")
 	_expect(_has_manual("rescue_dock"), "после маяка в доке можно открыть шлюз")
 	GameState.start_location_event("rescue_dock")
 	_expect(SituationEngine.current_id == "sit_4_4_rescue" and _has_option("A") and not _has_option("B"),
@@ -500,12 +515,34 @@ func _ready() -> void:
 	# --- Кислород: смерть от удушья ---
 	var entries_before := JournalSystem.entry_count()
 	ResourceSystem.apply_o2_delta(1.0 - ResourceSystem.o2)  # в баллоне остаётся 1 единица
-	MapSystem.select_node("dock_bay")
+	MapSystem.travel_to("dock_bay")
 	_expect(GameState.current_screen == Screen.DEATH and not LocationSystem.is_active()
 		and GameState.last_death_cause == "o2",
 		"переход без кислорода убивает и не пускает в модуль")
 	_expect(JournalSystem.entry_count() == entries_before + 1 and _journal_has("Смерть: закончился кислород."),
 		"смерть от удушья записана в журнал")
+
+	# --- Прорыв: побег из боя посреди маршрута ---
+	GameState.choose_restart()
+	_choose("C")
+	_choose("B")
+	GameState.leave_location()
+	MapSystem.travel_to("lift_01_to_02")
+	MapSystem.travel_to("lift_02_to_03")
+	_expect(SituationEngine.current_id == "sit_1_3_drone" and MapSystem.player_node_id == "cargo_bay",
+		"новый забег: дрон перехватывает на пути к нижнему лифту")
+	_choose("A")
+	var flee_tries := 0
+	while CombatSystem.state == CombatSystem.State.PLAYER_TURN and flee_tries < 20:
+		CombatSystem.player_action("flee")
+		flee_tries += 1
+	CombatSystem.finish()
+	_expect(GameState.current_screen == Screen.SECTOR_MAP and MapSystem.is_travelling(),
+		"побег посреди маршрута — путь продолжается (попыток: %d)" % flee_tries)
+	while MapSystem.is_travelling():
+		MapSystem.travel_step()
+	_expect(MapSystem.current_floor_id == "deck_03" and MapSystem.player_node_id == "lift_03_to_02"
+		and _node_state("cargo_bay") == "dangerous", "прорыв: игрок за дроном, на палубе 03")
 
 	if _failures.is_empty():
 		print("SMOKE OK")

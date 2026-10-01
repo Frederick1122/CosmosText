@@ -8,14 +8,14 @@ extends Node
 ## Что звучит по сигналам:
 ##   EffectResolver.change_reported — урон, лечение, кислород, находки;
 ##   EffectResolver.lock_opened / MapSystem.node_blocked — замки;
-##   LocationSystem.location_entered / MapSystem.elevator_used — перемещение;
+##   LocationSystem.location_entered / MapSystem.elevator_used / player_moved — перемещение;
 ##   ArchiveSystem.fragment_unlocked, CraftingSystem.crafted;
 ##   GameState.screen_changed — начало боя, смерть, победа;
 ##   ResourceSystem.o2_changed — тревога при падении ниже LOW_O2.
 
 const SOUND_DIR := "res://assets/sounds/"
 const SOUNDS := [
-	"ui_click", "map_open", "door", "elevator",
+	"ui_click", "map_open", "door", "elevator", "step",
 	"pickup", "equip", "craft", "heal", "o2_refill", "unlock", "locked", "lore", "low_o2",
 	"hurt", "hit", "shot", "miss", "combat_start", "combat_won",
 	"death", "victory",
@@ -52,6 +52,7 @@ func _ready() -> void:
 	EffectResolver.lock_opened.connect(func(_lock_id: String) -> void: play("unlock"))
 	MapSystem.node_blocked.connect(func(_node_id: String, _message: String) -> void: play("locked"))
 	MapSystem.elevator_used.connect(func(_floor_id: String) -> void: play("elevator"))
+	MapSystem.player_moved.connect(func(_from_id: String, _to_id: String) -> void: play("step"))
 	LocationSystem.location_entered.connect(func(_id: String) -> void: play("door"))
 	ArchiveSystem.fragment_unlocked.connect(func(_id: String) -> void: play("lore"))
 	CraftingSystem.crafted.connect(func(_recipe_id: String, _item_id: String) -> void: play("craft"))

@@ -9,6 +9,7 @@ Godot 4.7 (GDScript) проект: текстовая survival-RPG для тел
 - UI проверяется через MCP-сервер `godot` (`run_project` → `screenshot` → `click`, см. docs/MCP.md) или руками по чек-листу в docs/DEVELOPMENT.md.
 - Пиксельный арт (после правок `assets/art`): `python tools/make_pixel_art.py`, затем импорт `<Godot 4.7 console exe> --headless --path . --import`.
 - Звуки (после правок таблицы `SOUNDS` в `tools/import_sounds.py`): `python tools/import_sounds.py "D:/Repos/400 Sounds Pack"`, затем тот же импорт Godot.
+- После завершённой задачи всегда: коммит в `main` (без push) и debug APK `bash tools/build_android.sh` → `build/CosmoTextGame.apk`.
 
 ## Архитектура — правила
 
@@ -21,7 +22,7 @@ Godot 4.7 (GDScript) проект: текстовая survival-RPG для тел
 - Система с состоянием забега реализует `reset_for_new_run` / `to_save_data` / `load_save_data` и подключается в `SaveManager`.
 - UI (`scenes/Game.gd`, `scenes/ui/SectorMapView.gd`) строится из кода и перерисовывается целиком по `GameState.screen_changed`.
 - Экран модуля и экран ситуации — общая лента `NarrativeSystem`: текст дописывается снизу, ничего не очищается. Выбор в ситуации → реплика игрока → эффекты → `result` → кнопка «Продолжить» (`SituationEngine.confirm_continue`).
-- Отдельной кнопки «Выйти на карту» нет: из модуля выводит кнопка «Карта» в HUD.
+- Отдельной кнопки «Выйти на карту» нет: «Карта» в HUD открывает карту поверх модуля, игрок выходит, когда идёт по маршруту. Игрок стоит в узле (`MapSystem.player_node_id`) и ходит маршрутами (`plan_route` / `start_travel` / `travel_step`); транзитный модуль с автособытием перехватывает игрока. Видны только палубы, где игрок был.
 - Размеры шрифта задаются только через `UiKit.fs()`; настройки интерфейса — `SettingsSystem` (`user://settings.json`), анимации переходов включаются там же.
 - Кислород тратится не по таймеру, а на действия: цены в `data/config.json` → `o2_costs`, списывает `ResourceSystem.spend_o2`.
 - Ключи — предметы категории `key` с `unlocks`; замок (`lock`) ставится на узел сектора или на событие локации, открывает `EffectResolver.can_open_lock` / `open_lock`.

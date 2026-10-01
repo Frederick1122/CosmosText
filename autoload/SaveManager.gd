@@ -69,7 +69,6 @@ func save_run() -> void:
 		"map": MapSystem.to_save_data(),
 		"journal": JournalSystem.to_save_data(),
 		"narrative": NarrativeSystem.to_save_data(),
-		"game_state": GameState.to_save_data(),
 		"notifications": NotificationSystem.to_save_data(),
 		"economy_run": EconomyManager.to_run_save_data(),
 	}
@@ -111,7 +110,6 @@ func load_run(fallback_sector_id: String = "wreck_01") -> bool:
 	LocationSystem.load_save_data(data.get("locations", {}))
 	var journal_data = data.get("journal", [])
 	JournalSystem.load_save_data(journal_data if journal_data is Array else [])
-	GameState.load_save_data(data.get("game_state", {}))
 	NotificationSystem.load_save_data(data.get("notifications", {}))
 	var narrative_data = data.get("narrative", [])
 	NarrativeSystem.load_save_data(narrative_data if narrative_data is Array else [])

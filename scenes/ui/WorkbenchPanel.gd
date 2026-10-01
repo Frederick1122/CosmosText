@@ -33,7 +33,7 @@ func _rebuild() -> void:
 
 	_build_recipes()
 
-	var close := UiKit.button("Закрыть", "quiet")
+	var close := UiKit.button("✖ Закрыть", "quiet")
 	close.name = "CloseWorkbench"
 	close.pressed.connect(func(): closed.emit())
 	add_child(close)
@@ -76,7 +76,7 @@ func _build_recipes() -> void:
 				var met := EffectResolver.check_requirement(req)
 				card.add_child(UiKit.text("Условие: %s%s" % [_describe_requirement(req), "" if met else " (не выполнено)"], 21, UiKit.TEXT_COLOR if met else UiKit.BAD_COLOR))
 
-		var btn := UiKit.button("Создать", "default", 56)
+		var btn := UiKit.button("🛠️ Создать", "default", 56)
 		btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		btn.add_theme_font_size_override("font_size", UiKit.fs(20))
 		btn.pressed.connect(_craft.bind(recipe_id))

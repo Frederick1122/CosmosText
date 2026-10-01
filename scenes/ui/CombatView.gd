@@ -24,6 +24,15 @@ const LOG_COLORS := {
 	"move": UiKit.ACCENT_COLOR,
 	"end": UiKit.EXIT_COLOR,
 }
+const MOVE_ICONS := {
+	"shoot": "🔫 ",
+	"strike": "👊 ",
+	"approach": "⏩ ",
+	"retreat": "⏪ ",
+	"aim": "🎯 ",
+	"defend": "🛡️ ",
+	"flee": "🏃 ",
+}
 ## Пауза между ударами одного хода: сначала манёвр игрока, затем ответ врага.
 const FX_STEP := 0.5
 const FX_START := 0.12
@@ -208,7 +217,7 @@ func _build_outcome(outcome: String) -> void:
 	if _animate:
 		_pop_in(panel, FX_START + FX_STEP * float(_fresh_fx().size()))
 
-	var btn := UiKit.button("Продолжить", "exit", 72)
+	var btn := UiKit.button("▶️ Продолжить", "exit", 72)
 	btn.name = "CombatContinue"
 	btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	btn.pressed.connect(func() -> void: finished.emit())
@@ -228,7 +237,7 @@ func _build_moves() -> void:
 	for move in state.get("moves", []):
 		var move_id := str(move.get("id", ""))
 		var enabled := bool(move.get("enabled", false))
-		var label := str(move.get("label", move_id))
+		var label := str(MOVE_ICONS.get(move_id, "")) + str(move.get("label", move_id))
 		if not enabled and str(move.get("reason", "")) != "":
 			label += " — " + str(move.get("reason", ""))
 		var kind := "default"
@@ -266,7 +275,7 @@ func _build_moves() -> void:
 		var icon := UiKit.item_icon(item_id, 44)
 		if icon != null:
 			row.add_child(icon)
-		var btn := UiKit.button("Использовать: " + str(data.get("name", item_id)), "quiet", 64)
+		var btn := UiKit.button("💊 Использовать: " + str(data.get("name", item_id)), "quiet", 64)
 		btn.name = "CombatItem_%s" % item_id
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.pressed.connect(func() -> void: move_selected.emit("use_item", item_id))

@@ -15,7 +15,6 @@ var last_death_cause: String = ""
 ## Смертельный удар в бою («Дрон попадает. Урон: 12.»); "" — погиб не от удара.
 var last_death_blow: String = ""
 var last_ending_id: String = ""
-var has_left_capsule: bool = false
 ## Событие локации считается выполненным только после завершающего выбора.
 var _active_location_event_id: String = ""
 var _active_event_completes_on_win: bool = true
@@ -28,7 +27,6 @@ func _ready() -> void:
 
 
 func start_new_game(sector_id: String = "", opening_situation_id: String = "") -> void:
-	has_left_capsule = false
 	_active_location_event_id = ""
 	_active_event_completes_on_win = true
 	if sector_id == "":
@@ -41,8 +39,8 @@ func start_new_game(sector_id: String = "", opening_situation_id: String = "") -
 	if opening_situation_id != "":
 		enter_situation(opening_situation_id)
 	elif MapSystem.hub_node_id != "":
-		# Вступление — автособытия локации хаба.
-		MapSystem.select_node(MapSystem.hub_node_id)
+		# Вступление — автособытия локации хаба: игрок уже стоит в ней.
+		MapSystem.travel_to(MapSystem.hub_node_id)
 	else:
 		_set_screen(Screen.SECTOR_MAP)
 
@@ -73,13 +71,12 @@ func enter_location(location_id: String, node_id: String = "") -> void:
 	_resume_location()
 
 
+## Выход из модуля на карту: маршрут, по которому игрок шёл, закончен.
 func leave_location() -> void:
-	var was_in_location := LocationSystem.is_active()
 	LocationSystem.leave()
 	_active_location_event_id = ""
 	NarrativeSystem.clear()
-	if was_in_location:
-		has_left_capsule = true
+	MapSystem.cancel_travel()
 	_set_screen(Screen.SECTOR_MAP)
 
 ## Ручной запуск события из меню модуля. Действие стоит кислорода, а
@@ -188,7 +185,9 @@ func _run_event(ev: Dictionary, clear_narrative: bool = true) -> bool:
 	return false
 
 
+## Экран модуля — конец пути: игрок дошёл или его перехватили в отсеке.
 func _show_location() -> void:
+	MapSystem.cancel_travel()
 	var at_hub := LocationSystem.current_node_id != "" and LocationSystem.current_node_id == MapSystem.hub_node_id
 	if at_hub or LocationSystem.is_base():
 		EventBus.returned_to_hub.emit()  # хаб и любой модуль-база — точка чекпойнта
@@ -216,12 +215,13 @@ func _on_situation_ended(_id: String, next: String, completes_event: bool) -> vo
 	if next.begins_with("map:"):
 		if LocationSystem.is_active():
 			LocationSystem.leave()
-			has_left_capsule = true
 		var sector_id := next.substr(4)
-		var loaded := true
-		if MapSystem.current_sector_id != sector_id:
-			loaded = MapSystem.load_sector(sector_id)
-		if loaded:
+		if MapSystem.current_sector_id == sector_id:
+			# Отступление: игрок не входит в отсек и возвращается туда, откуда пришёл.
+			MapSystem.retreat()
+			_set_screen(Screen.SECTOR_MAP)
+			EventBus.returned_to_hub.emit()
+		elif MapSystem.load_sector(sector_id):
 			_set_screen(Screen.SECTOR_MAP)
 			EventBus.returned_to_hub.emit()
 	else:
@@ -259,11 +259,14 @@ func _on_combat_ended(result: String) -> void:
 		_active_location_event_id = ""
 	if stays_in_location:
 		_resume_location()  # победа — игрок остаётся в модуле
-	else:
-		NarrativeSystem.clear()
-		LocationSystem.leave()  # побег — выход на карту
-		has_left_capsule = true
-		_set_screen(Screen.SECTOR_MAP)
+		return
+	NarrativeSystem.clear()
+	LocationSystem.leave()
+	# Побег посреди маршрута — прорыв: игрок идёт дальше. Иначе он отходит туда,
+	# откуда пришёл, и мимо врага без боя не пройти.
+	if not MapSystem.resume_travel_after_flee():
+		MapSystem.retreat()
+	_set_screen(Screen.SECTOR_MAP)
 
 func _complete_active_location_event() -> void:
 	if _active_location_event_id == "":
@@ -274,21 +277,13 @@ func _complete_active_location_event() -> void:
 
 
 
-
 func _on_player_died(cause: String) -> void:
 	last_death_cause = cause
 	last_death_blow = CombatSystem.last_hit_on_player() \
 		if cause == "hp" and current_screen == Screen.COMBAT else ""
 	_active_location_event_id = ""
+	MapSystem.cancel_travel()
 	_set_screen(Screen.DEATH)
-
-
-func to_save_data() -> Dictionary:
-	return {"has_left_capsule": has_left_capsule}
-
-
-func load_save_data(data: Dictionary) -> void:
-	has_left_capsule = bool(data.get("has_left_capsule", false))
 
 func _set_screen(screen: int) -> void:
 	current_screen = screen

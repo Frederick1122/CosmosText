@@ -205,6 +205,44 @@ func add_notice(text: String) -> void:
 	NarrativeSystem.push("notice", text)
 
 
+## Что осталось в модуле, не входя в него (для цвета узла на карте и для
+## перехвата в пути): { open, locked, auto, stash } — доступные ручные
+## события, запертые ключом, ждущее автособытие и вещи на полу.
+## simulate_entry — проверить так, будто игрок сейчас входит: визит +1,
+## автособытия этого визита ещё не срабатывали. Состояние не меняется:
+## контекст текущей локации подменяется только на время проверки условий.
+func peek(location_id: String, simulate_entry: bool = false) -> Dictionary:
+	var result := {"open": 0, "locked": 0, "auto": false, "stash": not get_stash(location_id).is_empty()}
+	if not _locations.has(location_id):
+		return result
+	var saved_id := current_id
+	var saved_fired := _fired_this_visit
+	var had_visits := _visits.has(location_id)
+	var saved_visits := int(_visits.get(location_id, 0))
+	if location_id != current_id or simulate_entry:
+		_fired_this_visit = {}
+	current_id = location_id
+	if simulate_entry:
+		_visits[location_id] = saved_visits + 1
+	for ev in _current().get("events", []):
+		if not (ev is Dictionary) or not _is_available(ev):
+			continue
+		if str(ev.get("start", "manual")) == "auto":
+			result["auto"] = true
+		elif is_event_locked(ev):
+			result["locked"] = int(result["locked"]) + 1
+		else:
+			result["open"] = int(result["open"]) + 1
+	current_id = saved_id
+	_fired_this_visit = saved_fired
+	if simulate_entry:
+		if had_visits:
+			_visits[location_id] = saved_visits
+		else:
+			_visits.erase(location_id)
+	return result
+
+
 # --- Предметы на полу модуля ----------------------------------------------------
 
 ## { item_id: count } для локации (по умолчанию — текущей).

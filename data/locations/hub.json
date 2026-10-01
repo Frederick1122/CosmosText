@@ -39,7 +39,7 @@
     {
       "id": "search_supply_kit",
       "start": "manual",
-      "label": "Вскрыть лючок аварийного набора",
+      "label": "Вскрыть аварийный контейнер под креслом",
       "repeatable": false,
       "triggers": [ { "type": "event_done", "event": "wreckage" } ],
       "situation": "sit_1_4_supply_kit"

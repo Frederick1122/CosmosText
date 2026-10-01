@@ -366,6 +366,20 @@ def main():
                             errors.append(f"sectors/{secid}.{node_id}: лифт должен иметь map.target_floor")
                         elif floor_ids and target_floor not in floor_ids:
                             errors.append(f"sectors/{secid}.{node_id}.map.target_floor ссылается на неизвестную палубу '{target_floor}'")
+                        else:
+                            # Поездка — шаг маршрута к связанному лифту палубы target_floor.
+                            linked = set(node.get("connections", []) or [])
+                            linked |= {oid for oid, other in nodes.items()
+                                       if isinstance(other, dict) and node_id in (other.get("connections", []) or [])}
+                            pairs = [oid for oid in linked
+                                     if isinstance(nodes.get(oid), dict)
+                                     and isinstance(nodes[oid].get("map"), dict)
+                                     and str(nodes[oid]["map"].get("kind", "")) == "elevator"
+                                     and str(nodes[oid]["map"].get("floor", default_floor)) == target_floor]
+                            if not pairs:
+                                errors.append(
+                                    f"sectors/{secid}.{node_id}: лифт не связан с лифтом палубы '{target_floor}' — ехать некуда"
+                                )
 
                     if "position" in node_map and "cell" in node_map:
                         position = read_xy(node_map.get("position", {}), f"sectors/{secid}.{node_id}.map.position")

@@ -11,9 +11,9 @@ const UiKit = preload("res://scenes/ui/UiKit.gd")
 const DOLL_SCRIPT = preload("res://scenes/ui/CharacterDollView.gd")
 
 const TABS := [
-	["items", "Предметы"],
-	["equipment", "Снаряжение"],
-	["skills", "Навыки"],
+	["items", "🎒 Предметы"],
+	["equipment", "🦺 Снаряжение"],
+	["skills", "⭐ Навыки"],
 ]
 const CATEGORY_TITLES := {
 	"quest": "сюжетный",
@@ -45,16 +45,16 @@ func _rebuild() -> void:
 		remove_child(child)
 		child.queue_free()
 
-	add_child(UiKit.title("Персонаж"))
+	add_child(UiKit.title("🧑‍🚀 Персонаж"))
 	var tabs := HBoxContainer.new()
 	tabs.name = "Tabs"
 	tabs.add_theme_constant_override("separation", 8)
 	for entry in TABS:
 		var label := str(entry[1])
 		if entry[0] == "items" and NotificationSystem.has_new_items():
-			label += "  •"
-		elif entry[0] == "skills" and NotificationSystem.has_new_skill_points():
-			label += "  •"
+			label += " (!)"
+		elif entry[0] == "skills" and NotificationSystem.unspent_skill_points() > 0:
+			label += " (+%d)" % NotificationSystem.unspent_skill_points()
 		var btn := UiKit.button(label, "tab_active" if entry[0] == tab else "quiet", 58)
 		btn.name = "Tab_%s" % entry[0]
 		btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -74,7 +74,10 @@ func _rebuild() -> void:
 		_:
 			_build_items()
 
-	var close := UiKit.button("Закрыть", "quiet")
+	# Во вкладке навыков закрыть панель можно кнопкой «Персонаж» в HUD.
+	if tab == "skills":
+		return
+	var close := UiKit.button("✖ Закрыть", "quiet")
 	close.name = "CloseCharacter"
 	close.pressed.connect(func(): closed.emit())
 	add_child(close)
@@ -127,13 +130,13 @@ func _build_items() -> void:
 		actions.add_theme_constant_override("v_separation", 8)
 		card.add_child(actions)
 		if data.has("use_effect"):
-			actions.add_child(_action_button("Использовать", _use_item.bind(item_id)))
+			actions.add_child(_action_button("💊 Использовать", _use_item.bind(item_id)))
 		if slot != "":
-			actions.add_child(_action_button("Надеть", _equip.bind(item_id)))
+			actions.add_child(_action_button("🦺 Надеть", _equip.bind(item_id)))
 		for inter in InventorySystem.get_interactions(item_id):
 			actions.add_child(_action_button(str(inter.get("label", "")), _interact.bind(item_id, str(inter.get("id", "")))))
 		if InventorySystem.can_drop(item_id):
-			actions.add_child(_action_button("Оставить здесь" if LocationSystem.is_active() else "Выбросить", _drop.bind(item_id), "danger"))
+			actions.add_child(_action_button("📦 Оставить здесь" if LocationSystem.is_active() else "🗑️ Выбросить", _drop.bind(item_id), "danger"))
 
 
 
@@ -231,7 +234,7 @@ func _build_equipment() -> void:
 		var stats_text := CharacterSystem.describe_stats(InventorySystem.get_item_stats(equipped))
 		if stats_text != "":
 			card.add_child(UiKit.text(stats_text, 21, UiKit.ACCENT_COLOR))
-		card.add_child(_action_button("Снять", _unequip.bind(selected_slot), "quiet"))
+		card.add_child(_action_button("↩️ Снять", _unequip.bind(selected_slot), "quiet"))
 	else:
 		card.add_child(UiKit.text("Пусто."))
 
@@ -302,7 +305,7 @@ func _build_skills() -> void:
 			maxed.disabled = true
 			card.add_child(maxed)
 		else:
-			var btn := _action_button("Изучить (%d очк.)" % CharacterSystem.get_skill_cost(skill_id), _learn.bind(skill_id))
+			var btn := _action_button("⭐ Изучить (%d очк.)" % CharacterSystem.get_skill_cost(skill_id), _learn.bind(skill_id))
 			btn.disabled = not CharacterSystem.can_learn(skill_id)
 			card.add_child(btn)
 
@@ -318,8 +321,6 @@ func _learn(skill_id: String) -> void:
 
 func _select_tab(new_tab: String) -> void:
 	tab = new_tab
-	if tab == "skills":
-		NotificationSystem.mark_skill_points_seen()
 	message = ""
 	tab_changed.emit(tab)
 	_rebuild()

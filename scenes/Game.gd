@@ -16,6 +16,9 @@ const BUTTON_HEIGHT := 68
 const DRAG_THRESHOLD := 14.0
 ## Ширина столбца кнопок в главном меню (вьюпорт 1080).
 const MENU_COLUMN_WIDTH := 620.0
+## Шаг игрока по карте: переход фишки и пауза перед следующим отсеком, с.
+const TRAVEL_STEP_TIME := 0.55
+const TRAVEL_STEP_PAUSE := 0.2
 
 var body: VBoxContainer
 var content_margin: MarginContainer
@@ -57,6 +60,13 @@ var _story_shown: int = 0
 var _side_insets: float = 0.0
 ## Последний ход боя, чьи эффекты ударов уже показаны (0 — ни одного).
 var _combat_fx_turn: int = 0
+## Экран карты: сама карта, панель маршрута под ней и проложенный, но ещё
+## не начатый маршрут (MapSystem.plan_route). Второй тап по цели — в путь.
+var _map_view: Control
+var _route_panel: VBoxContainer
+var _route_panel_read_only: bool = false
+var _route_plan: Dictionary = {}
+var _travel_tick_id: int = 0
 
 
 func _ready() -> void:
@@ -159,10 +169,11 @@ func _connect_signals() -> void:
 	InventorySystem.item_removed.connect(_on_inventory_changed)
 	CharacterSystem.changed.connect(_on_character_changed)
 	NotificationSystem.changed.connect(_on_notification_changed)
-	MapSystem.node_state_changed.connect(_on_map_node_state_changed)
+	MapSystem.node_state_changed.connect(func(_node_id: String, _state: String) -> void: _refresh_map())
 	MapSystem.node_blocked.connect(_on_map_node_blocked)
-	MapSystem.floor_changed.connect(_on_map_floor_changed)
-	MapSystem.fog_changed.connect(_on_map_fog_changed)
+	MapSystem.floor_changed.connect(func(_floor_id: String) -> void: _refresh_map())
+	MapSystem.fog_changed.connect(_refresh_map)
+	MapSystem.travel_changed.connect(_refresh_route_panel)
 	SettingsSystem.changed.connect(_on_settings_changed)
 	SituationEngine.option_resolved.connect(_on_situation_option_resolved)
 	NarrativeSystem.entries_added.connect(_on_story_entries_added)
@@ -225,7 +236,7 @@ func _apply_hud_fonts() -> void:
 	for lbl in [hp_label, o2_label, ammo_label, bag_label]:
 		lbl.add_theme_font_size_override("font_size", UiKit.fs(22))
 	for btn in [map_button, character_button, journal_button, settings_button]:
-		btn.custom_minimum_size = Vector2(0, UiKit.fs(56))
+		btn.custom_minimum_size = Vector2(0, UiKit.fs(78))
 		btn.add_theme_font_size_override("font_size", UiKit.fs(19))
 
 
@@ -262,7 +273,9 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
-			_drag_armed = content_scroll.get_global_rect().has_point(event.position)
+			# Карту перетаскивают как камеру — ленту под ней не прокручиваем.
+			var on_map := _map_view_alive() and _map_view.get_global_rect().has_point(event.position)
+			_drag_armed = content_scroll.get_global_rect().has_point(event.position) and not on_map
 			_drag_scrolling = false
 			_drag_origin = event.position
 			_drag_scroll_origin = content_scroll.scroll_vertical
@@ -370,26 +383,10 @@ func _on_notification_changed() -> void:
 	_update_nav_buttons()
 
 
-func _on_map_fog_changed() -> void:
-	if (GameState.current_screen == GameState.Screen.SECTOR_MAP or map_open) and not journal_open and not character_open:
-		_render_current_screen()
-
-
-func _on_map_node_state_changed(_node_id: String, _state: String) -> void:
-	if (GameState.current_screen == GameState.Screen.SECTOR_MAP or map_open) and not journal_open and not character_open:
-		_render_current_screen()
-
-
-## Узел заперт и ключа нет — показываем причину прямо над картой.
+## Узел заперт и ключа нет — причина видна под картой.
 func _on_map_node_blocked(_node_id: String, message: String) -> void:
 	_map_message = message
-	if (GameState.current_screen == GameState.Screen.SECTOR_MAP or map_open) and not journal_open and not character_open:
-		_render_current_screen()
-
-
-func _on_map_floor_changed(_floor_id: String) -> void:
-	if (GameState.current_screen == GameState.Screen.SECTOR_MAP or map_open) and not journal_open and not character_open:
-		_render_current_screen()
+	_refresh_route_panel()
 
 
 func _on_settings_changed() -> void:
@@ -422,17 +419,18 @@ func _on_screen_changed(screen: int) -> void:
 	if screen != GameState.Screen.DEATH:
 		_death_message = ""
 	_map_message = ""
+	_route_plan = {}
 	_combat_fx_turn = 0
 	_render_current_screen()
 
 
 func _update_hud() -> void:
-	hp_label.text = "HP: %d/%d" % [ResourceSystem.hp, ResourceSystem.max_hp]
+	hp_label.text = "❤️ %d/%d" % [ResourceSystem.hp, ResourceSystem.max_hp]
 	var o2i := int(ResourceSystem.o2)
-	o2_label.text = "O2: %d" % o2i
+	o2_label.text = "💨 O2 %d" % o2i
 	o2_label.add_theme_color_override("font_color", UiKit.BAD_COLOR if o2i <= ResourceSystem.LOW_O2 else Color("#eef3ff"))
-	ammo_label.text = "Патроны: %d" % ResourceSystem.ammo
-	bag_label.text = "Сумка: %d/%d" % [InventorySystem.used_slots(), InventorySystem.max_slots]
+	ammo_label.text = "🔫 %d" % ResourceSystem.ammo
+	bag_label.text = "🎒 %d/%d" % [InventorySystem.used_slots(), InventorySystem.max_slots]
 
 
 # --- HUD-вкладки ----------------------------------------------------------------
@@ -472,10 +470,11 @@ func _toggle_settings() -> void:
 	_render_current_screen()
 
 
-## Кнопка «Карта» в HUD заменяет прежнюю кнопку «Выйти на карту»: из модуля
-## она выводит игрока наружу, из ситуации — открывает карту только для
-## просмотра (повторное нажатие закрывает), на самой карте — только
-## закрывает открытый поверх неё журнал, персонажа или настройки.
+## Кнопка «Карта» в HUD: из модуля и ситуации открывает карту поверх экрана
+## (повторное нажатие закрывает и возвращает в модуль). Из модуля по карте
+## можно проложить маршрут — игрок выходит, только когда тронется в путь.
+## Из ситуации карта только для просмотра. На самой карте кнопка закрывает
+## открытый поверх неё журнал, персонажа или настройки.
 func _toggle_map() -> void:
 	if map_button.disabled:
 		return
@@ -489,16 +488,14 @@ func _toggle_map() -> void:
 	character_open = false
 	settings_open = false
 	workbench_open = false
-	if GameState.current_screen == GameState.Screen.LOCATION and not map_open:
-		SoundSystem.play("map_open")
-		GameState.leave_location()
-		return
 	if GameState.current_screen == GameState.Screen.SECTOR_MAP:
 		map_open = false
 	else:
 		map_open = not map_open
 	if map_open or GameState.current_screen == GameState.Screen.SECTOR_MAP:
 		SoundSystem.play("map_open")
+	_route_plan = {}
+	_map_message = ""
 	_scroll_to_top()
 	_render_current_screen()
 
@@ -519,6 +516,7 @@ func _toggle_character() -> void:
 	character_open = true
 	map_open = false
 	journal_open = false
+	settings_open = false
 	workbench_open = false
 	_scroll_to_top()
 	_render_current_screen()
@@ -559,7 +557,7 @@ func _render_current_screen() -> void:
 		_animate_body()
 		return
 	if map_open:
-		_render_map(true)
+		_render_map(GameState.current_screen != GameState.Screen.LOCATION)
 		_animate_body()
 		return
 	if not _is_story_screen():
@@ -590,25 +588,26 @@ func _set_chrome_visible(is_visible: bool) -> void:
 	section_separator.visible = is_visible
 
 
+## В пути HUD заперт: сначала «Стоп», потом журнал или персонаж.
 func _update_nav_buttons() -> void:
 	if map_button == null:
 		return
 	var blocked := (
 		MapSystem.current_sector_id == ""
+		or MapSystem.is_travelling()
 		or GameState.current_screen == GameState.Screen.MAIN_MENU
 		or GameState.current_screen == GameState.Screen.COMBAT
 		or GameState.current_screen == GameState.Screen.VICTORY
 		or GameState.current_screen == GameState.Screen.DEATH
 	)
-	# Карта заменяет кнопку выхода из модуля, поэтому её не запираем вступлением.
 	map_button.disabled = blocked
-	character_button.disabled = blocked or not GameState.has_left_capsule
+	character_button.disabled = blocked
 	journal_button.disabled = blocked
-	settings_button.disabled = GameState.current_screen == GameState.Screen.COMBAT
-	_set_nav_label(map_button, "Карта", false)
-	_set_nav_label(character_button, "Персонаж", NotificationSystem.has_character_alert())
-	_set_nav_label(journal_button, "Журнал", NotificationSystem.has_new_lore())
-	_set_nav_label(settings_button, "Настройки", false)
+	settings_button.disabled = GameState.current_screen == GameState.Screen.COMBAT or MapSystem.is_travelling()
+	_set_nav_label(map_button, "🗺️", "Карта", false)
+	_set_nav_label(character_button, "🧑‍🚀", "Персонаж", NotificationSystem.has_character_alert())
+	_set_nav_label(journal_button, "📓", "Журнал", NotificationSystem.has_new_lore())
+	_set_nav_label(settings_button, "⚙️", "Настройки", false)
 	var map_active := not journal_open and not character_open and not settings_open and (
 		map_open or GameState.current_screen == GameState.Screen.SECTOR_MAP
 	)
@@ -618,8 +617,9 @@ func _update_nav_buttons() -> void:
 	_style_nav_button(settings_button, settings_open)
 
 
-func _set_nav_label(btn: Button, base: String, alert: bool) -> void:
-	btn.text = base + ("  •" if alert else "")
+## Значок сверху, подпись снизу: так «(!)» не обрезает название на узком экране.
+func _set_nav_label(btn: Button, icon: String, title: String, alert: bool) -> void:
+	btn.text = "%s%s\n%s" % [icon, " (!)" if alert else "", title]
 
 
 func _clear_body() -> void:
@@ -711,11 +711,11 @@ func _render_main_menu() -> void:
 	var menu := _add_centered_column(MENU_COLUMN_WIDTH)
 	var has_run := FileAccess.file_exists(SaveManager.RUN_PATH)
 	if has_run:
-		menu.add_child(_menu_button("Продолжить", _continue_game, "default"))
-		menu.add_child(_menu_button("Новая игра", _start_new_game, "quiet"))
+		menu.add_child(_menu_button("▶️ Продолжить", _continue_game, "default"))
+		menu.add_child(_menu_button("✨ Новая игра", _start_new_game, "quiet"))
 	else:
-		menu.add_child(_menu_button("Новая игра", _start_new_game, "default"))
-	menu.add_child(_menu_button("Настройки", _toggle_settings, "quiet"))
+		menu.add_child(_menu_button("✨ Новая игра", _start_new_game, "default"))
+	menu.add_child(_menu_button("⚙️ Настройки", _toggle_settings, "quiet"))
 
 	var chronicle := "Забегов: %d · побед: %d · финалов открыто: %d из %d" % [
 		ChronicleSystem.runs_finished, ChronicleSystem.victories,
@@ -781,42 +781,295 @@ func _continue_game() -> void:
 	GameState.continue_game()
 
 
+## Карта: легенда, сама карта на всю высоту и панель маршрута под ней.
+## read_only — карта из ситуации: только посмотреть.
 func _render_map(read_only: bool = false) -> void:
-	# Карта заполняет всю высоту тела экрана между заголовком и нижним HUD.
 	_set_body_stretch(true)
-	_add_title("Карта: " + MapSystem.get_sector_title())
-	if _map_message != "":
-		var msg := _add_text(_map_message)
-		msg.add_theme_color_override("font_color", UiKit.EXIT_COLOR)
+	_add_title("🗺️ " + MapSystem.get_sector_title())
+	body.add_child(_map_legend())
 	var nodes := MapSystem.get_map_nodes(true)
-	if nodes.is_empty():
-		_add_text("Видимых узлов нет.")
-		return
+	_map_view = SECTOR_MAP_VIEW_SCRIPT.new()
+	_map_view.name = "SectorMapView"
+	body.add_child(_map_view)
+	_map_view.node_selected.connect(_on_map_node_selected)
+	_map_view.setup({
+		"map_config": MapSystem.get_map_config(),
+		"nodes": nodes,
+		"hub_node_id": MapSystem.hub_node_id,
+		"current_floor_id": MapSystem.get_current_floor_id(),
+		"known_floors": MapSystem.get_known_floor_ids(),
+		"player_node_id": MapSystem.player_node_id,
+		"read_only": read_only,
+	})
+	_map_view.set_route(_current_route_path())
+	_route_panel = VBoxContainer.new()
+	_route_panel.name = "RoutePanel"
+	_route_panel.add_theme_constant_override("separation", 10)
+	body.add_child(_route_panel)
+	_route_panel_read_only = read_only
+	_refresh_route_panel()
+	if MapSystem.is_travelling():
+		# Экран карты вернулся посреди пути (прорыв после побега) — идём дальше.
+		_map_view.focus_player(false)
+		_schedule_travel_tick(TRAVEL_STEP_PAUSE * 2.0)
 
-	var map_view: Control = SECTOR_MAP_VIEW_SCRIPT.new()
-	map_view.name = "SectorMapView"
-	map_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.add_child(map_view)
-	map_view.node_selected.connect(_on_map_node_selected)
-	map_view.setup(
-		MapSystem.current_sector_id,
-		MapSystem.get_sector_title(),
-		MapSystem.get_map_config(),
-		nodes,
-		MapSystem.hub_node_id,
-		MapSystem.get_current_floor_id(),
-		read_only,
-		MapSystem.get_explored_floor_ids()
-	)
 
-	if read_only:
-		_add_button("Закрыть карту", _close_map_overlay, "quiet")
+## Строка цветных значков: что значит цвет отсека.
+func _map_legend() -> Control:
+	var flow := HFlowContainer.new()
+	flow.name = "MapLegend"
+	flow.add_theme_constant_override("h_separation", 14)
+	flow.add_theme_constant_override("v_separation", 6)
+	var styles: Dictionary = SECTOR_MAP_VIEW_SCRIPT.STATUS_STYLE
+	var entries: Array = []
+	for status in SECTOR_MAP_VIEW_SCRIPT.LEGEND_ORDER:
+		var style: Dictionary = styles[status]
+		entries.append([str(style["icon"]), style["fill"], style["border"], str(style["legend"])])
+	entries.append([SECTOR_MAP_VIEW_SCRIPT.PLAYER_ICON, Color("#22415c"), Color("#f5f8ff"), "Ты"])
+	entries.append([SECTOR_MAP_VIEW_SCRIPT.UNSEALED_BADGE, Color("#151a23"), Color("#34475e"), "Без давления: дороже по O2"])
+	for entry in entries:
+		var chip := HBoxContainer.new()
+		chip.add_theme_constant_override("separation", 6)
+		var swatch := PanelContainer.new()
+		swatch.custom_minimum_size = Vector2(UiKit.fs(30), UiKit.fs(30))
+		swatch.add_theme_stylebox_override("panel", UiKit.box(entry[1], entry[2], 2, 0))
+		var icon := UiKit.text(str(entry[0]), 16, Color.WHITE)
+		icon.autowrap_mode = TextServer.AUTOWRAP_OFF
+		icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		swatch.add_child(icon)
+		chip.add_child(swatch)
+		var caption := UiKit.text(str(entry[3]), 17, UiKit.MUTED_COLOR)
+		caption.autowrap_mode = TextServer.AUTOWRAP_OFF
+		caption.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		chip.add_child(caption)
+		flow.add_child(chip)
+	return flow
 
 
+## Первое нажатие на отсек — маршрут и цена, второе на ту же цель — в путь.
 func _on_map_node_selected(node_id: String) -> void:
-	map_open = false
+	if MapSystem.is_travelling():
+		return
+	if not _route_plan.is_empty() and str(_route_plan.get("target", "")) == node_id:
+		_start_travel()
+		return
+	_route_plan = {}
 	_map_message = ""
-	MapSystem.select_node(node_id)
+	if GameState.current_screen == GameState.Screen.LOCATION and node_id == MapSystem.player_node_id:
+		_map_message = "Ты уже здесь."
+	else:
+		var plan := MapSystem.plan_route(node_id)
+		if bool(plan["ok"]):
+			_route_plan = plan
+		else:
+			_map_message = str(plan["message"])
+	if _map_view_alive():
+		_map_view.set_route(_current_route_path())
+	_refresh_route_panel()
+
+
+## В путь: из модуля игрок сначала выходит, камера едет к нему, дальше шаги.
+func _start_travel() -> void:
+	var target := str(_route_plan.get("target", ""))
+	_route_plan = {}
+	_map_message = ""
+	if GameState.current_screen == GameState.Screen.LOCATION:
+		GameState.leave_location()
+	var plan := MapSystem.start_travel(target)
+	if not bool(plan["ok"]):
+		_map_message = str(plan["message"])
+		_refresh_route_panel()
+		return
+	if _map_view_alive():
+		_map_view.set_route(_current_route_path())
+		_map_view.focus_player(true)
+	_schedule_travel_tick(TRAVEL_STEP_PAUSE * 2.0)
+
+
+## «Стоп» посреди перехода: шаг не сделан, фишка возвращается в свой отсек.
+func _stop_travel() -> void:
+	_travel_tick_id += 1
+	MapSystem.cancel_travel()
+	if _map_view_alive():
+		_map_view.set_route([])
+		_map_view.move_player(MapSystem.player_node_id, TRAVEL_STEP_PAUSE)
+
+
+## Таймер шага: старый таймер после «Стоп» или перерисовки ничего не делает.
+func _schedule_travel_tick(delay: float) -> void:
+	_travel_tick_id += 1
+	var tick_id := _travel_tick_id
+	get_tree().create_timer(delay).timeout.connect(func() -> void:
+		if tick_id == _travel_tick_id:
+			_travel_tick())
+
+
+## Шаг маршрута: фишка сначала доезжает до следующего отсека, потом шаг
+## исполняется (кислород, перехват, вход). Поездка на лифте — сразу.
+func _travel_tick() -> void:
+	if not MapSystem.is_travelling() or GameState.current_screen != GameState.Screen.SECTOR_MAP or _any_overlay_open():
+		return
+	var next := MapSystem.peek_travel_step()
+	var to := str(next.get("to", ""))
+	var step_time := TRAVEL_STEP_TIME if SettingsSystem.animations else 0.0
+	if to == "" or bool(next.get("ride", false)) or step_time <= 0.0 or not _map_view_alive():
+		_travel_commit()
+		return
+	_map_view.move_player(to, step_time)
+	_travel_tick_id += 1
+	var tick_id := _travel_tick_id
+	get_tree().create_timer(step_time).timeout.connect(func() -> void:
+		if tick_id == _travel_tick_id:
+			_travel_commit())
+
+
+## Вход в модуль (цель или перехват) и смерть меняют экран сами — дальше
+## шагать некуда.
+func _travel_commit() -> void:
+	if not MapSystem.is_travelling() or GameState.current_screen != GameState.Screen.SECTOR_MAP:
+		return
+	var result := MapSystem.travel_step()
+	if result != "moved" and result != "arrived":
+		return
+	if _map_view_alive():
+		_map_view.move_player(MapSystem.player_node_id, 0.0)
+		_map_view.set_route(_current_route_path())
+	if result == "moved":
+		_schedule_travel_tick(TRAVEL_STEP_PAUSE)
+	elif _map_view_alive():
+		# Дошли (лифт): камера отпускает игрока и показывает палубу целиком.
+		get_tree().create_timer(TRAVEL_STEP_PAUSE * 2.0).timeout.connect(func() -> void:
+			if _map_view_alive() and not MapSystem.is_travelling():
+				_map_view.overview(true))
+
+
+## Узлы маршрута после игрока: оставшийся путь или проложенный план.
+func _current_route_path() -> Array:
+	var travel := MapSystem.get_travel()
+	if not travel.is_empty():
+		return (travel["path"] as Array).slice(int(travel["index"]))
+	if not _route_plan.is_empty():
+		return _route_plan["path"]
+	return []
+
+
+func _map_view_alive() -> bool:
+	return _map_view != null and is_instance_valid(_map_view) and _map_view.is_inside_tree()
+
+
+## Узлы и туман изменились (шаг, замок, лифт) — карта обновляется на месте,
+## без перерисовки экрана: камера и фишка игрока не сбрасываются.
+func _refresh_map() -> void:
+	if not _map_view_alive():
+		return
+	_map_view.update_nodes(MapSystem.get_map_nodes(true), MapSystem.get_current_floor_id(),
+		MapSystem.get_known_floor_ids(), MapSystem.player_node_id)
+	_map_view.set_route(_current_route_path())
+
+
+## Панель под картой: путь в дороге и «Стоп», проложенный маршрут с ценой и
+## предупреждениями, причина отказа или подсказка.
+func _refresh_route_panel() -> void:
+	_update_nav_buttons()
+	if _route_panel == null or not is_instance_valid(_route_panel) or not _route_panel.is_inside_tree():
+		return
+	for child in _route_panel.get_children():
+		_route_panel.remove_child(child)
+		child.queue_free()
+	if _map_message != "":
+		_route_panel.add_child(UiKit.text(_map_message, 22, UiKit.EXIT_COLOR))
+	if _route_panel_read_only:
+		_route_panel.add_child(UiKit.text("Карта только для просмотра — сначала закончи событие.", 20, UiKit.MUTED_COLOR))
+		var close := UiKit.button("✖ Закрыть карту", "quiet", BUTTON_HEIGHT)
+		close.pressed.connect(_close_map_overlay)
+		_route_panel.add_child(close)
+		return
+	var travel := MapSystem.get_travel()
+	if MapSystem.is_travelling():
+		var path: Array = travel["path"]
+		var left: Array = path.slice(int(travel["index"]))
+		_route_panel.add_child(UiKit.text("🚶 Иду: %s · шаг %d из %d" % [
+			_map_node_name(str(travel["target"])), int(travel["index"]) + 1, maxi(1, path.size())], 22, UiKit.TITLE_COLOR))
+		_route_panel.add_child(UiKit.text("💨 До цели ≈ −%d O2" % roundi(MapSystem.path_cost(left)), 20, UiKit.ACCENT_COLOR))
+		var stop := UiKit.button("⏹ Стоп", "danger", BUTTON_HEIGHT)
+		stop.name = "TravelStop"
+		stop.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		stop.pressed.connect(_stop_travel)
+		_route_panel.add_child(stop)
+		return
+	if _route_plan.is_empty():
+		if _map_message == "":
+			_route_panel.add_child(UiKit.text("Нажми на отсек — проложу маршрут и посчитаю кислород.", 20, UiKit.MUTED_COLOR))
+		return
+	var plan_path: Array = _route_plan["path"]
+	var names: Array = []
+	var floor_before := MapSystem.get_current_floor_id()
+	for node_id in plan_path:
+		var floor_id := MapSystem.get_node_floor_id(str(node_id))
+		if floor_id != floor_before:
+			names.append("⇅ " + MapSystem.get_floor_title(floor_id))
+			floor_before = floor_id
+		else:
+			names.append(_map_node_name(str(node_id)))
+	var target := str(_route_plan["target"])
+	var route_text := " → ".join(names) if not names.is_empty() else "войти в «%s»" % _map_node_name(target)
+	_route_panel.add_child(UiKit.text("📍 " + route_text, 21, UiKit.TITLE_COLOR))
+	var cost := float(_route_plan["cost"])
+	var o2 := ResourceSystem.o2
+	_route_panel.add_child(UiKit.text("💨 ≈ −%d O2 · останется ≈ %d" % [roundi(cost), maxi(0, roundi(o2 - cost))], 20, UiKit.ACCENT_COLOR))
+	for warning in _route_warnings(plan_path, cost):
+		_route_panel.add_child(UiKit.text(warning, 20, UiKit.BAD_COLOR))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var go := UiKit.button("▶️ Идти", "default", BUTTON_HEIGHT)
+	go.name = "TravelGo"
+	go.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	go.pressed.connect(_start_travel)
+	row.add_child(go)
+	var cancel := UiKit.button("✖ Отмена", "quiet", BUTTON_HEIGHT)
+	cancel.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cancel.pressed.connect(func() -> void:
+		_route_plan = {}
+		if _map_view_alive():
+			_map_view.set_route([])
+		_refresh_route_panel())
+	row.add_child(cancel)
+	_route_panel.add_child(row)
+
+
+## Кислорода не хватит или станет мало; враг или неизвестные отсеки по пути.
+func _route_warnings(path: Array, cost: float) -> Array:
+	var warnings: Array = []
+	var o2 := ResourceSystem.o2
+	if cost >= o2:
+		warnings.append("⛔ Кислорода не хватит: нужно ≈ %d, в баллоне %d." % [roundi(cost), int(o2)])
+	elif o2 - cost <= ResourceSystem.LOW_O2:
+		warnings.append("⚠️ После перехода останется ≈ %d O2 — это мало." % roundi(o2 - cost))
+	var hostile: Array = []
+	var unknown := false
+	for i in range(path.size() - 1):
+		match MapSystem.get_node_status(str(path[i])):
+			"hostile":
+				hostile.append(_map_node_name(str(path[i])))
+			"unknown":
+				unknown = true
+	if not hostile.is_empty():
+		warnings.append("☠ По пути враг: %s — не пропустит без боя." % ", ".join(hostile))
+	if unknown:
+		warnings.append("❔ По пути неизвестные отсеки — там могут остановить.")
+	return warnings
+
+
+## Подпись узла как на карте; неисследованный отсек не выдаёт своего имени.
+func _map_node_name(node_id: String) -> String:
+	if MapSystem.get_node_status(node_id) == "unknown":
+		return "Неизвестно"
+	var node: Dictionary = MapSystem.nodes.get(node_id, {})
+	var cfg = node.get("map", {})
+	if cfg is Dictionary and str(cfg.get("label", "")) != "":
+		return str(cfg["label"])
+	return str(node.get("title", node_id))
 
 
 ## Экран модуля и ситуация используют общий буфер, но при переходе старый
@@ -824,12 +1077,12 @@ func _on_map_node_selected(node_id: String) -> void:
 func _render_situation() -> void:
 	_render_story()
 	if SituationEngine.awaiting_continue:
-		_add_button("Продолжить", _continue_situation, "exit")
+		_add_button("▶️ Продолжить", _continue_situation, "exit")
 		return
 	var options := SituationEngine.get_available_options()
 	if options.is_empty():
 		# Некуда выбирать — единственная кнопка закрывает ситуацию.
-		_add_button("Продолжить", _continue_situation, "exit")
+		_add_button("▶️ Продолжить", _continue_situation, "exit")
 		return
 	for opt in options:
 		var opt_id: String = opt.get("id", "")
@@ -917,7 +1170,7 @@ func _render_location() -> void:
 	if not stash.is_empty():
 		_add_section("Склад" if LocationSystem.is_base() else "Здесь лежит")
 		for item_id in stash.keys():
-			_add_button("Взять: %s%s" % [_item_name(item_id), _count_suffix(int(stash[item_id]))], _make_stash_take_callback(item_id), "quiet")
+			_add_button("✋ Взять: %s%s" % [_item_name(item_id), _count_suffix(int(stash[item_id]))], _make_stash_take_callback(item_id), "quiet")
 
 	var usable: Array = []
 	for entry in InventorySystem.get_slots():
@@ -927,14 +1180,14 @@ func _render_location() -> void:
 	if not usable.is_empty():
 		_add_section("Инвентарь")
 		for item_id in usable:
-			_add_button("Использовать: " + _item_name(item_id), _make_location_item_callback(item_id), "quiet")
+			_add_button("💊 Использовать: " + _item_name(item_id), _make_location_item_callback(item_id), "quiet")
 
 
 ## Модуль-база: ручное сохранение, верстак и разгрузка сумки на склад.
 func _render_base_section() -> void:
 	_add_section("База")
-	_add_button("Сохранить забег", _base_save, "quiet")
-	_add_button("Верстак", _open_workbench, "quiet")
+	_add_button("💾 Сохранить забег", _base_save, "quiet")
+	_add_button("🛠️ Верстак", _open_workbench, "quiet")
 	var droppable: Array = []
 	for entry in InventorySystem.get_slots():
 		var item_id: String = entry.get("id", "")
@@ -944,7 +1197,7 @@ func _render_base_section() -> void:
 		return
 	_add_section("Разложить по складу")
 	for item_id in droppable:
-		_add_button("Положить: " + _item_name(item_id), _make_base_store_callback(item_id), "quiet")
+		_add_button("📦 Положить: " + _item_name(item_id), _make_base_store_callback(item_id), "quiet")
 
 
 func _base_save() -> void:
@@ -1085,8 +1338,8 @@ func _render_death() -> void:
 	var can_rollback := EconomyManager.can_use_rollback_today() and SaveManager.has_checkpoint()
 	if can_rollback:
 		var hint := "" if EconomyManager.has_full_access else " (реклама)"
-		menu.add_child(_menu_button("Вернуться к чекпойнту" + hint, _death_rollback, "default"))
-	menu.add_child(_menu_button("Начать заново", _death_restart, "quiet" if can_rollback else "default"))
+		menu.add_child(_menu_button("⏪ Вернуться к чекпойнту" + hint, _death_rollback, "default"))
+	menu.add_child(_menu_button("🔄 Начать заново", _death_restart, "quiet" if can_rollback else "default"))
 	blocks.append(menu.get_parent())
 	if _death_message != "":
 		blocks.append(_add_centered_text(_death_message, 22, UiKit.EXIT_COLOR))
@@ -1151,8 +1404,8 @@ func _render_victory() -> void:
 	card.add_child(UiKit.text("Забегов: %d (побед: %d, смертей: %d)" % [
 		ChronicleSystem.runs_finished, ChronicleSystem.victories, ChronicleSystem.deaths], 22))
 
-	_add_button("Новый забег", _victory_restart)
-	_add_button("В главное меню", _victory_menu, "quiet")
+	_add_button("🔄 Новый забег", _victory_restart)
+	_add_button("🏠 В главное меню", _victory_menu, "quiet")
 
 
 func _victory_restart() -> void:
@@ -1191,7 +1444,7 @@ func _on_rollback_ad_completed(success: bool) -> void:
 
 ## Журнал — две вкладки: «Хроника» (что уже произошло в забеге, JournalSystem)
 ## и «Архив» (найденные лор-фрагменты, ArchiveSystem).
-const JOURNAL_TABS := [["log", "Хроника"], ["lore", "Архив"]]
+const JOURNAL_TABS := [["log", "📜 Хроника"], ["lore", "🗄️ Архив"]]
 const JOURNAL_COLORS := {
 	"move": UiKit.ACCENT_COLOR,
 	"combat": UiKit.BAD_COLOR,
@@ -1212,7 +1465,7 @@ func _render_journal() -> void:
 		var tab_id := str(entry[0])
 		var label := str(entry[1])
 		if tab_id == "lore" and NotificationSystem.has_new_lore():
-			label += "  •"
+			label += " (!)"
 		var btn := UiKit.button(label, "tab_active" if tab_id == journal_tab else "quiet", 58)
 		btn.name = "JournalTab_%s" % tab_id
 		btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1225,7 +1478,7 @@ func _render_journal() -> void:
 		_render_journal_archive()
 	else:
 		_render_journal_log()
-	_add_button("Закрыть", _toggle_journal, "quiet")
+	_add_button("✖ Закрыть", _toggle_journal, "quiet")
 
 
 func _select_journal_tab(tab_id: String) -> void:
@@ -1299,7 +1552,7 @@ func _render_settings() -> void:
 			btn.pressed.connect(_select_sound_volume.bind(str(volume_id)))
 			body.add_child(btn)
 	_add_text("Настройки меняют интерфейс сразу и сохраняются между запусками.")
-	_add_button("Закрыть", _toggle_settings, "quiet")
+	_add_button("✖ Закрыть", _toggle_settings, "quiet")
 
 
 func _select_font_size(size_id: String) -> void:
