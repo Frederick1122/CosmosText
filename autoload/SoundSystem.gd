@@ -12,14 +12,14 @@ extends Node
 ##   ArchiveSystem.fragment_unlocked, CraftingSystem.crafted;
 ##   ProgressionSystem.xp_gained — опыт и новый уровень (в бою их озвучивает
 ##   экран победы, в такт своей анимации);
-##   GameState.screen_changed — начало боя, смерть, победа;
-##   ResourceSystem.o2_changed — тревога при падении ниже LOW_O2.
+##   ResourceSystem.o2_changed — тревога при падении ниже LOW_O2;
+##   NeedsSystem.changed — периодический сигнал при усталости или голоде.
 
 const SOUND_DIR := "res://assets/sounds/"
 const SOUNDS := [
-	"ui_click", "map_open", "door", "elevator", "step",
-	"pickup", "equip", "craft", "heal", "o2_refill", "unlock", "locked", "lore", "low_o2",
-	"xp", "level_up",
+	"ui_click", "map_open", "door", "shuttle_door", "elevator", "step",
+	"pickup", "equip", "craft", "heal", "o2_refill", "unlock", "locked", "lore",
+	"low_o2", "low_need", "xp", "level_up",
 	"hurt", "hit", "shot", "miss", "combat_start", "combat_won",
 	"death", "victory",
 ]
@@ -27,18 +27,29 @@ const SOUNDS := [
 const VOICES := 8
 ## Один и тот же звук не повторяется чаще: россыпь находок звучит один раз.
 const REPEAT_GUARD_MS := 80
+## Пока силы или питание в критической зоне, тревога повторяется редко:
+## игрок замечает состояние, но звук не превращается в постоянную сирену.
+const NEED_WARNING_INTERVAL := 8.0
 
 var _streams: Dictionary = {}
 var _players: Array[AudioStreamPlayer] = []
 var _next_voice: int = 0
 var _last_played: Dictionary = {}  # id -> Time.get_ticks_msec()
 var _o2_low: bool = false
+var _need_warning_timer: Timer
+var _needs_low: bool = false
 
 
 ## Без экрана (--headless, смоук-тест) звуки не грузятся и не
 ## играют: выводить их некуда, а тест завершается в том же кадре, и
 ## недоигранные звуки остаются в AudioServer утечкой.
 func _ready() -> void:
+	_need_warning_timer = Timer.new()
+	_need_warning_timer.name = "NeedWarningTimer"
+	_need_warning_timer.wait_time = NEED_WARNING_INTERVAL
+	_need_warning_timer.one_shot = false
+	_need_warning_timer.timeout.connect(_warn_low_needs)
+	add_child(_need_warning_timer)
 	if DisplayServer.get_name() != "headless":
 		for id in SOUNDS:
 			var path: String = SOUND_DIR + id + ".wav"
@@ -51,6 +62,7 @@ func _ready() -> void:
 			add_child(player)
 			_players.append(player)
 	_o2_low = ResourceSystem.o2 <= ResourceSystem.LOW_O2
+	_needs_low = NeedsSystem.is_tired() or NeedsSystem.is_hungry()
 	EffectResolver.change_reported.connect(_on_change_reported)
 	EffectResolver.lock_opened.connect(func(_lock_id: String) -> void: play("unlock"))
 	MapSystem.node_blocked.connect(func(_node_id: String, _message: String) -> void: play("locked"))
@@ -61,6 +73,7 @@ func _ready() -> void:
 	CraftingSystem.crafted.connect(func(_recipe_id: String, _item_id: String) -> void: play("craft"))
 	ProgressionSystem.xp_gained.connect(_on_xp_gained)
 	ResourceSystem.o2_changed.connect(_on_o2_changed)
+	NeedsSystem.changed.connect(_on_needs_changed)
 	GameState.screen_changed.connect(_on_screen_changed)
 
 
@@ -122,7 +135,37 @@ func _warn_low_o2() -> void:
 		play("low_o2")
 
 
+## Силы и питание меняются только от действий, но предупреждение должно
+## повторяться и пока игрок читает экран. Таймер выключен вне активного забега.
+func _on_needs_changed() -> void:
+	var low := NeedsSystem.is_tired() or NeedsSystem.is_hungry()
+	if low and not _needs_low:
+		_warn_low_needs.call_deferred()
+	_needs_low = low
+	_sync_need_warning_timer()
+
+
+func _warn_low_needs() -> void:
+	if _needs_low and _is_active_run_screen() and not ResourceSystem.is_dead():
+		play("low_need")
+
+
+func _sync_need_warning_timer() -> void:
+	if _needs_low and _is_active_run_screen():
+		if _need_warning_timer.is_stopped():
+			_need_warning_timer.start()
+	else:
+		_need_warning_timer.stop()
+
+
+func _is_active_run_screen() -> bool:
+	return GameState.current_screen != GameState.Screen.MAIN_MENU \
+		and GameState.current_screen != GameState.Screen.DEATH \
+		and GameState.current_screen != GameState.Screen.VICTORY
+
+
 func _on_screen_changed(screen: int) -> void:
+	_sync_need_warning_timer()
 	match screen:
 		GameState.Screen.COMBAT:
 			play("combat_start")

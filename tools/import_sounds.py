@@ -36,18 +36,19 @@ SOUNDS = {
     "map_open": ("Items/map_open.wav", -22.0),
     # перемещение
     "door": ("Machines/industrial_door_open.wav", -20.0),
+    "shuttle_door": ("Machines/industrial_door_open.wav", -17.0),
     "elevator": ("Machines/hydraulic_down.wav", -20.0),
     # предметы и ресурсы
     "pickup": ("UI/pop_3.wav", -20.0),
     "equip": ("Items/item_equip.wav", -20.0),
     "craft": ("Weapons/weapon_upgrade.wav", -19.0),
-    "elevator": ("Machines/hydraulic_down.wav", -20.0),
     "step": ("Footsteps/foley_footstep_concrete_2.wav", -22.0),
     "o2_refill": ("Environment/air_burst.wav", -20.0),
     "unlock": ("Environment/lock_unlock.wav", -20.0),
     "locked": ("Environment/lock_quick.wav", -21.0),
     "lore": ("Items/page_turn.wav", -22.0),
     "low_o2": ("UI/synth_warning.wav", -22.0),
+    "low_need": ("UI/synth_warning.wav", -25.0),
     # опыт и уровни
     "xp": ("UI/sci_fi_confirm.wav", -24.0),
     "level_up": ("Musical Effects/synth_bass_level_start.wav", -20.0),

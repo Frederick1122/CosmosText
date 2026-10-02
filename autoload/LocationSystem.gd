@@ -366,6 +366,39 @@ func stash_take(item_id: String, location_id: String = "") -> int:
 	return taken
 
 
+## Предмет на полу можно применить на месте, не перекладывая в сумку.
+## Семантика совпадает с InventorySystem.use_item: расходник исчезает,
+## многоразовый предмет остаётся.
+func stash_can_use(item_id: String, location_id: String = "") -> bool:
+	if location_id == "":
+		location_id = current_id
+	return int(get_stash(location_id).get(item_id, 0)) > 0 \
+		and InventorySystem.get_item_data(item_id).has("use_effect")
+
+
+func stash_use(item_id: String, location_id: String = "") -> bool:
+	if location_id == "":
+		location_id = current_id
+	if not stash_can_use(item_id, location_id):
+		return false
+	var data := InventorySystem.get_item_data(item_id)
+	EffectResolver.apply_effect(data["use_effect"])
+	if str(data.get("category", "")) != "consumable":
+		return true
+	var stash := get_stash(location_id)
+	var left := int(stash.get(item_id, 0)) - 1
+	if left > 0:
+		stash[item_id] = left
+	else:
+		stash.erase(item_id)
+	if stash.is_empty():
+		_stash.erase(location_id)
+	else:
+		_stash[location_id] = stash
+	stash_changed.emit(location_id)
+	return true
+
+
 # --- Сохранение -----------------------------------------------------------------
 
 func to_save_data() -> Dictionary:

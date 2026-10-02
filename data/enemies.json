@@ -72,5 +72,26 @@
     "start_range": 2,
     "weapon": "жгуты живой ткани",
     "xp": 50
+  },
+  "pirate_raider": {
+    "ai": "shooter",
+    "attack": {
+      "hit_chance": 0.52,
+      "max": 13,
+      "min": 6,
+      "range": 4
+    },
+    "flee_risk": 0.45,
+    "hp": 42,
+    "loot": [
+      "stim_shot",
+      "ration_bar"
+    ],
+    "name": "Пират-рейдер",
+    "preferred_range": 3,
+    "special_actions": [],
+    "start_range": 3,
+    "weapon": "укороченный карабин",
+    "xp": 35
   }
 }

@@ -1597,6 +1597,88 @@ def scene_death_hp(c, rng):
     c.noise_specks(rng, 0, 84, 159, 95, p["f2"], 30)
 
 
+def scene_shuttle_airlock_open(c, rng):
+    """Вскрытый грузовой шлюз: створки разошлись, за ними пиратский шаттл."""
+    p = {
+        "wall": (38, 44, 56), "wall_d": (21, 25, 34), "edge": (91, 103, 119),
+        "void": (8, 11, 18), "door": (70, 77, 91), "door_l": (126, 135, 148),
+        "hull": (107, 77, 68), "hull_d": (57, 39, 39), "red": (217, 68, 62),
+        "amber": (236, 169, 65), "pipe": (133, 141, 146), "spark": (255, 221, 121),
+    }
+    c.fill_rect(0, 0, 159, 95, p["wall_d"])
+    c.fill_rect(4, 8, 155, 89, p["wall"])
+    for y in range(14, 90, 12):
+        c.hline(5, 154, y, p["wall_d"])
+    # Проём и клиновидный корпус шаттла в темноте.
+    c.fill_rect(42, 12, 118, 82, p["void"])
+    c.rect(40, 10, 120, 84, p["edge"])
+    c.ellipse(80, 50, 31, 24, p["hull_d"])
+    c.ellipse(80, 48, 28, 21, p["hull"])
+    c.fill_rect(63, 38, 97, 49, (27, 42, 52))
+    c.fill_rect(68, 40, 77, 46, (91, 177, 185))
+    c.fill_rect(83, 40, 92, 46, (91, 177, 185))
+    c.fill_rect(76, 64, 84, 80, p["hull_d"])
+    c.fill_rect(66, 72, 94, 76, p["hull_d"])
+    c.pixel(57, 52, p["red"])
+    c.pixel(103, 52, p["red"])
+    # Разошедшиеся створки; внутренние кромки погнуты ломом.
+    c.fill_rect(8, 13, 39, 83, p["door"])
+    c.fill_rect(121, 13, 151, 83, p["door"])
+    c.rect(8, 13, 39, 83, p["door_l"])
+    c.rect(121, 13, 151, 83, p["door_l"])
+    for y in range(20, 82, 10):
+        c.hline(11, 35, y, p["wall_d"])
+        c.hline(125, 148, y, p["wall_d"])
+    c.line(39, 35, 44, 42, p["door_l"])
+    c.line(39, 43, 43, 49, p["door_l"])
+    c.line(121, 35, 117, 43, p["door_l"])
+    c.line(121, 45, 116, 51, p["door_l"])
+    # Обломок трубы ещё зажат в механизме.
+    c.line(29, 73, 49, 52, p["pipe"])
+    c.line(30, 74, 50, 53, p["door_l"])
+    c.fill_rect(25, 72, 31, 77, p["pipe"])
+    for x, y in ((44, 50), (47, 47), (50, 51), (42, 45), (52, 46)):
+        c.pixel(x, y, p["spark"])
+    for x in (14, 28, 132, 146):
+        c.fill_rect(x, 8, x + 3, 11, p["amber"])
+    c.noise_specks(rng, 38, 36, 54, 58, p["spark"], 11)
+    c.dither_over(0, 82, 159, 95, p["void"], 1)
+
+
+def scene_dock_pirate(c, rng):
+    """Пират в стыковочном отсеке осколка у реле."""
+    c.fill_rect(0, 0, 159, 95, (18, 22, 30))
+    c.fill_rect(5, 8, 154, 88, (39, 45, 55))
+    c.fill_rect(12, 17, 147, 78, (24, 29, 38))
+    c.rect(12, 17, 147, 78, (87, 96, 108))
+    c.fill_rect(56, 20, 104, 70, (11, 15, 22))
+    c.rect(56, 20, 104, 70, (118, 76, 63))
+    for y in range(26, 70, 9):
+        c.hline(58, 102, y, (50, 36, 38))
+    # Силуэт рейдера в латаном вакуумном костюме.
+    c.circle(80, 31, 9, (30, 31, 37))
+    c.circle(80, 30, 7, (104, 91, 82))
+    c.fill_rect(75, 28, 85, 34, (24, 39, 47))
+    c.hline(77, 83, 30, (197, 72, 58))
+    c.fill_rect(68, 40, 91, 64, (87, 54, 50))
+    c.rect(68, 40, 91, 64, (32, 29, 34))
+    c.fill_rect(72, 43, 79, 54, (128, 91, 63))
+    c.fill_rect(82, 45, 88, 49, (197, 72, 58))
+    c.line(69, 45, 58, 59, (87, 54, 50))
+    c.line(91, 45, 100, 58, (87, 54, 50))
+    c.line(73, 64, 68, 80, (48, 44, 49))
+    c.line(87, 64, 92, 80, (48, 44, 49))
+    # Короткий карабин, направленный к входу.
+    c.line(57, 58, 105, 51, (126, 136, 140))
+    c.line(82, 54, 90, 63, (53, 59, 65))
+    c.fill_rect(102, 49, 112, 52, (52, 58, 64))
+    c.pixel(113, 50, (245, 174, 70))
+    c.fill_rect(18, 70, 44, 82, (76, 55, 48))
+    c.rect(18, 70, 44, 82, (28, 28, 33))
+    c.noise_specks(rng, 5, 79, 154, 94, (92, 99, 105), 28)
+    c.dither_over(0, 82, 159, 95, (8, 11, 17), 1)
+
+
 SCENES = (
     ("cryo_pod", scene_cryo_pod),
     ("bridge", scene_bridge),
@@ -1614,6 +1696,8 @@ SCENES = (
     # те же отсеки после уничтожения стража (в конце, чтобы не сдвигать seed остальных)
     ("cargo_drone_down", scene_cargo_drone_down),
     ("comms_sentry_down", scene_comms_sentry_down),
+    ("shuttle_airlock_open", scene_shuttle_airlock_open),
+    ("dock_pirate", scene_dock_pirate),
 )
 
 
@@ -2624,11 +2708,39 @@ def portrait_strain_l7(c, rng):
     c.specks_on(rng, 12, 30, 52, 56, FLESH_D, VEIN, 18)
 
 
+def portrait_pirate_raider(c, rng):
+    """Рейдер в латаном вакуумном шлеме с красной визорной полосой."""
+    # плечи и нагрудник
+    c.fill_rect(8, 47, 55, 63, (47, 43, 48))
+    c.fill_rect(14, 42, 49, 61, (91, 55, 51))
+    c.rect(14, 42, 49, 61, (31, 28, 33))
+    c.fill_rect(19, 46, 28, 57, (137, 94, 61))
+    c.fill_rect(36, 46, 44, 52, (190, 66, 55))
+    # шлем с асимметричными латками
+    c.circle(32, 27, 20, (31, 30, 35))
+    c.circle(32, 26, 17, (101, 90, 82))
+    c.fill_rect(17, 22, 47, 34, (24, 35, 42))
+    c.rect(17, 22, 47, 34, (16, 19, 24))
+    c.fill_rect(20, 25, 44, 29, (111, 35, 39))
+    c.hline(23, 42, 27, (244, 86, 63))
+    c.fill_rect(14, 14, 23, 21, (128, 92, 63))
+    c.fill_rect(43, 31, 50, 39, (62, 58, 63))
+    c.line(49, 35, 58, 31, (111, 118, 121))
+    c.pixel(59, 30, (240, 170, 67))
+    # царапины и заклёпки
+    c.line(26, 10, 34, 16, (157, 146, 131))
+    c.line(37, 12, 42, 18, (53, 48, 51))
+    for x, y in ((18, 18), (46, 19), (18, 39), (46, 41), (28, 45), (42, 55)):
+        c.pixel(x, y, (178, 156, 120))
+    c.specks_on(rng, 14, 8, 51, 60, (101, 90, 82), (62, 58, 63), 24)
+
+
 PORTRAITS = (
     (PORTRAITS_DIR, "player", portrait_player),
     (ENEMIES_DIR, "drone_cargo", portrait_drone_cargo),
     (ENEMIES_DIR, "station_sentry", portrait_station_sentry),
     (ENEMIES_DIR, "strain_l7", portrait_strain_l7),
+    (ENEMIES_DIR, "pirate_raider", portrait_pirate_raider),
 )
 
 

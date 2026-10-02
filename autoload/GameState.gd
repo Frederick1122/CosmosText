@@ -267,7 +267,7 @@ func _run_event(ev: Dictionary, clear_narrative: bool = true) -> bool:
 		NarrativeSystem.clear()
 		_push_location_backdrop(ev)
 	# Сначала текст события, потом его последствия: лента должна читаться сверху вниз.
-	NarrativeSystem.push("text", str(ev.get("text", "")), str(ev.get("image", "")))
+	NarrativeSystem.push("text", str(ev.get("text", "")), str(ev.get("image", "")), str(ev.get("sound", "")))
 	EffectResolver.apply_effects(ev.get("effects", []))
 	if ResourceSystem.is_dead() or CombatSystem.state == CombatSystem.State.PLAYER_TURN:
 		return true

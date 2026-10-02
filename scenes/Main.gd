@@ -45,8 +45,8 @@ func _ready() -> void:
 		"после «Продолжить» событие заменено описанием локации")
 	_expect(QuestSystem.is_step_done("escape_persephone", "leave_capsule") and not QuestSystem.is_completed("escape_persephone")
 		and NotificationSystem.has_journal_alert() and NotificationSystem.has_new_codex()
-		and QuestSystem.get_thoughts().contains("Я пассажир."),
-		"цели и справочник: шаг побега засчитан, мысли пассажира, (!) у журнала")
+		and QuestSystem.get_thoughts().contains("летел работать"),
+		"цели и справочник: первый шаг засчитан, мысли о работе на Мейер-4, (!) у журнала")
 	var escape: Dictionary = QuestSystem.get_quests()[0]
 	_expect(escape["steps"].size() == 2 and bool(escape["steps"][1]["current"]),
 		"видны засчитанные шаги и один текущий, дальше цель не раскрывается")
@@ -254,10 +254,17 @@ func _ready() -> void:
 
 	_expect(not MapSystem.is_node_fog_visible("alien_shuttle"),
 		"не найденный шаттл скрыт даже рядом с грузовым отсеком")
+	var revealed_nodes: Array[String] = []
+	var capture_reveal := func(node_id: String, _title: String) -> void: revealed_nodes.append(node_id)
+	MapSystem.node_unlocked.connect(capture_reveal)
 	GameState.start_location_event("force_shuttle_airlock")
+	MapSystem.node_unlocked.disconnect(capture_reveal)
 	_expect(_node_state("alien_shuttle") == "available"
 		and MapSystem.is_node_fog_visible("alien_shuttle")
-		and _notice_contains("[Открыта новая локация \"Чужой шаттл\"]"),
+		and revealed_nodes == ["alien_shuttle"]
+		and _notice_contains("[Открыта новая локация \"Пиратский шаттл\"]")
+		and _narrative_image_last("text") == "shuttle_airlock_open"
+		and _narrative_sound_last("text") == "shuttle_door",
 		"действие показало шаттл и выделило открытие")
 
 	GameState.leave_location()
@@ -305,6 +312,13 @@ func _ready() -> void:
 		InventorySystem.drop_item(surplus)
 	_expect(int(LocationSystem.get_stash().get("scrap_metal", 0)) == 2,
 		"лишние находки сложены на полу техотсека")
+	ResourceSystem.apply_hp_delta(-10)
+	var hp_before_floor_use := ResourceSystem.hp
+	_expect(LocationSystem.stash_can_use("improvised_bandage")
+		and LocationSystem.stash_use("improvised_bandage")
+		and ResourceSystem.hp > hp_before_floor_use
+		and int(LocationSystem.get_stash().get("improvised_bandage", 0)) == 0,
+		"расходник применён прямо с пола и списан")
 
 	GameState.leave_location()
 	MapSystem.travel_to("cargo_bay")
@@ -362,13 +376,14 @@ func _ready() -> void:
 	ExplorationSystem.reveal("read_tag")
 	GameState.start_location_event("read_tag")
 	_expect(ArchiveSystem.is_unlocked("log_02"), "бирка: запись журнала")
+	var hp_before_canister := ResourceSystem.hp
 	GameState.start_location_event("take_canister")
 	_expect(SituationEngine.current_id == "sit_2_1_canister" and _has_option("A"),
 		"баллон: вариант с трубой доступен, раз труба есть")
 	_choose("A")
-	_expect(InventorySystem.has_item("o2_canister") and ResourceSystem.hp == ResourceSystem.hp
-		and not _has_manual("take_canister") and LocationSystem.get_description().contains("уже забрал"),
-		"баллон снят без потери HP, описание модуля сменилось")
+	_expect(InventorySystem.has_item("o2_canister") and ResourceSystem.hp == hp_before_canister
+		and not _has_manual("take_canister"),
+		"баллон снят без потери HP, событие завершено")
 
 	# --- Палуба 03: коридор и реактор ---
 	GameState.leave_location()
@@ -506,13 +521,20 @@ func _ready() -> void:
 	_expect(FileAccess.file_exists(SaveManager.CHECKPOINT_PATH), "переход между секторами пишет чекпойнт")
 	_expect(QuestSystem.is_completed("escape_persephone") and not QuestSystem.is_completed("call_for_help")
 		and QuestSystem.get_quests().any(func(q: Dictionary) -> bool: return q["id"] == "call_for_help")
-		and QuestSystem.get_thoughts().contains("позади"),
-		"улетели: побег выполнен, началась цель «Позвать помощь», мысли сменились")
+		and QuestSystem.get_thoughts().contains("неизведанные сектора"),
+		"улетели: побег выполнен, началась цель выбраться из неизведанных секторов")
 
 	# --- «Вехтер-9»: стыковка, каюты, медблок ---
 	MapSystem.travel_to("dock_bay")
-	_expect(LocationSystem.current_id == "dock_bay" and ArchiveSystem.is_unlocked("log_04")
-		and SituationEngine.get_flag("docked_wechter") == true, "прибытие: автособытие и запись журнала")
+	_expect(SituationEngine.current_id == "sit_4_0_pirate"
+		and GameState.current_screen == Screen.SITUATION, "в пиратском осколке ждёт выживший рейдер")
+	_choose("A")
+	rounds = _fight()
+	_expect(LocationSystem.current_id == "dock_bay"
+		and SituationEngine.get_flag("pirate_raider_down") == true
+		and ArchiveSystem.is_unlocked("log_04")
+		and SituationEngine.get_flag("docked_wechter") == true,
+		"рейдер побеждён, затем отработало прибытие (раундов: %d)" % rounds)
 	GameState.leave_location()
 	MapSystem.travel_to("crew_quarters")
 	while InventorySystem.has_item("ration_bar"):
@@ -818,6 +840,14 @@ func _narrative_image_last(kind: String) -> String:
 	for i in range(entries.size() - 1, -1, -1):
 		if str(entries[i].get("kind", "")) == kind:
 			return str(entries[i].get("image", ""))
+	return ""
+
+## Звук последней записи ленты указанного типа.
+func _narrative_sound_last(kind: String) -> String:
+	var entries := NarrativeSystem.get_entries()
+	for i in range(entries.size() - 1, -1, -1):
+		if str(entries[i].get("kind", "")) == kind:
+			return str(entries[i].get("sound", ""))
 	return ""
 
 

@@ -14,6 +14,8 @@ extends Node
 ## предыдущий узел.
 
 signal node_state_changed(node_id: String, state: String)
+## Узел впервые открыт эффектом контента: UI предлагает показать его на карте.
+signal node_unlocked(node_id: String, title: String)
 signal sector_loaded(sector_id: String)
 signal floor_changed(floor_id: String)
 signal fog_changed()
@@ -532,6 +534,7 @@ func unlock_node(node_id: String) -> String:
 		return ""
 	var title := str(nodes[node_id].get("title", node_id))
 	set_node_state(node_id, "available")
+	node_unlocked.emit(node_id, title)
 	return title
 
 

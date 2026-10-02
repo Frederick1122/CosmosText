@@ -26,14 +26,22 @@ var content_margin: MarginContainer
 var body_margin: MarginContainer
 var hud: VBoxContainer
 var content_scroll: ScrollContainer
+var pinned_header: VBoxContainer
 var hp_label: Label
+var hp_bar: ProgressBar
+var hp_icon: Label
 var o2_label: Label
 ## Оружие в руках; патроны — только при огнестреле.
 var weapon_label: Label
 var bag_label: Label
-## Силы, голод и день (NeedsSystem).
+## Силы и питание показываются остатком 0…max; NeedsSystem.hunger внутри
+## хранит обратную величину — накопленный голод.
 var energy_label: Label
+var energy_bar: ProgressBar
+var energy_icon: Label
 var hunger_label: Label
+var hunger_bar: ProgressBar
+var hunger_icon: Label
 var day_label: Label
 ## Уровень и опыт — тонкая полоса над показателями HUD.
 var xp_bar: HBoxContainer
@@ -49,6 +57,7 @@ var settings_open: bool = false
 ## Верстак базы: оверлей с рецептами поверх экрана модуля.
 var workbench_open: bool = false
 var character_tab: String = "items"
+var character_items_tab: String = "bag"
 var journal_tab: String = "goals"
 var codex_tab: String = "terms"
 
@@ -85,6 +94,15 @@ var _explore_card: PanelContainer
 var _explore_caption: Label
 var _explore_bar: ProgressBar
 var _explore_total: int = 1
+var _energy_alert_tween: Tween
+var _hunger_alert_tween: Tween
+var _energy_alert_active: bool = false
+var _hunger_alert_active: bool = false
+## Уведомление о новом узле и отложенный фокус карты.
+var _map_reveal_overlay: Control
+var _map_reveal_card: PanelContainer
+var _map_reveal_serial: int = 0
+var _pending_map_focus_node: String = ""
 
 
 func _ready() -> void:
@@ -124,25 +142,40 @@ func _build_static_layout() -> void:
 	xp_bar = XP_BAR_SCRIPT.new()
 	hud.add_child(xp_bar)
 
-	# При крупном шрифте показатели не помещаются в одну строку — переносятся.
+	# Три главных состояния читаются как доля от максимума, а не как три
+	# разрозненных числа среди служебных показателей.
+	var resource_grid := GridContainer.new()
+	resource_grid.name = "HudResources"
+	resource_grid.columns = 3
+	resource_grid.add_theme_constant_override("h_separation", 12)
+	hud.add_child(resource_grid)
+	var hp_meter := _make_resource_meter(resource_grid, "Здоровье", "❤️", Color("#55b884"))
+	hp_icon = hp_meter["icon"]
+	hp_label = hp_meter["value"]
+	hp_bar = hp_meter["bar"]
+	var energy_meter := _make_resource_meter(resource_grid, "Силы", "⚡", Color("#e0b153"))
+	energy_icon = energy_meter["icon"]
+	energy_label = energy_meter["value"]
+	energy_bar = energy_meter["bar"]
+	var hunger_meter := _make_resource_meter(resource_grid, "Питание", "🍖", Color("#cf8f58"))
+	hunger_icon = hunger_meter["icon"]
+	hunger_label = hunger_meter["value"]
+	hunger_bar = hunger_meter["bar"]
+
+	# Остальные показатели компактны и при крупном шрифте переносятся.
 	var stats_row := HFlowContainer.new()
 	stats_row.name = "HudStats"
 	stats_row.add_theme_constant_override("h_separation", 12)
 	stats_row.add_theme_constant_override("v_separation", 4)
 	hud.add_child(stats_row)
-	hp_label = _make_hud_label()
 	o2_label = _make_hud_label()
 	weapon_label = _make_hud_label()
 	weapon_label.name = "WeaponLabel"
 	bag_label = _make_hud_label()
 	bag_label.name = "BagLabel"
-	energy_label = _make_hud_label()
-	energy_label.name = "EnergyLabel"
-	hunger_label = _make_hud_label()
-	hunger_label.name = "HungerLabel"
 	day_label = _make_hud_label()
 	day_label.name = "DayLabel"
-	for lbl in _hud_labels():
+	for lbl in [o2_label, weapon_label, bag_label, day_label]:
 		stats_row.add_child(lbl)
 
 	var nav_row := HBoxContainer.new()
@@ -159,6 +192,12 @@ func _build_static_layout() -> void:
 	section_separator = HSeparator.new()
 	section_separator.name = "SectionSeparator"
 	root_vbox.add_child(section_separator)
+	pinned_header = VBoxContainer.new()
+	pinned_header.name = "PinnedHeader"
+	pinned_header.visible = false
+	pinned_header.add_theme_constant_override("separation", 10)
+	root_vbox.add_child(pinned_header)
+
 
 	content_scroll = ScrollContainer.new()
 	content_scroll.name = "ContentScroll"
@@ -183,9 +222,10 @@ func _build_static_layout() -> void:
 	body_margin.add_child(body)
 
 	# Основной контент занимает верх и середину экрана, HUD закреплён снизу.
-	# Узлы создаются выше в удобном для инициализации порядке, затем переставляются.
-	root_vbox.move_child(content_scroll, 0)
-	root_vbox.move_child(section_separator, 1)
+	# Заголовки и вкладки журналов/персонажа стоят над ScrollContainer.
+	root_vbox.move_child(pinned_header, 0)
+	root_vbox.move_child(content_scroll, 1)
+	root_vbox.move_child(section_separator, 2)
 
 
 func _connect_signals() -> void:
@@ -200,6 +240,7 @@ func _connect_signals() -> void:
 	CharacterSystem.changed.connect(_on_character_changed)
 	NotificationSystem.changed.connect(_on_notification_changed)
 	MapSystem.node_state_changed.connect(func(_node_id: String, _state: String) -> void: _refresh_map())
+	MapSystem.node_unlocked.connect(_on_map_node_unlocked)
 	MapSystem.node_blocked.connect(_on_map_node_blocked)
 	MapSystem.floor_changed.connect(func(_floor_id: String) -> void: _refresh_map())
 	MapSystem.fog_changed.connect(_refresh_map)
@@ -252,6 +293,43 @@ func _make_hud_label() -> Label:
 	return lbl
 
 
+## Компактный бар HUD: подпись и число сверху, заполнение снизу.
+func _make_resource_meter(parent: Control, title: String, emoji: String, fill: Color) -> Dictionary:
+	var column := VBoxContainer.new()
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	column.add_theme_constant_override("separation", 3)
+	parent.add_child(column)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	column.add_child(row)
+	var icon := Label.new()
+	icon.text = emoji
+	icon.tooltip_text = title
+	icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	icon.resized.connect(func() -> void: icon.pivot_offset = icon.size * 0.5)
+	row.add_child(icon)
+	var title_label := Label.new()
+	title_label.text = title
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_label.clip_text = true
+	title_label.tooltip_text = title
+	row.add_child(title_label)
+	var value_label := Label.new()
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(value_label)
+	var bar := ProgressBar.new()
+	bar.show_percentage = false
+	bar.custom_minimum_size.y = UiKit.fs(16)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.add_theme_stylebox_override("background", UiKit.box(Color("#10141b"), Color("#2e3a4c"), 1, 0))
+	bar.add_theme_stylebox_override("fill", UiKit.box(fill, fill.lightened(0.16), 1, 0))
+	column.add_child(bar)
+	for lbl in [icon, title_label, value_label]:
+		lbl.add_theme_font_size_override("font_size", UiKit.fs(18))
+		lbl.add_theme_color_override("font_color", Color("#eef3ff"))
+	return {"icon": icon, "value": value_label, "bar": bar}
+
+
 func _make_nav_button(text: String, node_name: String, callback: Callable) -> Button:
 	var btn := Button.new()
 	btn.name = node_name
@@ -270,6 +348,10 @@ func _make_nav_button(text: String, node_name: String, callback: Callable) -> Bu
 func _apply_hud_fonts() -> void:
 	for lbl in _hud_labels():
 		lbl.add_theme_font_size_override("font_size", UiKit.fs(22))
+	for lbl in [hp_icon, energy_icon, hunger_icon, hp_label, energy_label, hunger_label]:
+		lbl.add_theme_font_size_override("font_size", UiKit.fs(18))
+	for bar in [hp_bar, energy_bar, hunger_bar]:
+		bar.custom_minimum_size.y = UiKit.fs(16)
 	for btn in [map_button, character_button, journal_button, settings_button]:
 		btn.custom_minimum_size = Vector2(0, UiKit.fs(78))
 		btn.add_theme_font_size_override("font_size", UiKit.fs(19))
@@ -495,6 +577,7 @@ func _on_map_node_blocked(_node_id: String, message: String) -> void:
 func _on_settings_changed() -> void:
 	var scroll := content_scroll.scroll_vertical
 	_apply_hud_fonts()
+	_restart_need_alerts()
 	_restyling = true
 	_render_current_screen()
 	_restyling = false
@@ -633,6 +716,75 @@ func _drop_explore_overlay() -> void:
 		_explore_overlay = null
 		_explore_card = null
 
+## Открытый эффектом узел получает заметную плашку на пять секунд. Кнопка
+## открывает карту; там сам узел продолжает пульсировать до нажатия или таймера.
+func _on_map_node_unlocked(node_id: String, title: String) -> void:
+	_drop_map_reveal_overlay()
+	_pending_map_focus_node = node_id
+	_map_reveal_serial += 1
+	var serial := _map_reveal_serial
+	_map_reveal_overlay = Control.new()
+	_map_reveal_overlay.name = "MapRevealOverlay"
+	_map_reveal_overlay.mouse_filter = Control.MOUSE_FILTER_PASS
+	add_child(_map_reveal_overlay)
+	_fill_parent(_map_reveal_overlay)
+	var center := CenterContainer.new()
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_map_reveal_overlay.add_child(center)
+	_fill_parent(center)
+	_map_reveal_card = PanelContainer.new()
+	_map_reveal_card.name = "MapRevealCard"
+	_map_reveal_card.custom_minimum_size.x = 700.0
+	_map_reveal_card.mouse_filter = Control.MOUSE_FILTER_STOP
+	_map_reveal_card.add_theme_stylebox_override("panel", UiKit.box(Color("#242015"), UiKit.ACCENT_COLOR, 3, 26))
+	center.add_child(_map_reveal_card)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 12)
+	_map_reveal_card.add_child(column)
+	var caption := UiKit.text("Открыта новая локация\n«%s»" % title, 28, UiKit.TITLE_COLOR)
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(caption)
+	var show_btn := UiKit.button("Увидеть на карте", "default", 60)
+	show_btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	show_btn.pressed.connect(_show_revealed_node_on_map)
+	column.add_child(show_btn)
+	if SettingsSystem.animations:
+		var pulse := _map_reveal_card.create_tween().set_loops()
+		pulse.tween_property(_map_reveal_card, "modulate", Color("#ffd884"), 0.45).set_trans(Tween.TRANS_SINE)
+		pulse.tween_property(_map_reveal_card, "modulate", Color.WHITE, 0.45).set_trans(Tween.TRANS_SINE)
+	await get_tree().create_timer(5.0).timeout
+	if serial == _map_reveal_serial:
+		if _pending_map_focus_node == node_id:
+			_pending_map_focus_node = ""
+		_drop_map_reveal_overlay()
+
+
+func _show_revealed_node_on_map() -> void:
+	_drop_map_reveal_overlay()
+	if journal_open:
+		NotificationSystem.mark_journal_seen()
+	if character_open:
+		NotificationSystem.mark_character_seen()
+	journal_open = false
+	character_open = false
+	settings_open = false
+	workbench_open = false
+	map_open = GameState.current_screen != GameState.Screen.SECTOR_MAP
+	SoundSystem.play("map_open")
+	_route_plan = {}
+	_map_message = ""
+	_scroll_to_top()
+	_render_current_screen()
+
+
+func _drop_map_reveal_overlay() -> void:
+	_map_reveal_serial += 1
+	if _map_reveal_overlay != null:
+		_map_reveal_overlay.queue_free()
+	_map_reveal_overlay = null
+	_map_reveal_card = null
+
+
 
 func _on_screen_changed(screen: int) -> void:
 	if character_open:
@@ -653,7 +805,9 @@ func _on_screen_changed(screen: int) -> void:
 
 
 func _update_hud() -> void:
-	hp_label.text = "❤️ %d/%d" % [ResourceSystem.hp, ResourceSystem.max_hp]
+	hp_bar.max_value = maxi(1, ResourceSystem.max_hp)
+	hp_bar.value = ResourceSystem.hp
+	hp_label.text = "%d/%d" % [ResourceSystem.hp, ResourceSystem.max_hp]
 	var o2i := int(ResourceSystem.o2)
 	o2_label.text = "💨 O2 %d" % o2i
 	o2_label.add_theme_color_override("font_color", UiKit.BAD_COLOR if o2i <= ResourceSystem.LOW_O2 else Color("#eef3ff"))
@@ -661,16 +815,60 @@ func _update_hud() -> void:
 	weapon_label.add_theme_color_override("font_color",
 		UiKit.BAD_COLOR if CharacterSystem.has_firearm() and ResourceSystem.ammo <= 0 else Color("#eef3ff"))
 	bag_label.text = "🧰 %d/%d" % [InventorySystem.used_slots(), InventorySystem.max_slots]
-	energy_label.text = "⚡ %d" % roundi(NeedsSystem.energy)
-	energy_label.add_theme_color_override("font_color", UiKit.BAD_COLOR if NeedsSystem.is_tired() else Color("#eef3ff"))
-	hunger_label.text = "🍖 %d" % roundi(NeedsSystem.hunger)
-	hunger_label.add_theme_color_override("font_color", UiKit.BAD_COLOR if NeedsSystem.is_hungry() else Color("#eef3ff"))
+	energy_bar.max_value = maxf(1.0, NeedsSystem.max_energy())
+	energy_bar.value = NeedsSystem.energy
+	energy_label.text = "%d/%d" % [roundi(NeedsSystem.energy), roundi(NeedsSystem.max_energy())]
+	var nutrition := NeedsSystem.max_hunger() - NeedsSystem.hunger
+	hunger_bar.max_value = maxf(1.0, NeedsSystem.max_hunger())
+	hunger_bar.value = nutrition
+	hunger_label.text = "%d/%d" % [roundi(nutrition), roundi(NeedsSystem.max_hunger())]
 	day_label.text = "☀️ День %d" % NeedsSystem.day
+	_sync_need_alerts()
 	xp_bar.sync()
 
 
+func _sync_need_alerts() -> void:
+	var tired := NeedsSystem.is_tired()
+	var hungry := NeedsSystem.is_hungry()
+	if tired != _energy_alert_active or (tired and not SettingsSystem.animations and _energy_alert_tween != null):
+		_energy_alert_active = tired
+		_energy_alert_tween = _set_need_icon_alert(energy_icon, tired, _energy_alert_tween)
+	if hungry != _hunger_alert_active or (hungry and not SettingsSystem.animations and _hunger_alert_tween != null):
+		_hunger_alert_active = hungry
+		_hunger_alert_tween = _set_need_icon_alert(hunger_icon, hungry, _hunger_alert_tween)
+
+
+func _set_need_icon_alert(icon: Label, active: bool, current: Tween) -> Tween:
+	if current != null:
+		current.kill()
+	icon.scale = Vector2.ONE
+	icon.rotation = 0.0
+	icon.modulate = UiKit.BAD_COLOR if active else Color.WHITE
+	if not active or not SettingsSystem.animations:
+		return null
+	var tween := create_tween().set_loops()
+	tween.tween_property(icon, "scale", Vector2(1.28, 1.28), 0.42).set_trans(Tween.TRANS_SINE)
+	tween.parallel().tween_property(icon, "rotation", deg_to_rad(-7.0), 0.42).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(icon, "scale", Vector2.ONE, 0.42).set_trans(Tween.TRANS_SINE)
+	tween.parallel().tween_property(icon, "rotation", deg_to_rad(7.0), 0.42).set_trans(Tween.TRANS_SINE)
+	return tween
+
+
+func _restart_need_alerts() -> void:
+	_energy_alert_active = false
+	_hunger_alert_active = false
+	if _energy_alert_tween != null:
+		_energy_alert_tween.kill()
+		_energy_alert_tween = null
+	if _hunger_alert_tween != null:
+		_hunger_alert_tween.kill()
+		_hunger_alert_tween = null
+	_sync_need_alerts()
+
+
 func _hud_labels() -> Array:
-	return [hp_label, o2_label, weapon_label, bag_label, energy_label, hunger_label, day_label]
+	return [hp_icon, hp_label, o2_label, weapon_label, bag_label, energy_icon,
+		energy_label, hunger_icon, hunger_label, day_label]
 
 
 ## «⚔️ Обломок трубы», «⚔️ Табельный пистолет · 💥 6», «✊ Без оружия»:
@@ -880,6 +1078,10 @@ func _clear_body() -> void:
 	for child in body.get_children():
 		body.remove_child(child)
 		child.queue_free()
+	for child in pinned_header.get_children():
+		pinned_header.remove_child(child)
+		child.queue_free()
+	pinned_header.visible = false
 
 
 func _add_title(text: String) -> Label:
@@ -1056,6 +1258,10 @@ func _render_map(read_only: bool = false) -> void:
 		"read_only": read_only,
 	})
 	_map_view.set_route(_current_route_path())
+	if _pending_map_focus_node != "":
+		var focus_node := _pending_map_focus_node
+		_pending_map_focus_node = ""
+		_map_view.highlight_node(focus_node, 5.0)
 	_route_panel = VBoxContainer.new()
 	_route_panel.name = "RoutePanel"
 	_route_panel.add_theme_constant_override("separation", 10)
@@ -1444,7 +1650,24 @@ func _render_location() -> void:
 	if not stash.is_empty():
 		_add_section("Склад" if LocationSystem.is_base() else "Здесь лежит")
 		for item_id in stash.keys():
-			_add_button("✋ Взять: %s%s" % [_item_name(item_id), _count_suffix(int(stash[item_id]))], _make_stash_take_callback(item_id), "quiet")
+			var item_card := UiKit.card(body)
+			item_card.add_child(UiKit.text("%s%s" % [_item_name(item_id), _count_suffix(int(stash[item_id]))], 24, UiKit.TITLE_COLOR))
+			var item_data := InventorySystem.get_item_data(item_id)
+			var use_text := str(item_data.get("use_text", item_data.get("description", "")))
+			if use_text != "":
+				item_card.add_child(UiKit.text(use_text, 20, UiKit.MUTED_COLOR))
+			var actions := HBoxContainer.new()
+			actions.add_theme_constant_override("separation", 10)
+			var use_btn := UiKit.button("Применить", "default", 54)
+			use_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			use_btn.disabled = not LocationSystem.stash_can_use(item_id)
+			use_btn.pressed.connect(_make_stash_use_callback(item_id))
+			actions.add_child(use_btn)
+			var take_btn := UiKit.button("Подобрать", "quiet", 54)
+			take_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			take_btn.pressed.connect(_make_stash_take_callback(item_id))
+			actions.add_child(take_btn)
+			item_card.add_child(actions)
 
 
 ## «Исследовать»: сколько ещё можно найти в отсеке. Искать нечего — кнопка
@@ -1504,6 +1727,15 @@ func _make_location_event_callback(event_id: String) -> Callable:
 	return func(): GameState.start_location_event(event_id)
 
 
+func _make_stash_use_callback(item_id: String) -> Callable:
+	return func():
+		if LocationSystem.stash_use(item_id):
+			LocationSystem.add_notice("Применено: %s." % _item_name(item_id))
+		else:
+			LocationSystem.add_notice("«%s» нельзя применить на месте." % _item_name(item_id))
+		GameState.refresh_location()
+
+
 func _make_stash_take_callback(item_id: String) -> Callable:
 	return func():
 		var total := int(LocationSystem.get_stash().get(item_id, 0))
@@ -1517,10 +1749,46 @@ func _make_stash_take_callback(item_id: String) -> Callable:
 		GameState.refresh_location()
 
 
+const CHARACTER_TABS := [
+	["items", "🎒 Предметы"], ["equipment", "🛡️ Снаряжение"], ["skills", "⭐ Навыки"],
+]
+const CHARACTER_ITEM_TABS := [
+	["bag", "Сумка"], ["info", "Записи и ключи"],
+]
+
+
 func _render_character() -> void:
+	pinned_header.visible = true
+	pinned_header.add_child(UiKit.title("Персонаж"))
+	var tabs := HBoxContainer.new()
+	tabs.name = "CharacterTabs"
+	tabs.add_theme_constant_override("separation", 8)
+	for entry in CHARACTER_TABS:
+		var tab_id := str(entry[0])
+		var label := str(entry[1])
+		if tab_id == "items" and NotificationSystem.has_new_items():
+			label += " (!)"
+		var btn := UiKit.button(label, "tab_active" if tab_id == character_tab else "quiet", 56)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.add_theme_font_size_override("font_size", UiKit.fs(18))
+		btn.pressed.connect(_on_character_tab_changed.bind(tab_id))
+		tabs.add_child(btn)
+	pinned_header.add_child(tabs)
+	if character_tab == "items":
+		var item_tabs := HBoxContainer.new()
+		item_tabs.name = "CharacterItemTabs"
+		item_tabs.add_theme_constant_override("separation", 8)
+		for entry in CHARACTER_ITEM_TABS:
+			var tab_id := str(entry[0])
+			var btn := UiKit.button(str(entry[1]), "tab_active" if tab_id == character_items_tab else "quiet", 48)
+			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			btn.add_theme_font_size_override("font_size", UiKit.fs(17))
+			btn.pressed.connect(_on_character_item_tab_changed.bind(tab_id))
+			item_tabs.add_child(btn)
+		pinned_header.add_child(item_tabs)
 	var panel: VBoxContainer = CHARACTER_PANEL_SCRIPT.new()
 	panel.tab = character_tab
-	panel.tab_changed.connect(_on_character_tab_changed)
+	panel.item_tab = character_items_tab
 	body.add_child(panel)
 
 
@@ -1533,7 +1801,13 @@ func _render_workbench() -> void:
 func _on_character_tab_changed(new_tab: String) -> void:
 	character_tab = new_tab
 	_scroll_to_top()
+	_render_current_screen()
 
+
+func _on_character_item_tab_changed(new_tab: String) -> void:
+	character_items_tab = new_tab
+	_scroll_to_top()
+	_render_current_screen()
 
 ## Эффекты ударов проигрываются один раз на ход: повторная перерисовка того
 ## же хода (смена настроек) их не повторяет. Экран боя прижат к низу —
@@ -1732,7 +2006,8 @@ const JOURNAL_COLORS := {
 
 
 func _render_journal() -> void:
-	_add_title("Журнал")
+	pinned_header.visible = true
+	pinned_header.add_child(UiKit.title("Журнал"))
 	var tabs := HBoxContainer.new()
 	tabs.name = "JournalTabs"
 	tabs.add_theme_constant_override("separation", 8)
@@ -1751,7 +2026,7 @@ func _render_journal() -> void:
 		btn.add_theme_font_size_override("font_size", UiKit.fs(20))
 		btn.pressed.connect(_select_journal_tab.bind(tab_id))
 		tabs.add_child(btn)
-	body.add_child(tabs)
+	pinned_header.add_child(tabs)
 
 	match journal_tab:
 		"codex":
@@ -1851,7 +2126,7 @@ func _render_journal_codex() -> void:
 		btn.add_theme_font_size_override("font_size", UiKit.fs(18))
 		btn.pressed.connect(_select_codex_tab.bind(category))
 		tabs.add_child(btn)
-	body.add_child(tabs)
+	pinned_header.add_child(tabs)
 	var ids := CodexSystem.get_unlocked(codex_tab)
 	if ids.is_empty():
 		_add_text("В этой категории пока нет записей.")

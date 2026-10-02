@@ -1,20 +1,14 @@
 extends VBoxContainer
-## Экран персонажа — оверлей поверх текущего экрана (кнопка «Персонаж» в HUD
-## открывает и закрывает его). Вкладки: «Предметы», «Снаряжение», «Навыки».
-## Крафт — только на верстаке базы (WorkbenchPanel). Игровой логики не
-## содержит: вызывает InventorySystem / CharacterSystem и перерисовывается
+## Содержимое вкладки экрана персонажа. Закреплённый заголовок и переключатели
+## строит Game.gd вне общего ScrollContainer, поэтому они не уезжают при
+## прокрутке. Крафт — только на верстаке базы (WorkbenchPanel). Игровой логики
+## не содержит: вызывает InventorySystem / CharacterSystem и перерисовывается
 ## после каждого действия.
 
-signal tab_changed(tab: String)
 
 const UiKit = preload("res://scenes/ui/UiKit.gd")
 const DOLL_SCRIPT = preload("res://scenes/ui/CharacterDollView.gd")
 
-const TABS := [
-	["items", "🧰 Предметы"],
-	["equipment", "🦺 Снаряжение"],
-	["skills", "⭐ Навыки"],
-]
 const CATEGORY_TITLES := {
 	"quest": "сюжетный",
 	"consumable": "расходник",
@@ -26,6 +20,7 @@ const CATEGORY_TITLES := {
 }
 
 var tab: String = "items"
+var item_tab: String = "bag"
 var selected_slot: String = "body"
 var message: String = ""
 
@@ -45,26 +40,9 @@ func _rebuild() -> void:
 		remove_child(child)
 		child.queue_free()
 
-	add_child(UiKit.title("🧑‍🚀 Персонаж"))
-	var tabs := HBoxContainer.new()
-	tabs.name = "Tabs"
-	tabs.add_theme_constant_override("separation", 8)
-	for entry in TABS:
-		var label := str(entry[1])
-		if entry[0] == "items" and NotificationSystem.has_new_items():
-			label += " (!)"
-		elif entry[0] == "skills" and NotificationSystem.unspent_skill_points() > 0:
-			label += " (+%d)" % NotificationSystem.unspent_skill_points()
-		var btn := UiKit.button(label, "tab_active" if entry[0] == tab else "quiet", 58)
-		btn.name = "Tab_%s" % entry[0]
-		btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
-		btn.add_theme_font_size_override("font_size", UiKit.fs(20))
-		btn.pressed.connect(_select_tab.bind(entry[0]))
-		tabs.add_child(btn)
-	add_child(tabs)
-
 	if message != "":
 		add_child(UiKit.text(message, 22, UiKit.ACCENT_COLOR))
+
 
 	match tab:
 		"equipment":
@@ -77,23 +55,24 @@ func _rebuild() -> void:
 
 # --- Предметы -----------------------------------------------------------------
 
-## Сумка — сетка и карточки того, что занимает место. Инфо-предметы (сюжетные
-## и ключи) места не занимают и идут отдельным списком ниже.
+## Физические вещи и инфо-предметы разделены подвкладками. Сетка пустых ячеек
+## удалена: вместимость уже видна в заголовке сумки и HUD.
 func _build_items() -> void:
-	add_child(UiKit.section("Сумка: %d/%d слотов" % [InventorySystem.used_slots(), InventorySystem.max_slots]))
-	var bag: Array = []
-	var info: Array = []
+	var entries: Array = []
 	for entry in InventorySystem.get_slots():
-		(info if InventorySystem.is_info_item(str(entry.get("id", ""))) else bag).append(entry)
-	add_child(_bag_grid(bag))
-	if bag.is_empty():
-		add_child(UiKit.text("Сумка пуста."))
-	for entry in bag:
-		_item_card(entry)
-	if info.is_empty():
-		return
-	add_child(UiKit.section("📜 Записи и ключи — не занимают места"))
-	for entry in info:
+		var is_info := InventorySystem.is_info_item(str(entry.get("id", "")))
+		if (item_tab == "info") == is_info:
+			entries.append(entry)
+	if item_tab == "info":
+		add_child(UiKit.section("Записи и ключи · места в сумке не занимают"))
+		if entries.is_empty():
+			add_child(UiKit.text("Записей и ключей пока нет.", 22, UiKit.MUTED_COLOR))
+	else:
+		add_child(UiKit.section("Сумка: %d/%d занято · %d свободно" % [
+			InventorySystem.used_slots(), InventorySystem.max_slots, InventorySystem.free_slots()]))
+		if entries.is_empty():
+			add_child(UiKit.text("Сумка пуста.", 22, UiKit.MUTED_COLOR))
+	for entry in entries:
 		_item_card(entry)
 
 
@@ -148,44 +127,6 @@ func _item_card(entry: Dictionary) -> void:
 		actions.add_child(_action_button("📦 Оставить здесь" if LocationSystem.is_active() else "🗑️ Выбросить", _drop.bind(item_id), "danger"))
 
 
-## Сетка сумки: ячейки с иконками, как в Neo Scavenger. Пустые ячейки
-## показывают, сколько места ещё осталось.
-func _bag_grid(entries: Array) -> Control:
-	var grid := GridContainer.new()
-	grid.name = "BagGrid"
-	grid.columns = 5
-	grid.add_theme_constant_override("h_separation", 6)
-	grid.add_theme_constant_override("v_separation", 6)
-	for entry in entries:
-		var item_id := str(entry.get("id", ""))
-		grid.add_child(_bag_cell(item_id, int(entry.get("count", 1))))
-	for i in range(maxi(0, InventorySystem.free_slots())):
-		grid.add_child(_bag_cell("", 0))
-	return grid
-
-
-func _bag_cell(item_id: String, count: int) -> Control:
-	var cell := PanelContainer.new()
-	cell.custom_minimum_size = Vector2(104, 104)
-	var filled := item_id != ""
-	cell.add_theme_stylebox_override("panel", UiKit.box(
-		Color("#1b2230") if filled else Color("#131821"),
-		Color("#3b4c61") if filled else Color("#232c3a"), 1, 6))
-	if not filled:
-		return cell
-	cell.tooltip_text = "%s%s" % [_item_name(item_id), (" ×%d" % count) if count > 1 else ""]
-	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", 0)
-	cell.add_child(stack)
-	var icon := UiKit.item_icon(item_id, 76)
-	if icon != null:
-		stack.add_child(icon)
-	else:
-		stack.add_child(UiKit.text(_item_name(item_id).substr(0, 3), 20, UiKit.MUTED_COLOR))
-	var count_label := UiKit.text("×%d" % count if count > 1 else " ", 17, UiKit.MUTED_COLOR)
-	count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	stack.add_child(count_label)
-	return cell
 
 
 func _on_item_card_input(event: InputEvent, item_id: String) -> void:
@@ -330,11 +271,6 @@ func _learn(skill_id: String) -> void:
 
 # --- Общее --------------------------------------------------------------------
 
-func _select_tab(new_tab: String) -> void:
-	tab = new_tab
-	message = ""
-	tab_changed.emit(tab)
-	_rebuild()
 
 
 func _act(text: String) -> void:

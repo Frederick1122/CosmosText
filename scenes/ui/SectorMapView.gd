@@ -153,6 +153,9 @@ var _pinch_anchor: Vector2 = Vector2.ZERO
 ## Все визуальные элементы карты внутри группы: в read_only они наследуют серый материал.
 var _visual_group: Node2D
 var _lock_label: Label
+var _highlighted_node_id: String = ""
+var _highlight_tween: Tween
+var _highlight_serial: int = 0
 
 
 func _init() -> void:
@@ -239,6 +242,48 @@ func overview(animated: bool = true) -> void:
 	_follow_player = false
 	_move_camera(_view_origin + _view_span * 0.5, 1.0, animated)
 
+## Переключает палубу, наводит камеру и пульсирует новым узлом не дольше
+## duration секунд. Нажатие самого узла прекращает подсветку сразу.
+func highlight_node(node_id: String, duration: float = 5.0) -> void:
+	if not _node_lookup.has(node_id):
+		return
+	_clear_node_highlight()
+	_highlighted_node_id = node_id
+	_highlight_serial += 1
+	var serial := _highlight_serial
+	var floor_id := _node_floor_id(_node_lookup[node_id])
+	if floor_id != _active_floor_id:
+		_active_floor_id = floor_id
+		_recompute_view_bounds()
+		_rebuild()
+	_follow_player = false
+	_move_camera(_node_position(_node_lookup[node_id]), maxf(_zoom, FOLLOW_ZOOM), true)
+	_start_node_highlight()
+	await get_tree().create_timer(duration).timeout
+	if serial == _highlight_serial:
+		_clear_node_highlight()
+
+
+func _start_node_highlight() -> void:
+	if not _node_controls.has(_highlighted_node_id):
+		return
+	var btn: Button = _node_controls[_highlighted_node_id]["button"]
+	btn.modulate = Color("#fff2a8")
+	_highlight_tween = create_tween().set_loops()
+	_highlight_tween.tween_property(btn, "modulate", Color("#ff8b4d"), 0.42).set_trans(Tween.TRANS_SINE)
+	_highlight_tween.tween_property(btn, "modulate", Color("#fff2a8"), 0.42).set_trans(Tween.TRANS_SINE)
+
+
+func _clear_node_highlight() -> void:
+	_highlight_serial += 1
+	if _highlight_tween != null:
+		_highlight_tween.kill()
+		_highlight_tween = null
+	if _node_controls.has(_highlighted_node_id):
+		var btn: Button = _node_controls[_highlighted_node_id]["button"]
+		btn.modulate = Color.WHITE
+	_highlighted_node_id = ""
+
 
 func _apply_state(nodes: Array, current_floor_id: String, known_floors: Array, player_node_id: String) -> void:
 	_nodes = nodes.duplicate(true)
@@ -313,6 +358,8 @@ func _rebuild() -> void:
 	_build_lock_overlay()
 	_layout_controls()
 	_redraw()
+	if _highlighted_node_id != "":
+		_start_node_highlight()
 
 
 ## Обесцвечивание группы и надпись поверх карты только для просмотра.
@@ -388,7 +435,7 @@ func _build_node_controls() -> void:
 		btn.disabled = _read_only or not _is_node_targetable(node)
 		btn.add_theme_font_size_override("font_size", UiKit.fs(28))
 		_apply_node_style(btn, node)
-		btn.pressed.connect(_on_tap.bind(func() -> void: node_selected.emit(str(node_id))))
+		btn.pressed.connect(_on_tap.bind(_select_node.bind(str(node_id))))
 		_canvas.add_child(btn)
 
 		var label: Control = MARQUEE_SCRIPT.new()
@@ -404,6 +451,11 @@ func _build_node_controls() -> void:
 			badge.add_theme_font_size_override("font_size", UiKit.fs(20))
 			_canvas.add_child(badge)
 		_node_controls[node_id] = {"button": btn, "label": label, "badge": badge}
+
+
+func _select_node(node_id: String) -> void:
+	_clear_node_highlight()
+	node_selected.emit(node_id)
 
 
 func _select_floor_filter(floor_id: String) -> void:

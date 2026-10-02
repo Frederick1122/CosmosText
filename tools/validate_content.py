@@ -31,6 +31,7 @@ ENEMY_AI_TYPES = ("brawler", "shooter", "turret")
 MAX_COMBAT_RANGE = 5
 # Пиксельные иллюстрации сцен (поле "image" у локаций, событий и ситуаций).
 SCENE_ART_DIR = os.path.join(ROOT, "assets", "art", "scenes")
+SOUND_DIR = os.path.join(ROOT, "assets", "sounds")
 
 errors = []
 warnings = []
@@ -257,6 +258,15 @@ def main():
             return
         if not os.path.exists(os.path.join(SCENE_ART_DIR, name + ".png")):
             errors.append(f"{ctx}.image: нет файла assets/art/scenes/{name}.png")
+
+    def check_sound(name, ctx):
+        if name is None:
+            return
+        if not isinstance(name, str) or not name.strip():
+            errors.append(f"{ctx}.sound: должно быть именем файла без расширения")
+            return
+        if not os.path.exists(os.path.join(SOUND_DIR, name + ".wav")):
+            errors.append(f"{ctx}.sound: нет файла assets/sounds/{name}.wav")
 
     all_node_ids = set()
     nodes_without_location = set()
@@ -669,6 +679,7 @@ def main():
             check_requires(ev.get("triggers", []), f"{ev_ctx}.triggers", lid)
             check_effects(ev.get("effects", []), ev_ctx)
             check_image(ev.get("image"), ev_ctx)
+            check_sound(ev.get("sound"), ev_ctx)
             if "lock" in ev:
                 check_lock(ev["lock"], ev_ctx)
             sit = ev.get("situation", "")

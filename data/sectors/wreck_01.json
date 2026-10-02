@@ -47,13 +47,13 @@
 				},
 				"floor": "deck_02",
 				"label": "Шаттл",
-				"note": "Сигнал нестабилен",
+				"note": "Пиратская маркировка, питание отсутствует",
 				"order": 70.0,
 				"hidden_until_open": true
 			},
 			"sealed": true,
 			"state": "locked",
-			"title": "Чужой шаттл"
+			"title": "Пиратский шаттл"
 		},
 		"cargo_bay": {
 			"connections": [

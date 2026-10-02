@@ -359,6 +359,7 @@ func _build_event_fields(event: Dictionary) -> void:
 	_line("Кнопка", str(event.get("label", "")), func(value): _set_sub_value(event, "label", value))
 	_bool("Повторяемое", bool(event.get("repeatable", false)), func(value): _set_sub_value(event, "repeatable", value))
 	_line("Иллюстрация", str(event.get("image", "")), func(value): _set_sub_value(event, "image", value))
+	_line("Звук", str(event.get("sound", "")), func(value): _set_sub_value(event, "sound", value))
 	_bool("Очистить иллюстрацию", bool(event.get("clear_image", false)), func(value): _set_sub_value(event, "clear_image", value))
 	_line("Ситуация", str(event.get("situation", "")), func(value): _set_sub_value(event, "situation", value))
 	_text("Сообщение", str(event.get("text", "")), func(value): _set_sub_value(event, "text", value))
