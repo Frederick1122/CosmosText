@@ -66,6 +66,50 @@
         }
       ],
       "situation": "sit_3_4_departure"
+    },
+    {
+      "id": "origin_echo_engineer",
+      "start": "auto",
+      "repeatable": false,
+      "triggers": [ { "type": "origin", "origin": "colonial_engineer" } ],
+      "text": "Под консолью шаттла — блок оборудования с выжженным серийным номером. Ты узнаёшь маркировку: такие ставят только на энергосистемах колонии Мейер-4. Здесь, за границей карт, их быть не должно.",
+      "effects": [
+        { "type": "item_add", "item": "meyer_serial_module" },
+        { "type": "practice_add", "practice": "repair" }
+      ]
+    },
+    {
+      "id": "origin_echo_guard",
+      "start": "auto",
+      "repeatable": false,
+      "triggers": [ { "type": "origin", "origin": "contract_guard" } ],
+      "text": "На полу кабины, под сдвинутым креслом, блестит жетон. Ты поднимаешь его и холодешь: та же ЧВК, где ты служил. Номер части выбит знакомо и ровно.",
+      "effects": [
+        { "type": "item_add", "item": "mercenary_token" },
+        { "type": "practice_add", "practice": "command" }
+      ]
+    },
+    {
+      "id": "origin_echo_broker",
+      "start": "auto",
+      "repeatable": false,
+      "triggers": [ { "type": "origin", "origin": "cargo_broker" } ],
+      "text": "Среди пиратских бумаг на переборке — грузовой манифест. Бланк знаком до последней линейки: ты сам оформлял такие. Строку получателя перебили, но подпись осталась твоя.",
+      "effects": [
+        { "type": "item_add", "item": "mismatched_manifest" },
+        { "type": "practice_add", "practice": "negotiate" }
+      ]
+    },
+    {
+      "id": "origin_echo_xenobiologist",
+      "start": "auto",
+      "repeatable": false,
+      "triggers": [ { "type": "origin", "origin": "xenobiologist" } ],
+      "text": "В нише за креслом — термоконтейнер с биоматериалом. В пассажирской декларации «Персефоны» такого груза не значилось. Проба живая — и явно не с Мейер-4.",
+      "effects": [
+        { "type": "item_add", "item": "bio_container" },
+        { "type": "practice_add", "practice": "analyze" }
+      ]
     }
   ]
 }

@@ -38,7 +38,11 @@
       "found": "Одна из стоек управления ещё светится. На панели висит незакрытый журнал.",
       "triggers": [ { "type": "flag", "flag": "reactor_unlocked" } ],
       "text": "На панели — последняя запись перед остановкой. Запись добавлена в журнал.",
-      "effects": [ { "type": "unlock_lore", "id": "log_03" } ]
+      "effects": [
+        { "type": "unlock_lore", "id": "log_03" },
+        { "type": "unlock_knowledge", "knowledge": "k_reactor_school" },
+        { "type": "practice_add", "practice": "repair" }
+      ]
     },
     {
       "id": "extract_cell",

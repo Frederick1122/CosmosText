@@ -35,7 +35,7 @@ func _ready() -> void:
 	SituationEngine.situation_ended.connect(_on_situation_ended)
 
 
-func start_new_game(sector_id: String = "", opening_situation_id: String = "") -> void:
+func start_new_game(sector_id: String = "", opening_situation_id: String = "", origin_id: String = "") -> void:
 	_active_location_event_id = ""
 	_active_event_completes_on_win = true
 	_active_event_clears_image = false
@@ -45,7 +45,7 @@ func start_new_game(sector_id: String = "", opening_situation_id: String = "") -
 		sector_id = SaveManager.get_start_sector_id()
 	if opening_situation_id == "":
 		opening_situation_id = SaveManager.get_opening_situation_id()
-	SaveManager.start_new_run()
+	SaveManager.start_new_run(origin_id)
 	if not MapSystem.load_sector(sector_id):
 		return
 	if opening_situation_id != "":

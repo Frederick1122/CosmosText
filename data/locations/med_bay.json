@@ -34,7 +34,11 @@
       "found": "На полу у кушетки — планшет с медицинской картой, экраном вниз.",
       "triggers": [],
       "text": "Карта заполнена до середины и брошена. Запись добавлена в журнал.",
-      "effects": [ { "type": "unlock_lore", "id": "log_05" } ]
+      "effects": [
+        { "type": "unlock_lore", "id": "log_05" },
+        { "type": "unlock_knowledge", "knowledge": "k_science_school" },
+        { "type": "practice_add", "practice": "treat" }
+      ]
     },
     {
       "id": "tap_medical_o2",

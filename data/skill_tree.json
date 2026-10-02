@@ -1,0 +1,1834 @@
+{
+  "sectors": {
+    "combat": {
+      "name": "Бой",
+      "color": "#c86b6b"
+    },
+    "engineering": {
+      "name": "Инженерия",
+      "color": "#6b9bc8"
+    },
+    "science": {
+      "name": "Исследование",
+      "color": "#7fc8a8"
+    },
+    "piloting": {
+      "name": "Пилотирование",
+      "color": "#8a8fd6"
+    },
+    "trade": {
+      "name": "Торговля",
+      "color": "#d6b46b"
+    },
+    "social": {
+      "name": "Социальное",
+      "color": "#c88ac8"
+    },
+    "crew": {
+      "name": "Экипаж",
+      "color": "#6bc8c0"
+    },
+    "craft": {
+      "name": "Ремесло",
+      "color": "#c89a6b"
+    }
+  },
+  "practice": {
+    "repair": "Ремонты",
+    "dock": "Стыковки",
+    "treat": "Стабилизации",
+    "negotiate": "Переговоры",
+    "analyze": "Полевые анализы",
+    "salvage": "Разбор обломков",
+    "command": "Командование сменой"
+  },
+  "nodes": {
+    "combat_endurance": {
+      "name": "Полевая закалка",
+      "sector": "combat",
+      "ring": "inner",
+      "type": "small",
+      "cost": 1,
+      "description": "Универсальная боевая выживаемость: держать позицию, двигаться перебежками и не терять голову под огнём.",
+      "stats": {
+        "max_hp": 3
+      }
+    },
+    "combat_first_shot": {
+      "name": "Хладнокровный выстрел",
+      "sector": "combat",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Первый выстрел в бою получает бонус точности, если герой не был замечен противником.",
+      "requires": {
+        "nodes": [
+          "combat_endurance"
+        ]
+      },
+      "stats": {
+        "hit_chance": 0.05
+      },
+      "tags": [
+        "combat:first_shot"
+      ]
+    },
+    "combat_range_control": {
+      "name": "Контроль дистанции",
+      "sector": "combat",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Открывает действия «держать проход», «отступать с огнём» и «не подпускать», позволяя задавать дистанцию боя.",
+      "requires": {
+        "nodes": [
+          "combat_endurance"
+        ]
+      },
+      "stats": {
+        "flee_chance": 0.05
+      },
+      "tags": [
+        "combat:range_control"
+      ]
+    },
+    "combat_fast_reload": {
+      "name": "Быстрая перезарядка",
+      "sector": "combat",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Снижает цену действия на смену магазина или ячейки, позволяя стрелять чаще.",
+      "requires": {
+        "nodes": [
+          "combat_endurance"
+        ]
+      },
+      "stats": {
+        "ranged_damage": 1
+      },
+      "tags": [
+        "combat:fast_reload"
+      ]
+    },
+    "combat_improvised": {
+      "name": "Импровизированное оружие",
+      "sector": "combat",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Инструменты и предметы окружения получают полноценные боевые действия.",
+      "requires": {
+        "nodes": [
+          "combat_endurance"
+        ]
+      },
+      "stats": {
+        "melee_damage": 1
+      },
+      "tags": [
+        "combat:improvised",
+        "craft:improvised"
+      ]
+    },
+    "combat_suppression": {
+      "name": "Подавление",
+      "sector": "combat",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Позволяет стрелять не на урон, а на ограничение действий противника.",
+      "requires": {
+        "nodes": [
+          "combat_endurance"
+        ]
+      },
+      "tags": [
+        "combat:suppression"
+      ]
+    },
+    "combat_anatomy": {
+      "name": "Анатомия угрозы",
+      "sector": "combat",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "После наблюдения за существом или роботом открываются его уязвимые зоны.",
+      "requires": {
+        "nodes": [
+          "combat_endurance"
+        ]
+      },
+      "stats": {
+        "hit_chance": 0.05
+      },
+      "tags": [
+        "combat:anatomy"
+      ]
+    },
+    "combat_last_round": {
+      "name": "Последний патрон",
+      "sector": "combat",
+      "ring": "outer",
+      "type": "key",
+      "cost": 2,
+      "description": "Когда боезапас почти исчерпан, эффективность растёт, но отступить из боя становится сложнее.",
+      "requires": {
+        "nodes": [
+          "combat_first_shot",
+          "combat_fast_reload",
+          "combat_suppression"
+        ],
+        "knowledge": [
+          "k_combat_school"
+        ],
+        "practice": {
+          "command": 2
+        }
+      },
+      "stats": {
+        "ranged_damage": 2
+      },
+      "tags": [
+        "combat:last_round"
+      ]
+    },
+    "combat_tactical_loop": {
+      "name": "Тактическая петля",
+      "sector": "combat",
+      "ring": "outer",
+      "type": "legendary",
+      "cost": 3,
+      "description": "После успешного защитного действия следующая атака получает бесплатную тактическую модификацию.",
+      "requires": {
+        "nodes": [
+          "combat_last_round"
+        ],
+        "knowledge": [
+          "k_combat_school"
+        ],
+        "practice": {
+          "command": 3
+        }
+      },
+      "stats": {
+        "hit_chance": 0.05
+      },
+      "tags": [
+        "combat:tactical_loop"
+      ],
+      "grants": {
+        "flags": [
+          "combat:tactical_loop"
+        ]
+      }
+    },
+    "eng_toolkit": {
+      "name": "Набор инструментов",
+      "sector": "engineering",
+      "ring": "inner",
+      "type": "small",
+      "cost": 1,
+      "description": "Базовый профессиональный набор: диагностика, крепёж и аккуратная разборка узлов.",
+      "stats": {
+        "inventory_slots": 1
+      }
+    },
+    "eng_diagnostics": {
+      "name": "Диагностика",
+      "sector": "engineering",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Показывает истинную причину поломки вместо общего статуса «неисправно».",
+      "requires": {
+        "nodes": [
+          "eng_toolkit"
+        ]
+      },
+      "tags": [
+        "eng:diagnostics"
+      ]
+    },
+    "eng_field_repair": {
+      "name": "Полевой ремонт",
+      "sector": "engineering",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Часть ремонта доступна без мастерской, прямо на месте аварии.",
+      "requires": {
+        "nodes": [
+          "eng_toolkit"
+        ]
+      },
+      "tags": [
+        "eng:field_repair"
+      ]
+    },
+    "eng_power_reroute": {
+      "name": "Переброс питания",
+      "sector": "engineering",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Позволяет временно запитывать системы от соседних контуров.",
+      "requires": {
+        "nodes": [
+          "eng_toolkit"
+        ]
+      },
+      "tags": [
+        "eng:power_reroute"
+      ]
+    },
+    "eng_hot_work": {
+      "name": "Работа под нагрузкой",
+      "sector": "engineering",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Ремонт работающего оборудования становится возможен, но опасен.",
+      "requires": {
+        "nodes": [
+          "eng_toolkit"
+        ]
+      },
+      "tags": [
+        "eng:hot_work"
+      ]
+    },
+    "eng_isolation": {
+      "name": "Контурная изоляция",
+      "sector": "engineering",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Локализует пожар, короткое замыкание или утечку без отключения всего отсека.",
+      "requires": {
+        "nodes": [
+          "eng_toolkit"
+        ]
+      },
+      "stats": {
+        "armor": 1
+      },
+      "tags": [
+        "eng:isolation"
+      ]
+    },
+    "eng_protocols": {
+      "name": "Сервисные протоколы",
+      "sector": "engineering",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Даёт инженерные команды на терминалах и дронах.",
+      "requires": {
+        "nodes": [
+          "eng_toolkit"
+        ]
+      },
+      "tags": [
+        "eng:protocols"
+      ]
+    },
+    "eng_field_word": {
+      "name": "На честном слове",
+      "sector": "engineering",
+      "ring": "outer",
+      "type": "key",
+      "cost": 2,
+      "description": "Временный ремонт требует мало деталей, но создаёт скрытый износ и будущие аварии.",
+      "requires": {
+        "nodes": [
+          "eng_field_repair",
+          "eng_hot_work",
+          "eng_isolation"
+        ],
+        "knowledge": [
+          "k_engineering_school"
+        ],
+        "practice": {
+          "repair": 2
+        }
+      },
+      "stats": {
+        "inventory_slots": 1
+      },
+      "tags": [
+        "eng:field_word"
+      ]
+    },
+    "eng_body_ship": {
+      "name": "Корабль — продолжение тела",
+      "sector": "engineering",
+      "ring": "outer",
+      "type": "legendary",
+      "cost": 3,
+      "description": "Разрешает ручные аварийные операции над несколькими системами в одном ходу или сцене.",
+      "requires": {
+        "nodes": [
+          "eng_field_word"
+        ],
+        "knowledge": [
+          "k_engineering_school"
+        ],
+        "practice": {
+          "repair": 3
+        }
+      },
+      "stats": {
+        "armor": 1
+      },
+      "tags": [
+        "eng:body_ship"
+      ],
+      "grants": {
+        "flags": [
+          "eng:body_ship"
+        ]
+      }
+    },
+    "sci_notebook": {
+      "name": "Полевой журнал",
+      "sector": "science",
+      "ring": "inner",
+      "type": "small",
+      "cost": 1,
+      "description": "Привычка фиксировать наблюдения и образцы превращает случайные находки в данные.",
+      "stats": {
+        "explore_rolls": 1
+      }
+    },
+    "sci_observant": {
+      "name": "Наблюдательность",
+      "sector": "science",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Показывает следы, необычные детали и опасные признаки, которые другие пропускают.",
+      "requires": {
+        "nodes": [
+          "sci_notebook"
+        ]
+      },
+      "stats": {
+        "find_chance": 0.05
+      },
+      "tags": [
+        "sci:observant"
+      ]
+    },
+    "sci_field_analysis": {
+      "name": "Полевой анализ",
+      "sector": "science",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Позволяет определять материалы, среды и биологические образцы без лаборатории.",
+      "requires": {
+        "nodes": [
+          "sci_notebook"
+        ]
+      },
+      "tags": [
+        "sci:field_analysis"
+      ]
+    },
+    "sci_anomaly_cartography": {
+      "name": "Картограф аномалий",
+      "sector": "science",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Повышает качество данных о неизвестных секторах и скрытых объектах.",
+      "requires": {
+        "nodes": [
+          "sci_notebook"
+        ]
+      },
+      "stats": {
+        "explore_rolls": 1
+      },
+      "tags": [
+        "sci:anomaly_cartography"
+      ]
+    },
+    "sci_exobiology": {
+      "name": "Экзобиология",
+      "sector": "science",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Открывает взаимодействия с чужими организмами, спорами и экосистемами.",
+      "requires": {
+        "nodes": [
+          "sci_notebook"
+        ]
+      },
+      "tags": [
+        "sci:exobiology"
+      ]
+    },
+    "sci_radiation": {
+      "name": "Радиационная грамотность",
+      "sector": "science",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Позволяет оценивать дозу, экранирование и безопасные окна работы.",
+      "requires": {
+        "nodes": [
+          "sci_notebook"
+        ]
+      },
+      "stats": {
+        "armor": 1
+      },
+      "tags": [
+        "sci:radiation"
+      ]
+    },
+    "sci_reconstruction": {
+      "name": "Реконструкция событий",
+      "sector": "science",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "По следам и журналам собирает последовательность произошедшего.",
+      "requires": {
+        "nodes": [
+          "sci_notebook"
+        ]
+      },
+      "tags": [
+        "sci:reconstruction"
+      ]
+    },
+    "sci_curiosity": {
+      "name": "Научное любопытство",
+      "sector": "science",
+      "ring": "outer",
+      "type": "key",
+      "cost": 2,
+      "description": "Редкие опасные феномены дают дополнительные награды знаний, но отказаться от исследования дороже.",
+      "requires": {
+        "nodes": [
+          "sci_observant",
+          "sci_field_analysis",
+          "sci_anomaly_cartography"
+        ],
+        "knowledge": [
+          "k_science_school"
+        ],
+        "practice": {
+          "analyze": 2
+        }
+      },
+      "stats": {
+        "explore_rolls": 1
+      },
+      "tags": [
+        "sci:curiosity"
+      ]
+    },
+    "sci_unknown_theory": {
+      "name": "Теория неизвестного",
+      "sector": "science",
+      "ring": "outer",
+      "type": "legendary",
+      "cost": 3,
+      "description": "После первого контакта с новой аномалией быстрее открываются её правила и контрмеры.",
+      "requires": {
+        "nodes": [
+          "sci_curiosity"
+        ],
+        "knowledge": [
+          "k_science_school"
+        ],
+        "practice": {
+          "analyze": 3
+        }
+      },
+      "stats": {
+        "find_chance": 0.1
+      },
+      "tags": [
+        "sci:unknown_theory"
+      ],
+      "grants": {
+        "flags": [
+          "sci:unknown_theory"
+        ]
+      }
+    },
+    "pilot_checklist": {
+      "name": "Предполётный чек-лист",
+      "sector": "piloting",
+      "ring": "inner",
+      "type": "small",
+      "cost": 1,
+      "description": "Базовые манёвры и привычка проверять системы до старта.",
+      "stats": {
+        "flee_chance": 0.03
+      }
+    },
+    "pilot_docking": {
+      "name": "Точная стыковка",
+      "sector": "piloting",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Уменьшает риск повреждений и открывает сложные точки стыковки.",
+      "requires": {
+        "nodes": [
+          "pilot_checklist"
+        ]
+      },
+      "tags": [
+        "pilot:docking"
+      ]
+    },
+    "pilot_manual_impulse": {
+      "name": "Ручной импульс",
+      "sector": "piloting",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Позволяет экономить топливо ценой нагрузки на корпус.",
+      "requires": {
+        "nodes": [
+          "pilot_checklist"
+        ]
+      },
+      "stats": {
+        "flee_chance": 0.05
+      },
+      "tags": [
+        "pilot:manual_impulse"
+      ]
+    },
+    "pilot_gravity": {
+      "name": "Гравитационный манёвр",
+      "sector": "piloting",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Открывает маршруты через опасные орбитальные зоны.",
+      "requires": {
+        "nodes": [
+          "pilot_checklist"
+        ]
+      },
+      "tags": [
+        "pilot:gravity"
+      ]
+    },
+    "pilot_stealth": {
+      "name": "Тихий ход",
+      "sector": "piloting",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Снижает заметность корабля ценой скорости и энергопотребления.",
+      "requires": {
+        "nodes": [
+          "pilot_checklist"
+        ]
+      },
+      "tags": [
+        "pilot:stealth"
+      ]
+    },
+    "pilot_eva": {
+      "name": "EVA",
+      "sector": "piloting",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Снимает часть штрафов работы снаружи корабля и открывает аварийные маршруты.",
+      "requires": {
+        "nodes": [
+          "pilot_checklist"
+        ]
+      },
+      "stats": {
+        "armor": 1
+      },
+      "tags": [
+        "pilot:eva"
+      ]
+    },
+    "pilot_debris": {
+      "name": "Навигация по мусору",
+      "sector": "piloting",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Позволяет проходить через плотные поля обломков и находить ценные фрагменты.",
+      "requires": {
+        "nodes": [
+          "pilot_checklist"
+        ]
+      },
+      "stats": {
+        "find_chance": 0.05
+      },
+      "tags": [
+        "pilot:debris"
+      ]
+    },
+    "pilot_risky_course": {
+      "name": "Рискованный курс",
+      "sector": "piloting",
+      "ring": "outer",
+      "type": "key",
+      "cost": 2,
+      "description": "Можно существенно сокращать путь через угрозы, но ошибка наносит серьёзный урон.",
+      "requires": {
+        "nodes": [
+          "pilot_docking",
+          "pilot_manual_impulse",
+          "pilot_gravity"
+        ],
+        "knowledge": [
+          "k_piloting_school"
+        ],
+        "practice": {
+          "dock": 2
+        }
+      },
+      "stats": {
+        "flee_chance": 0.1
+      },
+      "tags": [
+        "pilot:risky_course"
+      ]
+    },
+    "pilot_instinct": {
+      "name": "Инстинкт пилота",
+      "sector": "piloting",
+      "ring": "outer",
+      "type": "legendary",
+      "cost": 3,
+      "description": "Один раз за перелёт превращает катастрофический навигационный исход в тяжёлый, но управляемый кризис.",
+      "requires": {
+        "nodes": [
+          "pilot_risky_course"
+        ],
+        "knowledge": [
+          "k_piloting_school"
+        ],
+        "practice": {
+          "dock": 3
+        }
+      },
+      "stats": {
+        "flee_chance": 0.05
+      },
+      "tags": [
+        "pilot:instinct"
+      ],
+      "grants": {
+        "flags": [
+          "pilot:instinct"
+        ]
+      }
+    },
+    "trade_purse": {
+      "name": "Кошель и счёт",
+      "sector": "trade",
+      "ring": "inner",
+      "type": "small",
+      "cost": 1,
+      "description": "Базовый учёт цен, долгов и обязательств: деньги и груз не теряются сами собой.",
+      "stats": {
+        "inventory_slots": 1
+      }
+    },
+    "trade_appraiser": {
+      "name": "Оценщик",
+      "sector": "trade",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Показывает реальный диапазон цены и скрытую ценность компонентов.",
+      "requires": {
+        "nodes": [
+          "trade_purse"
+        ]
+      },
+      "stats": {
+        "find_chance": 0.05
+      },
+      "tags": [
+        "trade:appraiser"
+      ]
+    },
+    "trade_cargo": {
+      "name": "Грузовая оптимизация",
+      "sector": "trade",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Лучше используется объём трюма, а партии грузятся быстрее.",
+      "requires": {
+        "nodes": [
+          "trade_purse"
+        ]
+      },
+      "stats": {
+        "inventory_slots": 2
+      },
+      "tags": [
+        "trade:cargo"
+      ]
+    },
+    "trade_contracts": {
+      "name": "Контрактник",
+      "sector": "trade",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Открывает дополнительные условия контрактов и штрафные оговорки.",
+      "requires": {
+        "nodes": [
+          "trade_purse"
+        ]
+      },
+      "tags": [
+        "trade:contracts"
+      ]
+    },
+    "trade_arbitrage": {
+      "name": "Арбитраж",
+      "sector": "trade",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "В журнале отмечаются заметные ценовые расхождения между известными рынками.",
+      "requires": {
+        "nodes": [
+          "trade_purse"
+        ]
+      },
+      "tags": [
+        "trade:arbitrage"
+      ]
+    },
+    "trade_supplier": {
+      "name": "Снабженец",
+      "sector": "trade",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Расходники покупаются выгоднее оптом, а редкие детали находятся проще.",
+      "requires": {
+        "nodes": [
+          "trade_purse"
+        ]
+      },
+      "tags": [
+        "trade:supplier"
+      ]
+    },
+    "trade_gray_books": {
+      "name": "Серая бухгалтерия",
+      "sector": "trade",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Открывает способы скрывать часть груза, доходов или происхождения товара.",
+      "requires": {
+        "nodes": [
+          "trade_purse"
+        ]
+      },
+      "tags": [
+        "trade:gray_books"
+      ]
+    },
+    "trade_price_of_all": {
+      "name": "Всё имеет цену",
+      "sector": "trade",
+      "ring": "outer",
+      "type": "key",
+      "cost": 2,
+      "description": "Редкие сюжетные решения можно покупать за деньги и имущество, но NPC быстрее начинают видеть в герое ресурс.",
+      "requires": {
+        "nodes": [
+          "trade_appraiser",
+          "trade_contracts",
+          "trade_arbitrage"
+        ],
+        "knowledge": [
+          "k_trade_school"
+        ],
+        "practice": {
+          "negotiate": 2
+        }
+      },
+      "tags": [
+        "trade:price_of_all"
+      ]
+    },
+    "trade_network": {
+      "name": "Торговая сеть",
+      "sector": "trade",
+      "ring": "outer",
+      "type": "legendary",
+      "cost": 3,
+      "description": "Освоенные рынки приносят информацию, заказы и редкие поставки без личного присутствия.",
+      "requires": {
+        "nodes": [
+          "trade_price_of_all"
+        ],
+        "knowledge": [
+          "k_trade_school"
+        ],
+        "practice": {
+          "negotiate": 3
+        }
+      },
+      "stats": {
+        "find_chance": 0.1
+      },
+      "tags": [
+        "trade:network"
+      ],
+      "grants": {
+        "flags": [
+          "trade:network"
+        ]
+      }
+    },
+    "social_ear": {
+      "name": "Слушать и слышать",
+      "sector": "social",
+      "ring": "inner",
+      "type": "small",
+      "cost": 1,
+      "description": "Базовая беседа: задавать вопросы, держать паузу и запоминать детали."
+    },
+    "social_reading": {
+      "name": "Чтение реакции",
+      "sector": "social",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Показывает часть скрытой мотивации и эмоционального состояния собеседника.",
+      "requires": {
+        "nodes": [
+          "social_ear"
+        ]
+      },
+      "tags": [
+        "social:reading"
+      ]
+    },
+    "social_persuasion": {
+      "name": "Убеждение",
+      "sector": "social",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Открывает аргументированные мирные решения.",
+      "requires": {
+        "nodes": [
+          "social_ear"
+        ]
+      },
+      "tags": [
+        "social:persuasion"
+      ]
+    },
+    "social_pressure": {
+      "name": "Давление",
+      "sector": "social",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Позволяет использовать угрозу, статус, компромат и обстановку.",
+      "requires": {
+        "nodes": [
+          "social_ear"
+        ]
+      },
+      "tags": [
+        "social:pressure"
+      ]
+    },
+    "social_deception": {
+      "name": "Ложь",
+      "sector": "social",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Создаёт правдоподобные легенды и поддельные объяснения.",
+      "requires": {
+        "nodes": [
+          "social_ear"
+        ]
+      },
+      "tags": [
+        "social:deception"
+      ]
+    },
+    "social_protocols": {
+      "name": "Протоколы",
+      "sector": "social",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Даёт знание законов, процедур, кодов доступа, карантина и прав на обломки.",
+      "requires": {
+        "nodes": [
+          "social_ear"
+        ]
+      },
+      "tags": [
+        "social:protocols"
+      ]
+    },
+    "social_xeno_culture": {
+      "name": "Ксенокультура",
+      "sector": "social",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Снижает риск фатальных ошибок при контакте с чуждыми культурами.",
+      "requires": {
+        "nodes": [
+          "social_ear"
+        ]
+      },
+      "tags": [
+        "social:xeno_culture"
+      ]
+    },
+    "social_double_game": {
+      "name": "Двойная игра",
+      "sector": "social",
+      "ring": "outer",
+      "type": "key",
+      "cost": 2,
+      "description": "Можно одновременно поддерживать отношения с конфликтующими сторонами, но разоблачение имеет удвоенные последствия.",
+      "requires": {
+        "nodes": [
+          "social_reading",
+          "social_persuasion",
+          "social_deception"
+        ],
+        "knowledge": [
+          "k_social_school"
+        ],
+        "practice": {
+          "negotiate": 2
+        }
+      },
+      "tags": [
+        "social:double_game"
+      ]
+    },
+    "social_reputation_first": {
+      "name": "Репутация говорит первой",
+      "sector": "social",
+      "ring": "outer",
+      "type": "legendary",
+      "cost": 3,
+      "description": "Высокая репутация автоматически меняет стартовые условия встреч с фракциями.",
+      "requires": {
+        "nodes": [
+          "social_double_game"
+        ],
+        "knowledge": [
+          "k_social_school"
+        ],
+        "practice": {
+          "negotiate": 3
+        }
+      },
+      "tags": [
+        "social:reputation_first"
+      ],
+      "grants": {
+        "flags": [
+          "social:reputation_first"
+        ]
+      }
+    },
+    "crew_hand": {
+      "name": "Рука помощи",
+      "sector": "crew",
+      "ring": "inner",
+      "type": "small",
+      "cost": 1,
+      "description": "Готовность работать в связке и подстраховать товарища в обычной смене.",
+      "stats": {
+        "max_hp": 2
+      }
+    },
+    "crew_roles": {
+      "name": "Распределение ролей",
+      "sector": "crew",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Бонусы напарников сильнее, если они заняты профильной задачей.",
+      "requires": {
+        "nodes": [
+          "crew_hand"
+        ]
+      },
+      "tags": [
+        "crew:roles"
+      ]
+    },
+    "crew_crisis": {
+      "name": "Кризисное командование",
+      "sector": "crew",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Снижает панику и штрафы в авариях.",
+      "requires": {
+        "nodes": [
+          "crew_hand"
+        ]
+      },
+      "stats": {
+        "armor": 1
+      },
+      "tags": [
+        "crew:crisis"
+      ]
+    },
+    "crew_mediation": {
+      "name": "Разбор конфликта",
+      "sector": "crew",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Открывает посредничество в ссорах и личных квестах экипажа.",
+      "requires": {
+        "nodes": [
+          "crew_hand"
+        ]
+      },
+      "tags": [
+        "crew:mediation"
+      ]
+    },
+    "crew_teacher": {
+      "name": "Учитель",
+      "sector": "crew",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Напарники быстрее осваивают выбранную специализацию.",
+      "requires": {
+        "nodes": [
+          "crew_hand"
+        ]
+      },
+      "tags": [
+        "crew:teacher"
+      ]
+    },
+    "crew_trust": {
+      "name": "Доверие",
+      "sector": "crew",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Позволяет поручать напарникам автономные решения без постоянного контроля.",
+      "requires": {
+        "nodes": [
+          "crew_hand"
+        ]
+      },
+      "tags": [
+        "crew:trust"
+      ]
+    },
+    "crew_shared_risk": {
+      "name": "Общий риск",
+      "sector": "crew",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Герой может разделить последствия ошибки с добровольцем из экипажа, усиливая связь или создавая обиду.",
+      "requires": {
+        "nodes": [
+          "crew_hand"
+        ]
+      },
+      "stats": {
+        "max_hp": 2
+      },
+      "tags": [
+        "crew:shared_risk"
+      ]
+    },
+    "crew_captain_answers": {
+      "name": "Капитан отвечает",
+      "sector": "crew",
+      "ring": "outer",
+      "type": "key",
+      "cost": 2,
+      "description": "Экипаж получает сильный моральный бонус, но провалы решений заметно сильнее бьют по доверию.",
+      "requires": {
+        "nodes": [
+          "crew_crisis",
+          "crew_mediation",
+          "crew_trust"
+        ],
+        "knowledge": [
+          "k_crew_school"
+        ],
+        "practice": {
+          "command": 2
+        }
+      },
+      "stats": {
+        "max_hp": 3
+      },
+      "tags": [
+        "crew:captain_answers"
+      ]
+    },
+    "crew_own_team": {
+      "name": "Своя команда",
+      "sector": "crew",
+      "ring": "outer",
+      "type": "legendary",
+      "cost": 3,
+      "description": "Лояльные напарники получают уникальные совместные действия и спасают героя в отдельных фатальных сценах.",
+      "requires": {
+        "nodes": [
+          "crew_captain_answers"
+        ],
+        "knowledge": [
+          "k_crew_school"
+        ],
+        "practice": {
+          "command": 3
+        }
+      },
+      "stats": {
+        "max_hp": 5
+      },
+      "tags": [
+        "crew:own_team"
+      ],
+      "grants": {
+        "flags": [
+          "crew:own_team"
+        ]
+      }
+    },
+    "craft_hands": {
+      "name": "Умелые руки",
+      "sector": "craft",
+      "ring": "inner",
+      "type": "small",
+      "cost": 1,
+      "description": "Базовый демонтаж и сборка: разобрать узел, не сломав то, что ещё пригодится.",
+      "stats": {
+        "inventory_slots": 1
+      }
+    },
+    "craft_salvage": {
+      "name": "Разборщик",
+      "sector": "craft",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Демонтаж чаще сохраняет целые компоненты.",
+      "requires": {
+        "nodes": [
+          "craft_hands"
+        ]
+      },
+      "stats": {
+        "find_chance": 0.05
+      },
+      "tags": [
+        "craft:salvage"
+      ]
+    },
+    "craft_improvised": {
+      "name": "Импровизация",
+      "sector": "craft",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Позволяет собирать временные решения из неподходящих деталей.",
+      "requires": {
+        "nodes": [
+          "craft_hands"
+        ]
+      },
+      "tags": [
+        "craft:improvised"
+      ]
+    },
+    "craft_microfab": {
+      "name": "Микрофабрикация",
+      "sector": "craft",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Открывает печать мелких деталей и адаптеров.",
+      "requires": {
+        "nodes": [
+          "craft_hands"
+        ]
+      },
+      "tags": [
+        "craft:microfab"
+      ]
+    },
+    "craft_weapon_mod": {
+      "name": "Моддинг оружия",
+      "sector": "craft",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Разрешает нестандартные модули, боеприпасы и питание.",
+      "requires": {
+        "nodes": [
+          "craft_hands"
+        ]
+      },
+      "stats": {
+        "melee_damage": 1
+      },
+      "tags": [
+        "craft:weapon_mod"
+      ]
+    },
+    "craft_suit_repair": {
+      "name": "Ремонт скафандров",
+      "sector": "craft",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Полевое восстановление герметичности и систем EVA.",
+      "requires": {
+        "nodes": [
+          "craft_hands"
+        ]
+      },
+      "stats": {
+        "armor": 1
+      },
+      "tags": [
+        "craft:suit_repair"
+      ]
+    },
+    "craft_robotics": {
+      "name": "Робототехника",
+      "sector": "craft",
+      "ring": "middle",
+      "type": "notable",
+      "cost": 1,
+      "description": "Сборка, ремонт и перепрошивка дронов.",
+      "requires": {
+        "nodes": [
+          "craft_hands"
+        ]
+      },
+      "tags": [
+        "craft:robotics"
+      ]
+    },
+    "craft_nothing_wasted": {
+      "name": "Ничего не выбрасывать",
+      "sector": "craft",
+      "ring": "outer",
+      "type": "key",
+      "cost": 2,
+      "description": "Почти любой объект становится источником материалов, но инвентарь перегружается, а сбор отнимает время.",
+      "requires": {
+        "nodes": [
+          "craft_salvage",
+          "craft_improvised",
+          "craft_microfab"
+        ],
+        "knowledge": [
+          "k_craft_school"
+        ],
+        "practice": {
+          "salvage": 2
+        }
+      },
+      "stats": {
+        "find_chance": 0.05
+      },
+      "tags": [
+        "craft:nothing_wasted"
+      ]
+    },
+    "craft_workshop_aboard": {
+      "name": "Мастерская на борту",
+      "sector": "craft",
+      "ring": "outer",
+      "type": "legendary",
+      "cost": 3,
+      "description": "Корабль получает полноценный производственный цикл для большинства неуникальных деталей.",
+      "requires": {
+        "nodes": [
+          "craft_nothing_wasted"
+        ],
+        "knowledge": [
+          "k_craft_school"
+        ],
+        "practice": {
+          "salvage": 3
+        }
+      },
+      "stats": {
+        "inventory_slots": 2
+      },
+      "tags": [
+        "craft:workshop_aboard"
+      ],
+      "grants": {
+        "flags": [
+          "craft:workshop_aboard"
+        ]
+      }
+    },
+    "eng_official_school": {
+      "name": "Официальная инженерная школа",
+      "sector": "engineering",
+      "ring": "middle",
+      "type": "mastery",
+      "cost": 1,
+      "description": "Заводская методика: высокая надёжность, диагностика, безопасность и эффективность. Исключает пиратскую инженерию.",
+      "requires": {
+        "nodes": [
+          "eng_protocols"
+        ],
+        "knowledge": [
+          "k_engineering_school"
+        ]
+      },
+      "excludes": [
+        "eng_pirate_school"
+      ],
+      "stats": {
+        "armor": 1
+      },
+      "tags": [
+        "eng:diagnostics",
+        "eng:protocols"
+      ]
+    },
+    "eng_pirate_school": {
+      "name": "Пиратская инженерия",
+      "sector": "engineering",
+      "ring": "middle",
+      "type": "mastery",
+      "cost": 1,
+      "description": "Перегрузка систем, дешёвый ремонт и работа с несовместимыми деталями ценой повышенного риска аварии. Исключает официальную школу.",
+      "requires": {
+        "nodes": [
+          "eng_field_repair"
+        ],
+        "knowledge": [
+          "k_engineering_school"
+        ]
+      },
+      "excludes": [
+        "eng_official_school"
+      ],
+      "stats": {
+        "inventory_slots": 1
+      },
+      "tags": [
+        "eng:hot_work",
+        "eng:field_word"
+      ]
+    },
+    "combat_charter_school": {
+      "name": "Уставная боевая школа",
+      "sector": "combat",
+      "ring": "middle",
+      "type": "mastery",
+      "cost": 1,
+      "description": "Дисциплина, прикрытие и удержание проходов по уставу. Исключает вольную школу.",
+      "requires": {
+        "nodes": [
+          "combat_range_control"
+        ],
+        "knowledge": [
+          "k_combat_school"
+        ]
+      },
+      "excludes": [
+        "combat_free_school"
+      ],
+      "stats": {
+        "hit_chance": 0.05
+      },
+      "tags": [
+        "combat:range_control",
+        "combat:suppression"
+      ]
+    },
+    "combat_free_school": {
+      "name": "Вольная боевая школа",
+      "sector": "combat",
+      "ring": "middle",
+      "type": "mastery",
+      "cost": 1,
+      "description": "Импровизация, агрессия и быстрый темп боя вместо уставных схем. Исключает уставную школу.",
+      "requires": {
+        "nodes": [
+          "combat_improvised"
+        ],
+        "knowledge": [
+          "k_combat_school"
+        ]
+      },
+      "excludes": [
+        "combat_charter_school"
+      ],
+      "stats": {
+        "melee_damage": 1
+      },
+      "tags": [
+        "combat:improvised",
+        "combat:fast_reload"
+      ]
+    },
+    "crew_charter_command": {
+      "name": "Уставное командование",
+      "sector": "crew",
+      "ring": "middle",
+      "type": "mastery",
+      "cost": 1,
+      "description": "Командование через роли, регламент и уставное доверие к должности. Исключает командование личным авторитетом.",
+      "requires": {
+        "nodes": [
+          "crew_roles"
+        ],
+        "knowledge": [
+          "k_crew_school"
+        ]
+      },
+      "excludes": [
+        "crew_personal_command"
+      ],
+      "stats": {
+        "max_hp": 3
+      },
+      "tags": [
+        "crew:roles",
+        "crew:trust"
+      ]
+    },
+    "crew_personal_command": {
+      "name": "Командование личным авторитетом",
+      "sector": "crew",
+      "ring": "middle",
+      "type": "mastery",
+      "cost": 1,
+      "description": "Командование через общий риск и личную связь с каждым напарником. Исключает уставное командование.",
+      "requires": {
+        "nodes": [
+          "crew_shared_risk"
+        ],
+        "knowledge": [
+          "k_crew_school"
+        ]
+      },
+      "excludes": [
+        "crew_charter_command"
+      ],
+      "stats": {
+        "max_hp": 3
+      },
+      "tags": [
+        "crew:shared_risk",
+        "crew:crisis"
+      ]
+    },
+    "bridge_combat_eng": {
+      "name": "Боевой инженер",
+      "sector": "combat",
+      "ring": "middle",
+      "type": "bridge",
+      "cost": 1,
+      "description": "Турели, ловушки, перегрузка оружия и стрельба по системам корабля.",
+      "requires": {
+        "nodes": [
+          "combat_improvised",
+          "eng_power_reroute"
+        ]
+      },
+      "stats": {
+        "melee_damage": 1
+      },
+      "tags": [
+        "combat:improvised",
+        "eng:power_reroute"
+      ]
+    },
+    "bridge_combat_sci": {
+      "name": "Полевой медик",
+      "sector": "combat",
+      "ring": "middle",
+      "type": "bridge",
+      "cost": 1,
+      "description": "Стабилизация под огнём, анатомия, стимуляторы и выборочные дебаффы врагу.",
+      "requires": {
+        "nodes": [
+          "combat_anatomy",
+          "sci_field_analysis"
+        ],
+        "practice": {
+          "treat": 2
+        }
+      },
+      "stats": {
+        "max_hp": 3
+      },
+      "tags": [
+        "combat:anatomy",
+        "sci:field_analysis"
+      ]
+    },
+    "bridge_sci_pilot": {
+      "name": "Разведчик EVA",
+      "sector": "science",
+      "ring": "middle",
+      "type": "bridge",
+      "cost": 1,
+      "description": "Выходы наружу, поиск обходных маршрутов, разведка обломков и аномалий.",
+      "requires": {
+        "nodes": [
+          "sci_observant",
+          "pilot_eva"
+        ]
+      },
+      "stats": {
+        "armor": 1
+      },
+      "tags": [
+        "pilot:eva",
+        "sci:observant"
+      ]
+    },
+    "bridge_pilot_trade": {
+      "name": "Контрабандист",
+      "sector": "piloting",
+      "ring": "middle",
+      "type": "bridge",
+      "cost": 1,
+      "description": "Тайники, обход патрулей, рискованные маршруты и чёрные рынки.",
+      "requires": {
+        "nodes": [
+          "pilot_stealth",
+          "trade_gray_books"
+        ]
+      },
+      "stats": {
+        "inventory_slots": 1
+      },
+      "tags": [
+        "pilot:stealth",
+        "trade:gray_books"
+      ]
+    },
+    "bridge_trade_social": {
+      "name": "Дипломат-торговец",
+      "sector": "trade",
+      "ring": "middle",
+      "type": "bridge",
+      "cost": 1,
+      "description": "Пакетные сделки, политические уступки и торговые договоры.",
+      "requires": {
+        "nodes": [
+          "trade_contracts",
+          "social_protocols"
+        ]
+      },
+      "tags": [
+        "trade:contracts",
+        "social:protocols"
+      ]
+    },
+    "bridge_social_crew": {
+      "name": "Капитан-переговорщик",
+      "sector": "social",
+      "ring": "middle",
+      "type": "bridge",
+      "cost": 1,
+      "description": "Переговоры от имени команды, делегирование и удержание коалиций.",
+      "requires": {
+        "nodes": [
+          "social_persuasion",
+          "crew_roles"
+        ]
+      },
+      "tags": [
+        "social:persuasion",
+        "crew:roles"
+      ]
+    },
+    "bridge_crew_craft": {
+      "name": "Корабельный старшина",
+      "sector": "crew",
+      "ring": "middle",
+      "type": "bridge",
+      "cost": 1,
+      "description": "Производственные смены, обучение техников и обслуживание корабля силами команды.",
+      "requires": {
+        "nodes": [
+          "crew_teacher",
+          "craft_microfab"
+        ]
+      },
+      "stats": {
+        "max_hp": 2
+      },
+      "tags": [
+        "crew:teacher",
+        "craft:microfab"
+      ]
+    },
+    "bridge_craft_combat": {
+      "name": "Штурмовой техник",
+      "sector": "craft",
+      "ring": "middle",
+      "type": "bridge",
+      "cost": 1,
+      "description": "Силовая броня, боевые дроны, оружейный моддинг и импровизированные взрывные решения.",
+      "requires": {
+        "nodes": [
+          "craft_weapon_mod",
+          "combat_suppression"
+        ]
+      },
+      "stats": {
+        "melee_damage": 1
+      },
+      "tags": [
+        "craft:weapon_mod",
+        "combat:suppression"
+      ]
+    },
+    "eng_reactor_school": {
+      "name": "Реакторная школа",
+      "sector": "engineering",
+      "ring": "outer",
+      "type": "mastery",
+      "cost": 1,
+      "description": "Экзотический допуск к реакторным системам: аварийное управление и безопасная перенастройка под нагрузкой.",
+      "requires": {
+        "nodes": [
+          "eng_body_ship"
+        ],
+        "knowledge": [
+          "k_reactor_school"
+        ],
+        "practice": {
+          "repair": 3
+        }
+      },
+      "hidden": true,
+      "stats": {
+        "armor": 1
+      },
+      "tags": [
+        "eng:power_reroute",
+        "eng:hot_work"
+      ]
+    },
+    "combat_xeno_war": {
+      "name": "Ксенобоевые платформы",
+      "sector": "combat",
+      "ring": "outer",
+      "type": "mastery",
+      "cost": 1,
+      "description": "Боевые платформы чужих культур: их слабые места, режимы и способы противодействия.",
+      "requires": {
+        "nodes": [
+          "combat_tactical_loop"
+        ],
+        "knowledge": [
+          "k_xeno_war"
+        ],
+        "practice": {
+          "command": 3
+        }
+      },
+      "hidden": true,
+      "stats": {
+        "ranged_damage": 1
+      },
+      "tags": [
+        "combat:anatomy",
+        "combat:suppression"
+      ]
+    },
+    "sci_anomaly_physics": {
+      "name": "Аномальная физика",
+      "sector": "science",
+      "ring": "outer",
+      "type": "mastery",
+      "cost": 1,
+      "description": "Физика аномалий Неизведанных Секторов: правила, контрмеры и безопасные полевые эксперименты.",
+      "requires": {
+        "nodes": [
+          "sci_unknown_theory"
+        ],
+        "knowledge": [
+          "k_anomaly_physics"
+        ],
+        "practice": {
+          "analyze": 3
+        }
+      },
+      "hidden": true,
+      "stats": {
+        "explore_rolls": 1
+      },
+      "tags": [
+        "sci:anomaly_cartography",
+        "sci:unknown_theory"
+      ]
+    },
+    "craft_xeno_robotics": {
+      "name": "Ксеноробототехника",
+      "sector": "craft",
+      "ring": "outer",
+      "type": "mastery",
+      "cost": 1,
+      "description": "Сборка, ремонт и перепрошивка ксенодронов из фрагментов чужих технологий.",
+      "requires": {
+        "nodes": [
+          "craft_workshop_aboard"
+        ],
+        "knowledge": [
+          "k_xeno_war"
+        ],
+        "practice": {
+          "salvage": 3
+        }
+      },
+      "hidden": true,
+      "stats": {
+        "inventory_slots": 1
+      },
+      "tags": [
+        "craft:robotics",
+        "craft:microfab"
+      ]
+    }
+  }
+}

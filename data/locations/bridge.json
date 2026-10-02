@@ -69,7 +69,11 @@
       "found": "Ты стираешь иней с нагрудной пластины пилота. Под ним — тканевая бирка, и на ней что-то дописано от руки.",
       "triggers": [ { "type": "flag", "flag": "pilot_found" } ],
       "text": "На бирке — имя и приписка маркером. Запись добавлена в журнал.",
-      "effects": [ { "type": "unlock_lore", "id": "log_02" } ]
+      "effects": [
+        { "type": "unlock_lore", "id": "log_02" },
+        { "type": "unlock_knowledge", "knowledge": "k_piloting_school" },
+        { "type": "practice_add", "practice": "dock" }
+      ]
     },
     {
       "id": "take_canister",

@@ -44,7 +44,11 @@ func get_opening_situation_id() -> String:
 	return str(_config.get("opening_situation_id", ""))
 
 
-func start_new_run() -> void:
+func get_start_origin_id() -> String:
+	return str(_config.get("start_origin", ""))
+
+
+func start_new_run(origin_id: String = "") -> void:
 	ResourceSystem.reset_for_new_run(_config)
 	InventorySystem.reset_for_new_run(_config)
 	CharacterSystem.reset_for_new_run(_config)  # после ресурсов и сумки: применяет бонусы
@@ -59,6 +63,15 @@ func start_new_run() -> void:
 	NarrativeSystem.reset_for_new_run()
 	EconomyManager.reset_for_new_run()
 	NotificationSystem.reset_for_new_run()
+	# Последним: выдаёт предметы/флаги происхождения — их должны увидеть
+	# уведомления и лента, уже очищенные выше.
+	# Происхождение переживает смерть: забег обнуляется, биография героя — нет.
+	var chosen_origin := origin_id
+	if chosen_origin == "":
+		chosen_origin = SkillTreeSystem.get_origin_id()
+	if chosen_origin == "":
+		chosen_origin = get_start_origin_id()
+	SkillTreeSystem.reset_for_new_run(chosen_origin)
 	_delete_file(RUN_PATH)
 	_delete_file(CHECKPOINT_PATH)
 
@@ -68,6 +81,7 @@ func save_run() -> void:
 		"resources": ResourceSystem.to_save_data(),
 		"inventory": InventorySystem.to_save_data(),
 		"character": CharacterSystem.to_save_data(),
+		"skill_tree": SkillTreeSystem.to_save_data(),
 		"progression": ProgressionSystem.to_save_data(),
 		"needs": NeedsSystem.to_save_data(),
 		"quests": QuestSystem.to_save_data(),
@@ -114,6 +128,7 @@ func load_run(fallback_sector_id: String = "wreck_01") -> bool:
 	ResourceSystem.load_save_data(resource_data)
 	InventorySystem.load_save_data(data.get("inventory", []))
 	CharacterSystem.load_save_data(data.get("character", {}))  # после ресурсов и сумки
+	SkillTreeSystem.load_save_data(data.get("skill_tree", {}))
 	ProgressionSystem.load_save_data(data.get("progression", {}))
 	NeedsSystem.load_save_data(data.get("needs", {}))
 	QuestSystem.load_save_data(data.get("quests", {}))
@@ -158,6 +173,7 @@ func save_meta() -> void:
 		"codex": CodexSystem.to_save_data(),
 		"chronicle": ChronicleSystem.to_save_data(),
 		"economy": EconomyManager.to_save_data(),
+		"knowledge": SkillTreeSystem.to_meta_save_data(),
 	}
 	_write_json(META_PATH, data)
 
@@ -170,6 +186,7 @@ func load_meta() -> void:
 	CodexSystem.load_save_data(data.get("codex", []))
 	ChronicleSystem.load_save_data(data.get("chronicle", {}))
 	EconomyManager.load_save_data(data.get("economy", {}))
+	SkillTreeSystem.load_meta_save_data(data.get("knowledge", {}))
 
 
 ## Победа: забег закончен и продолжать его нечем — стираем run и чекпойнт,

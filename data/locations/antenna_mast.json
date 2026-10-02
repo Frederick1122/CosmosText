@@ -26,7 +26,10 @@
       "repeatable": false,
       "triggers": [ { "type": "flag", "flag": "beacon_online" } ],
       "text": "Передатчик хранит последний исходящий сеанс. Запись добавлена в журнал.",
-      "effects": [ { "type": "unlock_lore", "id": "log_06" } ]
+      "effects": [
+        { "type": "unlock_lore", "id": "log_06" },
+        { "type": "practice_add", "practice": "negotiate" }
+      ]
     }
   ]
 }

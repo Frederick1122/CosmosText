@@ -56,7 +56,11 @@
       "found": "Под ворохом ветоши на верстаке — потрёпанный планшет. Экран ещё светится: журнал ремонтов.",
       "triggers": [],
       "text": "Последняя запись оборвана на полуслове. Запись добавлена в архив.",
-      "effects": [ { "type": "unlock_lore", "id": "log_07" } ]
+      "effects": [
+        { "type": "unlock_lore", "id": "log_07" },
+        { "type": "unlock_knowledge", "knowledge": "k_engineering_school" },
+        { "type": "practice_add", "practice": "repair" }
+      ]
     }
   ]
 }

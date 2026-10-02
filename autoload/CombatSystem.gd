@@ -88,6 +88,8 @@ var _enemy_distracted_turns: int = 0
 var _guaranteed_hit: bool = false
 ## В руке подобранный обломок — следующим ходом его можно бросить.
 var _holding_debris: bool = false
+## «Хладнокровный выстрел»: бонус первого выстрела боя ещё не потрачен.
+var _first_shot_ready: bool = false
 
 const MOVE_TITLES := {
 	"approach": "Сблизиться",
@@ -153,6 +155,7 @@ func start_combat(id: String, clear_node: String = "", on_win: Array = [], on_fl
 	_enemy_distracted_turns = 0
 	_guaranteed_hit = false
 	_holding_debris = false
+	_first_shot_ready = SkillTreeSystem.has_tag("combat:first_shot")
 	reward = {}
 	turn = 0
 	outcome = ""
@@ -343,7 +346,12 @@ func _resolve_shot() -> void:
 		_log("Осечка: патронов нет.", "info")
 		return
 	ResourceSystem.apply_ammo_delta(-1)
+	# «Хладнокровный выстрел»: первый выстрел боя бьёт точнее и больнее.
+	var cold_shot := _first_shot_ready
+	_first_shot_ready = false
 	var chance := RANGED_HIT_CHANCE + _accuracy_bonus()
+	if cold_shot:
+		chance += 0.15
 	# На вытянутой руке стрелять неудобно, на большой дистанции — тем более.
 	chance -= 0.08 * float(maxi(0, range_steps - 2))
 	if range_steps == 0:
@@ -353,6 +361,8 @@ func _resolve_shot() -> void:
 	_consume_aim()
 	if _take_guaranteed_hit() or randf() <= minf(chance, MAX_HIT_CHANCE):
 		var dmg := maxi(1, RANGED_DAMAGE + int(CharacterSystem.get_stat("ranged_damage")))
+		if cold_shot:
+			dmg = maxi(1, roundi(dmg * 1.25))
 		_damage_enemy(dmg, "Попадание! Урон: %d." % dmg, "ranged")
 	else:
 		_log("Выстрел уходит мимо.", "info", [_fx("enemy", 0, "ranged")])
@@ -451,6 +461,11 @@ func _resolve_special(payload) -> void:
 		if s.get("id", "") == sid:
 			special = s
 			break
+	if special == null:
+		for s in _available_specials():  # синтетические спецдействия узлов дерева
+			if s.get("id", "") == sid:
+				special = s
+				break
 	if special == null or _used_specials.has(sid) or not EffectResolver.check_requirements(special.get("requires", [])):
 		state = State.PLAYER_TURN
 		return
@@ -475,13 +490,15 @@ func _resolve_special(payload) -> void:
 # --- Дистанция и ИИ -------------------------------------------------------------
 
 ## Перемещения обеих сторон складываются: отход под наступление врага
-## оставляет дистанцию прежней — как в Neo Scavenger.
+## оставляет дистанцию прежней — как в Neo Scavenger. «Контроль дистанции»
+## двигает игрока на два шага за ход вместо одного.
 func _apply_movement(player_move: String, enemy_move: String) -> void:
+	var player_steps := 2 if SkillTreeSystem.has_tag("combat:range_control") else 1
 	var delta := 0
 	if player_move == "approach":
-		delta -= 1
+		delta -= player_steps
 	elif player_move == "retreat" or player_move == "flee":
-		delta += 1
+		delta += player_steps
 	if enemy_move == "approach":
 		delta -= 1
 	elif enemy_move == "retreat":
@@ -574,6 +591,8 @@ func _player_conditions() -> Array:
 		result.append("Без патронов")
 	if _holding_debris:
 		result.append("Обломок в руке")
+	if _first_shot_ready:
+		result.append("Хладнокровный выстрел")
 	if NeedsSystem.is_tired():
 		result.append("Измотан: −%d%% к попаданию" % roundi(NeedsSystem.hit_penalty() * 100.0))
 	if NeedsSystem.is_hungry():
@@ -601,6 +620,14 @@ func _player_weapon_name() -> String:
 
 func _available_specials() -> Array:
 	var result: Array = []
+	# «Подавление»: узел дерева даёт один подавляющий залп за бой — враг теряет
+	# цель, не получая урона. Собственные спецдействия врага идут следом.
+	if SkillTreeSystem.has_tag("combat:suppression") and not _used_specials.has("skill_suppression"):
+		result.append({
+			"id": "skill_suppression",
+			"label": "Подавить огнём (враг теряет цель)",
+			"effect": {"type": "distract", "value": 2},
+		})
 	for special in enemy_data.get("special_actions", []):
 		var sid: String = special.get("id", "")
 		if _used_specials.has(sid):

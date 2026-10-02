@@ -22,6 +22,7 @@ func _ready() -> void:
 	_delete_save(SaveManager.META_PATH)
 	ArchiveSystem.load_save_data([])
 	CodexSystem.load_save_data([])
+	SkillTreeSystem.load_meta_save_data({})
 
 	# --- Палуба 01: отсек гибернации ---
 	GameState.start_new_game()
@@ -723,6 +724,110 @@ func _ready() -> void:
 	CharacterSystem.add_skill_points(1)
 	_expect(CharacterSystem.learn("scavenging") and ExplorationSystem.remaining("service_corridor") == 1
 		and ExplorationSystem.can_explore(), "навык «Поиск» добавляет поиск в каждом отсеке")
+
+	# --- Кольцевое дерево, знание и происхождение ---
+	_expect(SkillTreeSystem.get_sectors().size() == 8 and SkillTreeSystem.get_nodes().size() >= 80,
+		"дерево развития загружено: %d секторов, %d узлов"
+			% [SkillTreeSystem.get_sectors().size(), SkillTreeSystem.get_nodes().size()])
+	var knowledge_before := SkillTreeSystem.known_knowledge().size()
+	EffectResolver.apply_effect({"type": "unlock_knowledge", "knowledge": "k_xeno_war"})
+	_expect(SkillTreeSystem.knowledge_known("k_xeno_war")
+		and SkillTreeSystem.known_knowledge().size() == knowledge_before + 1,
+		"знание выдаётся эффектом unlock_knowledge (было %d, стало %d, k_xeno_war=%s)"
+			% [knowledge_before, SkillTreeSystem.known_knowledge().size(), str(SkillTreeSystem.knowledge_known("k_xeno_war"))])
+	EffectResolver.apply_effect({"type": "unlock_knowledge", "knowledge": "k_xeno_war"})
+	_expect(SkillTreeSystem.known_knowledge().size() == knowledge_before + 1, "повторно то же знание не выдаётся")
+
+	# Новый герой: происхождение задаёт старт дерева и открывает только свои сектора.
+	# Знание из прошлого забега убираем — проверяем стартовый слой, а не мета-прогресс.
+	SkillTreeSystem.load_meta_save_data({})
+	GameState.start_new_game("", "", "colonial_engineer")
+	_expect(SkillTreeSystem.get_origin_id() == "colonial_engineer"
+		and SkillTreeSystem.is_owned("eng_toolkit") and SkillTreeSystem.is_owned("craft_hands"),
+		"происхождение выдало стартовые узлы бесплатно")
+	_expect(SkillTreeSystem.knowledge_known("k_engineering_school")
+		and SkillTreeSystem.is_sector_known("engineering") and SkillTreeSystem.is_sector_known("craft")
+		and not SkillTreeSystem.is_sector_known("piloting"),
+		"происхождение открыло свои сектора и знание, чужие сектора скрыты")
+	_expect(SkillTreeSystem.node_state("pilot_checklist") == SkillTreeSystem.NodeState.UNKNOWN,
+		"узел скрытого сектора неизвестен игроку")
+	_expect(SkillTreeSystem.get_nodes("engineering").any(func(n: Dictionary) -> bool:
+			return int(n["state"]) == SkillTreeSystem.NodeState.AVAILABLE),
+		"после старта происхождения в его секторе есть доступный узел")
+
+	EffectResolver.apply_effect({"type": "reveal_sector", "sector": "trade"})
+	_expect(SkillTreeSystem.is_sector_known("trade"), "эффект reveal_sector открывает сектор")
+	_expect(SkillTreeSystem.node_state("trade_price_of_all") == SkillTreeSystem.NodeState.LOCKED
+		and SkillTreeSystem.lock_reason("trade_price_of_all").contains("знание"),
+		"узел известен, но закрыт: причина названа игроку")
+	EffectResolver.apply_effect({"type": "reveal_sector", "sector": "science"})
+	_expect(SkillTreeSystem.node_state("sci_anomaly_physics") == SkillTreeSystem.NodeState.UNKNOWN,
+		"скрытый узел показан знаком вопроса, пока нет нужного знания")
+
+	var points_before_buy := CharacterSystem.skill_points
+	_expect(SkillTreeSystem.can_buy("eng_diagnostics") and SkillTreeSystem.buy("eng_diagnostics")
+		and CharacterSystem.skill_points == points_before_buy - 1
+		and SkillTreeSystem.is_owned("eng_diagnostics"),
+		"узел куплен за очко, очки списаны")
+
+	CharacterSystem.add_skill_points(2)
+	EffectResolver.apply_effect({"type": "practice_add", "practice": "repair", "value": 2})
+	_expect(SkillTreeSystem.practice("repair") == 2, "эффект practice_add копит практику забега")
+	SkillTreeSystem.reveal_sector("combat")
+	CharacterSystem.add_skill_points(2)
+	_expect(SkillTreeSystem.buy("combat_endurance") and SkillTreeSystem.buy("combat_suppression")
+		and SkillTreeSystem.has_tag("combat:suppression"),
+		"метки купленных узлов видит код")
+	CombatSystem.start_combat("drone_cargo")
+	_expect(CombatSystem.get_state()["available_specials"].any(func(s: Dictionary) -> bool:
+			return str(s.get("id", "")) == "skill_suppression"),
+		"«Подавление» даёт бойцу спецдействие, которого нет у других")
+	SkillTreeSystem.add_practice("repair", 1)
+	CombatSystem.reset_for_new_run()
+	GameState.refresh_location()
+	_expect(not SkillTreeSystem.lock_reason("eng_field_word").contains("Ремонты"),
+		"накопленная практика снимает свой замок с ключевого узла")
+
+	# Метка происхождения/узла меняет цену действия.
+	SkillTreeSystem.reveal_sector("piloting")
+	CharacterSystem.add_skill_points(3)
+	var move_cost_before := ResourceSystem.get_o2_cost("move", "cargo_bay")
+	_expect(SkillTreeSystem.buy("pilot_checklist") and SkillTreeSystem.buy("pilot_docking")
+		and is_equal_approx(ResourceSystem.get_o2_cost("move", "cargo_bay"), maxf(0.0, move_cost_before - 1.0)),
+		"«Точная стыковка» удешевляет переход на единицу кислорода")
+
+	# Дерево — состояние забега, знание — meta.
+	var tree_before := SkillTreeSystem.to_save_data()
+	SkillTreeSystem.load_save_data({})
+	_expect(SkillTreeSystem.get_origin_id() == "" and SkillTreeSystem.owned_nodes().is_empty(),
+		"пустой сейв дерева обнуляет узлы забега")
+	SkillTreeSystem.load_save_data(tree_before)
+	_expect(SkillTreeSystem.get_origin_id() == "colonial_engineer"
+		and SkillTreeSystem.is_owned("pilot_docking") and SkillTreeSystem.is_sector_known("piloting")
+		and SkillTreeSystem.practice("repair") == 3,
+		"узлы, практика, происхождение и сектора переживают загрузку")
+	var known_before_meta := SkillTreeSystem.known_knowledge().size()
+	SaveManager.save_meta()
+	SkillTreeSystem.load_meta_save_data({})
+	_expect(SkillTreeSystem.known_knowledge().is_empty(), "новая сессия без meta не знает направлений")
+	SaveManager.load_meta()
+	_expect(SkillTreeSystem.knowledge_known("k_engineering_school")
+		and SkillTreeSystem.known_knowledge().size() == known_before_meta,
+		"знание дерева переживает перезагрузку meta")
+
+	# Происхождение переживает смерть: новый забег того же героя — та же биография.
+	SaveManager.clear_run()
+	_expect(SkillTreeSystem.get_origin_id() == "colonial_engineer"
+		and SkillTreeSystem.is_owned("eng_toolkit") and not SkillTreeSystem.is_owned("eng_diagnostics"),
+		"происхождение и стартовые узлы переживают новую игру того же героя")
+
+	# Предмет-крючок личной линии: находка раскрывает запись и направление знания.
+	InventorySystem.add_item("bio_container")
+	InventorySystem.interact("bio_container", "inspect")
+	_expect(ArchiveSystem.is_unlocked("log_origin_xenobiologist")
+		and SkillTreeSystem.knowledge_known("k_anomaly_physics")
+		and SituationEngine.get_flag("origin_xeno_read") == true,
+		"предмет-крючок происхождения открывает личную запись, знание и флаг")
 
 	if _failures.is_empty():
 		print("SMOKE OK")

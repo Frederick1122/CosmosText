@@ -230,5 +230,85 @@
 			"type": "hp_delta",
 			"value": 25.0
 		}
+	},
+	"meyer_serial_module": {
+		"category": "quest",
+		"description": "Блок оборудования с выжженным серийным номером. Такую маркировку ставят только на энергосистемах колонии Мейер-4.",
+		"name": "Модуль с гравировкой Мейер-4",
+		"slot_cost": 0.0,
+		"stackable": false,
+		"interactions": [
+			{
+				"id": "inspect",
+				"label": "Изучить серийный номер",
+				"requires": [ { "type": "flag", "flag": "origin_engineer_read", "value": false } ],
+				"text": "Номер ведёт в реестр поставок колонии. Блок списали ещё до отлёта «Персефоны» — и он оказался на пиратском борту задолго до катастрофы. Кто-то вывозил оборудование Мейер-4 заранее.",
+				"effects": [
+					{ "type": "unlock_lore", "id": "log_origin_engineer" },
+					{ "type": "unlock_knowledge", "knowledge": "k_reactor_school" },
+					{ "type": "flag_set", "flag": "origin_engineer_read" }
+				]
+			}
+		]
+	},
+	"mercenary_token": {
+		"category": "quest",
+		"description": "Жетон частной военной компании с обгоревшим краем. Номер части — из тех, где герой служил раньше.",
+		"name": "Жетон ЧВК",
+		"slot_cost": 0.0,
+		"stackable": false,
+		"interactions": [
+			{
+				"id": "inspect",
+				"label": "Сверить номер части",
+				"requires": [ { "type": "flag", "flag": "origin_guard_read", "value": false } ],
+				"text": "Номер сходится: это подразделение героя. Погибший рейдер носил жетон той самой ЧВК — значит, кто-то из бывших сослуживцев работал на захватчиков «Персефоны».",
+				"effects": [
+					{ "type": "unlock_lore", "id": "log_origin_guard" },
+					{ "type": "unlock_knowledge", "knowledge": "k_crew_school" },
+					{ "type": "flag_set", "flag": "origin_guard_read" }
+				]
+			}
+		]
+	},
+	"mismatched_manifest": {
+		"category": "quest",
+		"description": "Грузовой манифест с подчищенными строками. Форма бланка — та же, что герой заполнял сам.",
+		"name": "Подменённый манифест",
+		"slot_cost": 0.0,
+		"stackable": false,
+		"interactions": [
+			{
+				"id": "inspect",
+				"label": "Сверить с оформлением",
+				"requires": [ { "type": "flag", "flag": "origin_broker_read", "value": false } ],
+				"text": "Партия вписана рукой героя — но пункт назначения перебит. Товар шёл на Мейер-4 законной поставкой, а оказался на пиратском складе. Цепочка подмены началась ещё до рейса.",
+				"effects": [
+					{ "type": "unlock_lore", "id": "log_origin_broker" },
+					{ "type": "unlock_knowledge", "knowledge": "k_social_school" },
+					{ "type": "flag_set", "flag": "origin_broker_read" }
+				]
+			}
+		]
+	},
+	"bio_container": {
+		"category": "quest",
+		"description": "Термоконтейнер с биоматериалом. В пассажирской декларации «Персефоны» такого груза не было.",
+		"name": "Контейнер с биоматериалом",
+		"slot_cost": 0.0,
+		"stackable": false,
+		"interactions": [
+			{
+				"id": "inspect",
+				"label": "Осмотреть образец",
+				"requires": [ { "type": "flag", "flag": "origin_xeno_read", "value": false } ],
+				"text": "Проба живая и не похожа ни на что из каталогов Мейер-4. Её везли скрытно, отдельно от грузового манифеста, — и она старше самого рейса. Кто-то вывозил биологию из Неизведанных Секторов задолго до катастрофы.",
+				"effects": [
+					{ "type": "unlock_lore", "id": "log_origin_xenobiologist" },
+					{ "type": "unlock_knowledge", "knowledge": "k_anomaly_physics" },
+					{ "type": "flag_set", "flag": "origin_xeno_read" }
+				]
+			}
+		]
 	}
 }

@@ -49,6 +49,12 @@ func apply_effect(effect: Dictionary) -> void:
 			MapSystem.set_node_state(effect.get("node", ""), effect.get("state", "dangerous"))
 		"skill_points_add":
 			CharacterSystem.add_skill_points(int(effect.get("value", 1)))
+		"unlock_knowledge":
+			SkillTreeSystem.learn_knowledge(str(effect.get("knowledge", "")))
+		"practice_add":
+			SkillTreeSystem.add_practice(str(effect.get("practice", "")), int(effect.get("value", 1)))
+		"reveal_sector":
+			SkillTreeSystem.reveal_sector(str(effect.get("sector", "")))
 		"start_combat":
 			CombatSystem.start_combat(
 				effect.get("enemy", ""),
@@ -86,6 +92,10 @@ func describe_effect(effect: Dictionary) -> String:
 			return "%+d голода" % value
 		"skill_points_add":
 			return "%+d очк. навыков" % value
+		"unlock_knowledge":
+			return "Знание: %s" % SkillTreeSystem.knowledge_title(str(effect.get("knowledge", "")))
+		"practice_add":
+			return "Практика: %s +%d" % [SkillTreeSystem.practice_title(str(effect.get("practice", ""))), value]
 	return ""
 
 
@@ -125,6 +135,16 @@ func check_requirement(req: Dictionary) -> bool:
 			return current >= float(req.get("value", 0))
 		"skill_gte":
 			return CharacterSystem.get_skill_level(str(req.get("skill", ""))) >= int(req.get("value", 1))
+		"knowledge":
+			return SkillTreeSystem.knowledge_known(str(req.get("knowledge", ""))) == bool(req.get("value", true))
+		"node_bought":
+			return SkillTreeSystem.is_owned(str(req.get("node", ""))) == bool(req.get("value", true))
+		"practice_gte":
+			return SkillTreeSystem.practice(str(req.get("practice", ""))) >= int(req.get("value", 1))
+		"tag":
+			return SkillTreeSystem.has_tag(str(req.get("tag", ""))) == bool(req.get("value", true))
+		"origin":
+			return (SkillTreeSystem.get_origin_id() == str(req.get("origin", ""))) == bool(req.get("value", true))
 		"in_location":
 			return LocationSystem.current_id == str(req.get("location", ""))
 		"event_done":

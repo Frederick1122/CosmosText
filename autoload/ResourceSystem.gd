@@ -105,9 +105,20 @@ func apply_ammo_delta(v: int) -> void:
 
 ## Сколько кислорода стоит действие kind в узле node_id (пусто — текущий
 ## модуль игрока). Незагерметизированный узел дороже, модуль с воздухом —
-## бесплатно.
+## бесплатно. Узлы дерева «Точная стыковка» и «Переброс питания» срезают
+## по одному пункту с переходов и действий соответственно.
 func get_o2_cost(kind: String, node_id: String = "") -> float:
-	return maxf(0.0, float(o2_costs.get(kind, 0.0))) * environment_multiplier(node_id)
+	var base := maxf(0.0, float(o2_costs.get(kind, 0.0)) - float(_tag_discount(kind)))
+	return base * environment_multiplier(node_id)
+
+
+func _tag_discount(kind: String) -> int:
+	match kind:
+		"move", "elevator":
+			return 1 if SkillTreeSystem.has_tag("pilot:docking") else 0
+		"action", "choice":
+			return 1 if SkillTreeSystem.has_tag("eng:power_reroute") else 0
+	return 0
 
 
 ## Списывает стоимость действия. count_action=false нужен для промежуточных

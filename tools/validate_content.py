@@ -171,6 +171,13 @@ def main():
     skills = load_optional("skills.json")
     recipes = load_optional("recipes.json")
     endings = load_optional("endings.json")
+    # Кольцевое дерево навыков, происхождения и знание (SkillTreeSystem).
+    skill_tree = load_optional("skill_tree.json")
+    knowledge = load_optional("knowledge.json")
+    origins = load_optional("origins.json")
+    tree_sectors = skill_tree.get("sectors", {}) if isinstance(skill_tree.get("sectors", {}), dict) else {}
+    tree_nodes = skill_tree.get("nodes", {}) if isinstance(skill_tree.get("nodes", {}), dict) else {}
+    tree_practice = skill_tree.get("practice", {}) if isinstance(skill_tree.get("practice", {}), dict) else {}
 
     situations_raw = load_dir(os.path.join(DATA, "situations"))
     sectors_raw = load_dir(os.path.join(DATA, "sectors"))
@@ -511,6 +518,27 @@ def main():
                 value = req.get("value")
                 if not isinstance(value, int) or isinstance(value, bool) or value < 0:
                     errors.append(f"{ctx}: {t}.value должен быть неотрицательным целым")
+            elif t == "knowledge":
+                kid = req.get("knowledge", "")
+                if kid not in knowledge:
+                    errors.append(f"{ctx}: requires.knowledge ссылается на неизвестное знание '{kid}'")
+            elif t == "node_bought":
+                nid = req.get("node", "")
+                if nid not in tree_nodes:
+                    errors.append(f"{ctx}: requires.node_bought ссылается на неизвестный узел дерева '{nid}'")
+            elif t == "practice_gte":
+                pid = req.get("practice", "")
+                if pid not in tree_practice:
+                    errors.append(f"{ctx}: requires.practice_gte ссылается на неизвестную практику '{pid}'")
+                if not is_positive_int(req.get("value", 1)):
+                    errors.append(f"{ctx}: practice_gte.value должен быть положительным целым")
+            elif t == "tag":
+                if not str(req.get("tag", "")).strip():
+                    errors.append(f"{ctx}: tag без непустого поля 'tag'")
+            elif t == "origin":
+                oid = req.get("origin", "")
+                if oid not in origins:
+                    errors.append(f"{ctx}: requires.origin ссылается на неизвестное происхождение '{oid}'")
             elif t is None:
                 errors.append(f"{ctx}: requires-запись без 'type'")
             else:
@@ -555,6 +583,20 @@ def main():
                 value = eff.get("value", 1)
                 if not isinstance(value, int) or isinstance(value, bool):
                     errors.append(f"{ctx}: skill_points_add.value должен быть целым")
+            elif t == "unlock_knowledge":
+                kid = eff.get("knowledge", "")
+                if kid not in knowledge:
+                    errors.append(f"{ctx}: effect 'unlock_knowledge' ссылается на неизвестное знание '{kid}'")
+            elif t == "practice_add":
+                pid = eff.get("practice", "")
+                if pid not in tree_practice:
+                    errors.append(f"{ctx}: effect 'practice_add' ссылается на неизвестную практику '{pid}'")
+                if "value" in eff and not is_positive_int(eff["value"]):
+                    errors.append(f"{ctx}: effect 'practice_add'.value должен быть положительным целым")
+            elif t == "reveal_sector":
+                sid = eff.get("sector", "")
+                if sid not in tree_sectors:
+                    errors.append(f"{ctx}: effect 'reveal_sector' ссылается на неизвестный сектор дерева '{sid}'")
             elif t == "end_run":
                 ending = eff.get("ending", "")
                 referenced_endings.add(ending)
@@ -707,7 +749,8 @@ def main():
             warnings.append(f"{ctx}: финал недостижим — ни один effect 'end_run' на него не ссылается")
 
     # Пулы случайных находок исследования (ExplorationSystem).
-    allowed_pool_effects = ("item_add", "o2_delta", "hp_delta", "hunger_delta", "ammo_delta")
+    allowed_pool_effects = ("item_add", "o2_delta", "hp_delta", "hunger_delta", "ammo_delta",
+                            "unlock_knowledge", "reveal_sector")
     for pool_id, entries in explore_pools.items():
         pctx = f"explore_pools/{pool_id}"
         if not isinstance(entries, list) or not entries:
@@ -902,6 +945,127 @@ def main():
                     errors.append(f"{ctx}.ingredients[{i}].count: должно быть положительным целым")
         check_requires(recipe.get("requires", []), ctx)
 
+    # Кольцевое дерево навыков, происхождение и знание (SkillTreeSystem).
+    valid_rings = ("inner", "middle", "outer")
+    valid_node_types = ("small", "notable", "mastery", "bridge", "key", "legendary")
+    for sector_id, sector in tree_sectors.items():
+        ctx = f"skill_tree/sectors/{sector_id}"
+        if not isinstance(sector, dict):
+            errors.append(f"{ctx}: ожидается объект")
+        elif not str(sector.get("name", "")).strip():
+            errors.append(f"{ctx}: нет name")
+    for practice_id, title in tree_practice.items():
+        if not str(title).strip():
+            errors.append(f"skill_tree/practice/{practice_id}: пустое название практики")
+    for node_id, node in tree_nodes.items():
+        ctx = f"skill_tree/nodes/{node_id}"
+        if not isinstance(node, dict):
+            errors.append(f"{ctx}: ожидается объект")
+            continue
+        if not str(node.get("name", "")).strip():
+            errors.append(f"{ctx}: нет name")
+        if not str(node.get("description", "")).strip():
+            errors.append(f"{ctx}: нет description")
+        if node.get("sector") not in tree_sectors:
+            errors.append(f"{ctx}: неизвестный сектор '{node.get('sector')}'")
+        if node.get("ring") not in valid_rings:
+            errors.append(f"{ctx}.ring: допустимы {', '.join(valid_rings)}")
+        if node.get("type") not in valid_node_types:
+            errors.append(f"{ctx}.type: допустимы {', '.join(valid_node_types)}")
+        if not is_positive_int(node.get("cost")):
+            errors.append(f"{ctx}.cost: положительное целое")
+        elif node.get("type") in ("key", "legendary") and node["cost"] < 2:
+            errors.append(f"{ctx}: ключевой и легендарный узел стоят не меньше 2 очков")
+        if "hidden" in node and not isinstance(node["hidden"], bool):
+            errors.append(f"{ctx}.hidden: true/false")
+        if "stats" in node:
+            check_stats(node["stats"], f"{ctx}.stats")
+        requires = node.get("requires", {})
+        if not isinstance(requires, dict):
+            errors.append(f"{ctx}.requires: ожидается объект")
+            requires = {}
+        for prev in requires.get("nodes", []):
+            if prev not in tree_nodes:
+                errors.append(f"{ctx}.requires.nodes: неизвестный узел '{prev}'")
+            elif prev == node_id:
+                errors.append(f"{ctx}.requires.nodes: узел ссылается сам на себя")
+        for kid in requires.get("knowledge", []):
+            if kid not in knowledge:
+                errors.append(f"{ctx}.requires.knowledge: неизвестное знание '{kid}'")
+        practice_req = requires.get("practice", {})
+        if not isinstance(practice_req, dict):
+            errors.append(f"{ctx}.requires.practice: ожидается объект {{практика: число}}")
+        else:
+            for pid, amount in practice_req.items():
+                if pid not in tree_practice:
+                    errors.append(f"{ctx}.requires.practice: неизвестная практика '{pid}'")
+                if not is_positive_int(amount):
+                    errors.append(f"{ctx}.requires.practice.{pid}: положительное целое")
+        origin_req = str(requires.get("origin", ""))
+        if origin_req and origin_req not in origins:
+            errors.append(f"{ctx}.requires.origin: неизвестное происхождение '{origin_req}'")
+        for other in node.get("excludes", []):
+            if other not in tree_nodes:
+                errors.append(f"{ctx}.excludes: неизвестный узел '{other}'")
+        grants = node.get("grants", {})
+        if grants and not isinstance(grants, dict):
+            errors.append(f"{ctx}.grants: ожидается объект")
+        elif isinstance(grants, dict):
+            for kid in grants.get("knowledge", []):
+                if kid not in knowledge:
+                    errors.append(f"{ctx}.grants.knowledge: неизвестное знание '{kid}'")
+            for item_id in grants.get("items", []):
+                if item_id not in items:
+                    errors.append(f"{ctx}.grants.items: неизвестный предмет '{item_id}'")
+            for sector_id in grants.get("reveal_sectors", []):
+                if sector_id not in tree_sectors:
+                    errors.append(f"{ctx}.grants.reveal_sectors: неизвестный сектор '{sector_id}'")
+    for sector_id in tree_sectors:
+        if not any(isinstance(n, dict) and n.get("sector") == sector_id for n in tree_nodes.values()):
+            errors.append(f"skill_tree/sectors/{sector_id}: у сектора нет ни одного узла")
+
+    for knowledge_id, entry in knowledge.items():
+        ctx = f"knowledge/{knowledge_id}"
+        if not isinstance(entry, dict):
+            errors.append(f"{ctx}: ожидается объект")
+            continue
+        if not str(entry.get("name", "")).strip():
+            errors.append(f"{ctx}: нет name")
+        if not str(entry.get("source", "")).strip():
+            errors.append(f"{ctx}: нет source — откуда игрок добывает знание")
+        for sector_id in entry.get("reveal_sectors", []):
+            if sector_id not in tree_sectors:
+                errors.append(f"{ctx}.reveal_sectors: неизвестный сектор '{sector_id}'")
+
+    for origin_id, origin in origins.items():
+        ctx = f"origins/{origin_id}"
+        if not isinstance(origin, dict):
+            errors.append(f"{ctx}: ожидается объект")
+            continue
+        if not str(origin.get("name", "")).strip():
+            errors.append(f"{ctx}: нет name")
+        for sector_id in origin.get("start_sectors", []):
+            if sector_id not in tree_sectors:
+                errors.append(f"{ctx}.start_sectors: неизвестный сектор '{sector_id}'")
+        for node_id in origin.get("start_nodes", []):
+            if node_id not in tree_nodes:
+                errors.append(f"{ctx}.start_nodes: неизвестный узел дерева '{node_id}'")
+        for knowledge_id in origin.get("knowledge", []):
+            if knowledge_id not in knowledge:
+                errors.append(f"{ctx}.knowledge: неизвестное знание '{knowledge_id}'")
+        for item_id in origin.get("items", []):
+            if item_id not in items:
+                errors.append(f"{ctx}.items: неизвестный предмет '{item_id}'")
+        if "stats" in origin:
+            check_stats(origin["stats"], f"{ctx}.stats")
+        resources = origin.get("resources", {})
+        if resources and not isinstance(resources, dict):
+            errors.append(f"{ctx}.resources: ожидается объект")
+        elif isinstance(resources, dict):
+            for key in resources:
+                if key not in ("ammo", "hp", "o2"):
+                    errors.append(f"{ctx}.resources: неизвестный ключ '{key}' (допустимы ammo, hp, o2)")
+
     start_equipment = config.get("start_equipment", {})
     if not isinstance(start_equipment, dict):
         errors.append("config.json: start_equipment должен быть объектом {слот: предмет}")
@@ -916,6 +1080,11 @@ def main():
     start_points = config.get("start_skill_points", 0)
     if not isinstance(start_points, int) or isinstance(start_points, bool) or start_points < 0:
         errors.append("config.json: start_skill_points должен быть неотрицательным целым")
+    start_origin = config.get("start_origin", "")
+    if not isinstance(start_origin, str):
+        errors.append("config.json: start_origin должен быть строкой (id происхождения или пусто)")
+    elif start_origin and start_origin not in origins:
+        errors.append(f"config.json: start_origin ссылается на неизвестное происхождение '{start_origin}'")
 
     start_o2 = config.get("start_o2")
     if not is_number(start_o2) or start_o2 <= 0:
@@ -978,6 +1147,8 @@ def main():
           f"Секторов: {len(sectors)} | Предметов: {len(items)} | Навыков: {len(skills)} | "
           f"Рецептов: {len(recipes)} | Врагов: {len(enemies)} | Лор-фрагментов: {len(lore)} | "
           f"Записей справочника: {len(codex)} | Финалов: {len(endings)}")
+    print(f"Дерево навыков: узлов {len(tree_nodes)} в {len(tree_sectors)} секторах | "
+          f"Знаний: {len(knowledge)} | Происхождений: {len(origins)}")
 
     if warnings:
         print(f"\nПредупреждения ({len(warnings)}):")

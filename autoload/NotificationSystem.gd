@@ -17,6 +17,7 @@ var _new_goals: bool = false
 func _ready() -> void:
 	InventorySystem.item_added.connect(_on_item_added)
 	CharacterSystem.changed.connect(changed.emit)
+	SkillTreeSystem.changed.connect(changed.emit)
 	ArchiveSystem.fragment_unlocked.connect(_on_fragment_unlocked)
 	CodexSystem.entry_unlocked.connect(_on_codex_entry_unlocked)
 

@@ -3,6 +3,7 @@ extends Control
 const UiKit = preload("res://scenes/ui/UiKit.gd")
 const SECTOR_MAP_VIEW_SCRIPT := preload("res://scenes/ui/SectorMapView.gd")
 const CHARACTER_PANEL_SCRIPT := preload("res://scenes/ui/CharacterPanel.gd")
+const SKILL_TREE_PANEL_SCRIPT := preload("res://scenes/ui/SkillTreePanel.gd")
 const WORKBENCH_PANEL_SCRIPT := preload("res://scenes/ui/WorkbenchPanel.gd")
 const COMBAT_VIEW_SCRIPT := preload("res://scenes/ui/CombatView.gd")
 const XP_BAR_SCRIPT := preload("res://scenes/ui/XpBar.gd")
@@ -47,12 +48,17 @@ var day_label: Label
 var xp_bar: HBoxContainer
 var map_button: Button
 var character_button: Button
+var skill_button: Button
 var journal_button: Button
 var settings_button: Button
 var section_separator: HSeparator
 var map_open: bool = false
 var journal_open: bool = false
 var character_open: bool = false
+## Кольцевое дерево навыков: оверлей поверх модуля.
+var skill_open: bool = false
+## Экран создания героя: выбор происхождения перед новой игрой.
+var origin_picker_open: bool = false
 var settings_open: bool = false
 ## Верстак базы: оверлей с рецептами поверх экрана модуля.
 var workbench_open: bool = false
@@ -184,9 +190,10 @@ func _build_static_layout() -> void:
 	hud.add_child(nav_row)
 	map_button = _make_nav_button("Карта", "MapButton", _toggle_map)
 	character_button = _make_nav_button("Персонаж", "CharacterButton", _toggle_character)
+	skill_button = _make_nav_button("Развитие", "SkillButton", _toggle_skills)
 	journal_button = _make_nav_button("Журнал", "JournalButton", _toggle_journal)
 	settings_button = _make_nav_button("Настройки", "SettingsButton", _toggle_settings)
-	for btn in [map_button, character_button, journal_button, settings_button]:
+	for btn in [map_button, character_button, skill_button, journal_button, settings_button]:
 		nav_row.add_child(btn)
 
 	section_separator = HSeparator.new()
@@ -470,7 +477,7 @@ func _is_story_screen() -> bool:
 
 
 func _any_overlay_open() -> bool:
-	return map_open or journal_open or character_open or settings_open or workbench_open
+	return map_open or journal_open or character_open or skill_open or settings_open or workbench_open
 
 
 ## Плавное появление экрана целиком (карта, журнал, бой, смена сцены).
@@ -903,6 +910,7 @@ func _toggle_journal() -> void:
 		journal_open = true
 		map_open = false
 		character_open = false
+		skill_open = false
 		settings_open = false
 		workbench_open = false
 	_scroll_to_top()
@@ -921,6 +929,7 @@ func _toggle_settings() -> void:
 		map_open = false
 		journal_open = false
 		character_open = false
+		skill_open = false
 		workbench_open = false
 	_scroll_to_top()
 	_render_current_screen()
@@ -942,6 +951,7 @@ func _toggle_map() -> void:
 		NotificationSystem.mark_character_seen()
 	journal_open = false
 	character_open = false
+	skill_open = false
 	settings_open = false
 	workbench_open = false
 	if GameState.current_screen == GameState.Screen.SECTOR_MAP:
@@ -967,6 +977,7 @@ func _toggle_character() -> void:
 	character_open = true
 	map_open = false
 	journal_open = false
+	skill_open = false
 	settings_open = false
 	workbench_open = false
 	_scroll_to_top()
@@ -984,6 +995,28 @@ func _close_character() -> void:
 		_render_current_screen()
 
 
+## Кнопка «Развитие»: кольцевое дерево поверх экрана. Игровые правила живут в
+## SkillTreeSystem — панель только показывает и покупает.
+func _toggle_skills() -> void:
+	if skill_button.disabled:
+		return
+	if skill_open:
+		skill_open = false
+	else:
+		if journal_open:
+			NotificationSystem.mark_journal_seen()
+		if character_open:
+			NotificationSystem.mark_character_seen()
+		skill_open = true
+		map_open = false
+		journal_open = false
+		character_open = false
+		settings_open = false
+		workbench_open = false
+	_scroll_to_top()
+	_render_current_screen()
+
+
 func _render_current_screen() -> void:
 	_update_hud()
 	_set_chrome_visible(GameState.current_screen != GameState.Screen.MAIN_MENU)
@@ -991,6 +1024,10 @@ func _render_current_screen() -> void:
 	var story_before := _story_shown
 	_set_body_stretch(false)
 	_clear_body()
+	if origin_picker_open:
+		_render_origin_picker()
+		_animate_body()
+		return
 	if settings_open:
 		_render_settings()
 		_animate_body()
@@ -1001,6 +1038,10 @@ func _render_current_screen() -> void:
 		return
 	if character_open:
 		_render_character()
+		_animate_body()
+		return
+	if skill_open:
+		_render_skill_tree()
 		_animate_body()
 		return
 	if workbench_open:
@@ -1054,17 +1095,20 @@ func _update_nav_buttons() -> void:
 	)
 	map_button.disabled = blocked
 	character_button.disabled = blocked
+	skill_button.disabled = blocked
 	journal_button.disabled = blocked
 	settings_button.disabled = GameState.current_screen == GameState.Screen.COMBAT or MapSystem.is_travelling() or GameState.is_exploring()
 	_set_nav_label(map_button, "🗺️", "Карта", false)
 	_set_nav_label(character_button, "🧑‍🚀", "Персонаж", NotificationSystem.has_character_alert())
+	_set_nav_label(skill_button, "🌐", "Развитие", SkillTreeSystem.has_available())
 	_set_nav_label(journal_button, "📓", "Журнал", NotificationSystem.has_journal_alert())
 	_set_nav_label(settings_button, "⚙️", "Настройки", false)
-	var map_active := not journal_open and not character_open and not settings_open and (
+	var map_active := not journal_open and not character_open and not skill_open and not settings_open and (
 		map_open or GameState.current_screen == GameState.Screen.SECTOR_MAP
 	)
 	_style_nav_button(map_button, map_active)
 	_style_nav_button(character_button, character_open)
+	_style_nav_button(skill_button, skill_open)
 	_style_nav_button(journal_button, journal_open)
 	_style_nav_button(settings_button, settings_open)
 
@@ -1230,7 +1274,60 @@ func _pulse(node: CanvasItem) -> void:
 
 
 func _start_new_game() -> void:
-	GameState.start_new_game()
+	if SkillTreeSystem.get_origins().is_empty():
+		GameState.start_new_game()
+		return
+	origin_picker_open = true
+	_scroll_to_top()
+	_render_current_screen()
+
+
+## Создание героя: биография важнее характеристик — экран объясняет, кем был
+## пассажир, что это даёт и чего лишает.
+func _render_origin_picker() -> void:
+	_set_body_stretch(false)
+	_add_title("Кем вы были до «Персефоны»")
+	_add_section("Происхождение задаёт старт в дереве развития — потом его не сменить.")
+	for origin in SkillTreeSystem.get_origins():
+		var origin_id := str(origin.get("id", ""))
+		var card := UiKit.card(body)
+		card.add_child(UiKit.text(str(origin.get("name", origin_id)), 26, UiKit.TITLE_COLOR))
+		var why := str(origin.get("why", ""))
+		if why != "":
+			card.add_child(UiKit.text(why, 20))
+		var sectors := str(origin.get("sectors_text", ""))
+		if sectors != "":
+			card.add_child(UiKit.text("Старт в дереве: %s" % sectors, 20, UiKit.ACCENT_COLOR))
+		var buff := str(origin.get("buff", ""))
+		if buff != "":
+			card.add_child(UiKit.text("Черта: %s" % buff, 20, UiKit.GOOD_COLOR))
+		var debuff := str(origin.get("debuff", ""))
+		if debuff != "":
+			card.add_child(UiKit.text("Цена: %s" % debuff, 20, UiKit.BAD_COLOR))
+		var hook := str(origin.get("hook", ""))
+		if hook != "":
+			card.add_child(UiKit.text("Крючок: %s" % hook, 20))
+		var goal := str(origin.get("goal", ""))
+		if goal != "":
+			card.add_child(UiKit.text("Цель: %s" % goal, 20, UiKit.MUTED_COLOR))
+		var btn := UiKit.button("🧬 Начать за этого героя", "default", 62)
+		btn.pressed.connect(_choose_origin.bind(origin_id))
+		card.add_child(btn)
+	var back := UiKit.button("← В меню", "quiet", 62)
+	back.pressed.connect(_close_origin_picker)
+	body.add_child(back)
+
+
+func _choose_origin(origin_id: String) -> void:
+	origin_picker_open = false
+	GameState.start_new_game("", "", origin_id)
+	_render_current_screen()
+
+
+func _close_origin_picker() -> void:
+	origin_picker_open = false
+	_scroll_to_top()
+	_render_current_screen()
 
 
 func _continue_game() -> void:
@@ -1789,6 +1886,15 @@ func _render_character() -> void:
 	var panel: VBoxContainer = CHARACTER_PANEL_SCRIPT.new()
 	panel.tab = character_tab
 	panel.item_tab = character_items_tab
+	body.add_child(panel)
+
+
+## Кольцевое дерево развития: карта колец и карточка выбранного узла.
+func _render_skill_tree() -> void:
+	pinned_header.visible = true
+	pinned_header.add_child(UiKit.title("Развитие"))
+	var panel: VBoxContainer = SKILL_TREE_PANEL_SCRIPT.new()
+	panel.name = "SkillTreePanel"
 	body.add_child(panel)
 
 

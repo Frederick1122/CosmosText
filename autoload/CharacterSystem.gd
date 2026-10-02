@@ -31,6 +31,9 @@ var skill_points: int = 0
 
 var _skill_db: Dictionary = {}
 var _stats: Dictionary = {}
+## Пассивные бонусы кольцевого дерева (SkillTreeSystem): те же характеристики,
+## что у снаряжения и базовых навыков, — один общий пересчёт.
+var _tree_stats: Dictionary = {}
 
 
 func _ready() -> void:
@@ -203,6 +206,21 @@ func add_skill_points(value: int) -> void:
 	skill_points = maxi(0, skill_points + value)
 	changed.emit()
 
+
+## Списание очков на узел кольцевого дерева (SkillTreeSystem.buy).
+func spend_skill_points(value: int) -> bool:
+	if value < 0 or skill_points < value:
+		return false
+	skill_points -= value
+	changed.emit()
+	return true
+
+
+## Бонусы купленных узлов дерева и происхождения; пересчитывает характеристики.
+func set_tree_stats(stats: Dictionary) -> void:
+	_tree_stats = stats.duplicate()
+	_recalculate()
+
 # --- Сохранение ---------------------------------------------------------------
 
 func to_save_data() -> Dictionary:
@@ -232,6 +250,7 @@ func _recalculate() -> void:
 		var per_level = _skill_db.get(skill_id, {}).get("per_level", {})
 		if per_level is Dictionary:
 			_add_stats(per_level, int(skill_levels[skill_id]))
+	_add_stats(_tree_stats, 1)
 	InventorySystem.set_bonus_slots(int(get_stat("inventory_slots")))
 	ResourceSystem.set_max_hp_bonus(int(get_stat("max_hp")))
 	changed.emit()

@@ -16,6 +16,7 @@
   "o2_unsealed_multiplier": 2.0,
   "start_equipment": { "body": "flight_suit" },
   "start_skill_points": 1,
+  "start_origin": "",
   "xp": {
     "explore": 10,
     "craft": 10,
