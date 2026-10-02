@@ -583,6 +583,10 @@ def main():
                 value = eff.get("value", 1)
                 if not isinstance(value, int) or isinstance(value, bool):
                     errors.append(f"{ctx}: skill_points_add.value должен быть целым")
+            elif t == "max_o2_add":
+                value = eff.get("value")
+                if not is_positive_int(value):
+                    errors.append(f"{ctx}: effect 'max_o2_add'.value должен быть положительным целым")
             elif t == "unlock_knowledge":
                 kid = eff.get("knowledge", "")
                 if kid not in knowledge:
@@ -1089,6 +1093,11 @@ def main():
     start_o2 = config.get("start_o2")
     if not is_number(start_o2) or start_o2 <= 0:
         errors.append("config.json: start_o2 должен быть положительным числом")
+    max_o2 = config.get("max_o2", start_o2)
+    if not is_number(max_o2) or max_o2 <= 0:
+        errors.append("config.json: max_o2 должен быть положительным числом (ёмкость баллона)")
+    elif is_number(start_o2) and start_o2 > max_o2:
+        errors.append(f"config.json: start_o2 ({start_o2}) больше ёмкости max_o2 ({max_o2}) — старт обрежется")
     o2_costs = config.get("o2_costs", {})
     if not isinstance(o2_costs, dict):
         errors.append("config.json: o2_costs должен быть объектом {действие: цена}")

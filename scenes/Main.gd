@@ -66,7 +66,10 @@ func _ready() -> void:
 	_expect(FileAccess.file_exists(SaveManager.CHECKPOINT_PATH), "в хабе записан чекпойнт")
 
 	_expect(InventorySystem.get_interactions("broken_datapad").size() == 1, "у планшета есть взаимодействие «Прочитать»")
+	var o2_before_read := ResourceSystem.o2
 	InventorySystem.interact("broken_datapad", "read")
+	_expect(is_equal_approx(ResourceSystem.o2, o2_before_read) and is_zero_approx(ResourceSystem.get_o2_cost("action")),
+		"чтение планшета в отсеке с воздухом не тратит кислород")
 	_expect(ArchiveSystem.is_unlocked("log_01") and InventorySystem.get_interactions("broken_datapad").is_empty(),
 		"взаимодействие открыло запись журнала и скрылось")
 	_expect(CodexSystem.is_unlocked("persephone") and CodexSystem.is_unlocked("meyer_4")
@@ -595,8 +598,10 @@ func _ready() -> void:
 	var o2_in_hall := ResourceSystem.o2
 	ExplorationSystem.reveal("emergency_bottle")
 	GameState.start_location_event("emergency_bottle")
-	_expect(ResourceSystem.o2 >= o2_in_hall + 90.0 - ResourceSystem.get_o2_cost("action"),
-		"аварийный баллон пополнил кислород в зале связи")
+	_expect(is_equal_approx(ResourceSystem.o2, minf(ResourceSystem.max_o2,
+			o2_in_hall - ResourceSystem.get_o2_cost("action") + 90.0)),
+		"аварийный баллон пополнил кислород в зале связи, но не выше ёмкости (%d/%d)"
+			% [roundi(ResourceSystem.o2), roundi(ResourceSystem.max_o2)])
 	_expect(not MapSystem.is_node_fog_visible("antenna_mast"),
 		"мачта скрыта до ремонта консоли")
 	GameState.start_location_event("patch_console")
@@ -724,6 +729,26 @@ func _ready() -> void:
 	CharacterSystem.add_skill_points(1)
 	_expect(CharacterSystem.learn("scavenging") and ExplorationSystem.remaining("service_corridor") == 1
 		and ExplorationSystem.can_explore(), "навык «Поиск» добавляет поиск в каждом отсеке")
+
+	# --- Ёмкость баллона и её крафтовое улучшение ---
+	_expect(is_equal_approx(ResourceSystem.max_o2, ResourceSystem.base_max_o2)
+		and ResourceSystem.o2 <= ResourceSystem.max_o2,
+		"кислород ограничен ёмкостью баллона (%d/%d)" % [roundi(ResourceSystem.o2), roundi(ResourceSystem.max_o2)])
+	var o2_before_cap := ResourceSystem.o2
+	ResourceSystem.apply_o2_delta(1000.0)
+	_expect(is_equal_approx(ResourceSystem.o2, ResourceSystem.max_o2), "запас не копится выше ёмкости баллона")
+	ResourceSystem.apply_o2_delta(-(ResourceSystem.max_o2 - o2_before_cap))
+	InventorySystem.add_item("scrap_metal", 2)
+	InventorySystem.add_item("duct_tape")
+	CharacterSystem.add_skill_points(1)
+	CharacterSystem.learn("engineering")
+	var max_o2_before := ResourceSystem.max_o2
+	_expect(CraftingSystem.craft("o2_tank_upgrade") == "" and InventorySystem.use_item("o2_tank_upgrade")
+		and is_equal_approx(ResourceSystem.max_o2, max_o2_before + 60.0),
+		"крафт «Набор для баллона» расширяет ёмкость на 60 и расходуется")
+	ResourceSystem.load_save_data(ResourceSystem.to_save_data())
+	_expect(is_equal_approx(ResourceSystem.max_o2, max_o2_before + 60.0),
+		"ёмкость баллона переживает сохранение")
 
 	# --- Кольцевое дерево, знание и происхождение ---
 	_expect(SkillTreeSystem.get_sectors().size() == 8 and SkillTreeSystem.get_nodes().size() >= 80,

@@ -31,6 +31,30 @@
 			"item": "makeshift_backpack"
 		}
 	},
+	"o2_tank_upgrade": {
+		"name": "Набор для баллона",
+		"ingredients": [
+			{
+				"count": 2,
+				"item": "scrap_metal"
+			},
+			{
+				"count": 1,
+				"item": "duct_tape"
+			}
+		],
+		"requires": [
+			{
+				"skill": "engineering",
+				"type": "skill_gte",
+				"value": 1
+			}
+		],
+		"result": {
+			"count": 1,
+			"item": "o2_tank_upgrade"
+		}
+	},
 	"plate_vest": {
 		"ingredients": [
 			{

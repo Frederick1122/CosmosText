@@ -13,7 +13,7 @@ const KINDS := [
 	["lore", "Журнал"],
 ]
 const ITEM_CATEGORIES := ["quest", "key", "consumable", "weapon", "armor", "gear", "component"]
-const EFFECT_TYPES := ["", "hp_delta", "o2_delta", "ammo_delta", "item_add", "item_remove", "flag_set", "unlock_lore", "reveal_map", "open_map_node", "lock_map_node", "skill_points_add", "start_combat", "unlock_knowledge", "practice_add", "reveal_sector"]
+const EFFECT_TYPES := ["", "hp_delta", "o2_delta", "max_o2_add", "ammo_delta", "item_add", "item_remove", "flag_set", "unlock_lore", "reveal_map", "open_map_node", "lock_map_node", "skill_points_add", "start_combat", "unlock_knowledge", "practice_add", "reveal_sector"]
 const EVENT_STARTS := ["manual", "auto"]
 const REQUIREMENT_TYPES := ["has_item", "has_key", "flag", "stat_gte", "skill_gte", "in_location", "event_done", "visits_gte", "visits_lte", "knowledge", "node_bought", "practice_gte", "tag", "origin"]
 const NODE_STATES := ["locked", "available", "dangerous", "cleared"]

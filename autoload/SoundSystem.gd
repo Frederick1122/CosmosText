@@ -12,7 +12,7 @@ extends Node
 ##   ArchiveSystem.fragment_unlocked, CraftingSystem.crafted;
 ##   ProgressionSystem.xp_gained — опыт и новый уровень (в бою их озвучивает
 ##   экран победы, в такт своей анимации);
-##   ResourceSystem.o2_changed — тревога при падении ниже LOW_O2;
+##   ResourceSystem.o2_changed — тревога при падении ниже low_o2();
 ##   NeedsSystem.changed — периодический сигнал при усталости или голоде.
 
 const SOUND_DIR := "res://assets/sounds/"
@@ -61,7 +61,7 @@ func _ready() -> void:
 			var player := AudioStreamPlayer.new()
 			add_child(player)
 			_players.append(player)
-	_o2_low = ResourceSystem.o2 <= ResourceSystem.LOW_O2
+	_o2_low = ResourceSystem.o2 <= ResourceSystem.low_o2()
 	_needs_low = NeedsSystem.is_tired() or NeedsSystem.is_hungry()
 	EffectResolver.change_reported.connect(_on_change_reported)
 	EffectResolver.lock_opened.connect(func(_lock_id: String) -> void: play("unlock"))
@@ -124,7 +124,7 @@ func _on_xp_gained(_amount: int, levels: int) -> void:
 ## Тревога — один раз при переходе через порог. Проверка отложена: если
 ## баллон опустел совсем, к этому моменту уже выставлена смерть и звучит она.
 func _on_o2_changed(value: float) -> void:
-	var low := value <= ResourceSystem.LOW_O2
+	var low := value <= ResourceSystem.low_o2()
 	if low and not _o2_low:
 		_warn_low_o2.call_deferred()
 	_o2_low = low

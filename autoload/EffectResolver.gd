@@ -23,6 +23,12 @@ func apply_effect(effect: Dictionary) -> void:
 			var o2_before := ResourceSystem.o2
 			ResourceSystem.apply_o2_delta(float(effect.get("value", 0.0)))
 			report_change("o2", ResourceSystem.o2 - o2_before, "O2")
+		"max_o2_add":
+			var capacity_before := ResourceSystem.max_o2
+			ResourceSystem.add_max_o2_bonus(int(effect.get("value", 0)))
+			var capacity_gain := roundi(ResourceSystem.max_o2 - capacity_before)
+			if capacity_gain != 0:
+				NarrativeSystem.push("gain", "[Баллон: ёмкость +%d]" % capacity_gain)
 		"ammo_delta":
 			var ammo_before := ResourceSystem.ammo
 			ResourceSystem.apply_ammo_delta(int(effect.get("value", 0)))
@@ -86,6 +92,8 @@ func describe_effect(effect: Dictionary) -> String:
 			return "%+d HP" % value
 		"o2_delta":
 			return "%+d O2" % value
+		"max_o2_add":
+			return "+%d к ёмкости баллона" % value
 		"ammo_delta":
 			return "%+d патр." % value
 		"hunger_delta":

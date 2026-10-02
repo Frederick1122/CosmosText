@@ -37,14 +37,21 @@ const DEFAULT_O2_COSTS := {
 	"combat_turn": 4.0,
 }
 const DEFAULT_UNSEALED_MULTIPLIER := 2.0
-## Ниже этого запаса кислорода HUD краснеет, а SoundSystem подаёт сигнал тревоги.
-const LOW_O2 := 60.0
+## Ниже этой доли ёмкости HUD краснеет, а SoundSystem подаёт сигнал тревоги.
+const LOW_O2_RATIO := 0.25
+## Пол тревоги: при малой ёмкости четверть — слишком маленькое число.
+const LOW_O2_MIN := 25.0
 
 var hp: int = 100
 var max_hp: int = 100
 var base_max_hp: int = 100
 var max_hp_bonus: int = 0
 var o2: float = 0.0
+## Ёмкость баллона: кислород не копится бесконечно, а баллоны не теряют смысл.
+## Базовую ёмкость увеличивает эффект max_o2_add (крафт «Набор для баллона»).
+var max_o2: float = 150.0
+var base_max_o2: float = 150.0
+var max_o2_bonus: float = 0.0
 var ammo: int = 0
 
 ## Цены действий и множитель разгерметизации — контент, а не состояние забега:
@@ -64,7 +71,10 @@ func reset_for_new_run(config: Dictionary) -> void:
 	max_hp_bonus = 0
 	max_hp = base_max_hp
 	hp = max_hp
-	o2 = float(config.get("start_o2", 252.0))
+	base_max_o2 = maxf(1.0, float(config.get("max_o2", 150.0)))
+	max_o2_bonus = 0.0
+	max_o2 = base_max_o2
+	o2 = clampf(float(config.get("start_o2", 252.0)), 0.0, max_o2)
 	ammo = int(config.get("start_ammo", 0))
 	_died_this_run = false
 	hp_changed.emit(hp)
@@ -80,6 +90,20 @@ func set_max_hp_bonus(bonus: int) -> void:
 	hp_changed.emit(hp)
 
 
+## Улучшение баллона: ёмкость растёт навсегда (в забеге) и не теряет запас.
+func add_max_o2_bonus(value: int) -> void:
+	if value <= 0:
+		return
+	max_o2_bonus += float(value)
+	max_o2 = base_max_o2 + max_o2_bonus
+	o2_changed.emit(o2)
+
+
+## Порог тревоги по кислороду — доля ёмкости, но не меньше LOW_O2_MIN.
+func low_o2() -> float:
+	return maxf(LOW_O2_MIN, max_o2 * LOW_O2_RATIO)
+
+
 func apply_hp_delta(v: int) -> void:
 	if _died_this_run:
 		return
@@ -92,7 +116,7 @@ func apply_hp_delta(v: int) -> void:
 func apply_o2_delta(v: float) -> void:
 	if _died_this_run:
 		return
-	o2 = max(0.0, o2 + v)
+	o2 = clampf(o2 + v, 0.0, max_o2)
 	o2_changed.emit(o2)
 	if o2 <= 0.0:
 		_trigger_death("o2")
@@ -154,6 +178,8 @@ func to_save_data() -> Dictionary:
 		"max_hp": max_hp,
 		"base_max_hp": base_max_hp,
 		"o2": o2,
+		"base_max_o2": base_max_o2,
+		"max_o2_bonus": max_o2_bonus,
 		"ammo": ammo,
 	}
 
@@ -163,8 +189,11 @@ func load_save_data(data: Dictionary) -> void:
 	base_max_hp = int(data.get("base_max_hp", max_hp))
 	max_hp_bonus = max_hp - base_max_hp
 	hp = clampi(int(data.get("hp", hp)), 0, max_hp)
+	base_max_o2 = maxf(1.0, float(data.get("base_max_o2", max_o2)))
+	max_o2_bonus = maxf(0.0, float(data.get("max_o2_bonus", 0.0)))
+	max_o2 = base_max_o2 + max_o2_bonus
 	# "o2_seconds" — ключ сейвов версии 1, когда кислород шёл по таймеру.
-	o2 = max(0.0, float(data.get("o2", data.get("o2_seconds", o2))))
+	o2 = clampf(float(data.get("o2", data.get("o2_seconds", o2))), 0.0, max_o2)
 	ammo = max(0, int(data.get("ammo", ammo)))
 	_died_this_run = false
 	hp_changed.emit(hp)

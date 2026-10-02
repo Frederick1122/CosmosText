@@ -21,6 +21,11 @@ const MENU_COLUMN_WIDTH := 620.0
 ## Шаг игрока по карте: переход фишки и пауза перед следующим отсеком, с.
 const TRAVEL_STEP_TIME := 0.55
 const TRAVEL_STEP_PAUSE := 0.2
+## Появление кнопок ситуации: пауза перед первой, шаг между кнопками и время
+## всплытия одной кнопки, с.
+const BUTTON_REVEAL_DELAY := 0.05
+const BUTTON_REVEAL_STEP := 0.07
+const BUTTON_REVEAL_TIME := 0.18
 
 var body: VBoxContainer
 var content_margin: MarginContainer
@@ -81,6 +86,9 @@ var _death_message: String = ""
 ## Сколько записей ленты уже показано: новые проявляются анимацией.
 var _story_shown: int = 0
 var _story_render_queued: bool = false
+## Время (с), когда кнопки ситуации станут доступны: считается от конца печати
+## текста и не сдвигается назад перерисовками.
+var _buttons_ready_at: float = 0.0
 ## Боковые вырезы экрана (слева + справа) — сужают тело экрана.
 var _side_insets: float = 0.0
 ## Последний ход боя, чьи эффекты ударов уже показаны (0 — ни одного).
@@ -109,6 +117,9 @@ var _map_reveal_overlay: Control
 var _map_reveal_card: PanelContainer
 var _map_reveal_serial: int = 0
 var _pending_map_focus_node: String = ""
+## Открытый узел, чью плашку ждём показать до конца печати ленты: { node, title }.
+var _pending_map_reveal: Dictionary = {}
+var _map_reveal_scheduled: bool = false
 
 
 func _ready() -> void:
@@ -621,6 +632,7 @@ func _render_story_deferred() -> void:
 
 func _on_story_cleared() -> void:
 	_story_shown = 0
+	_buttons_ready_at = 0.0
 
 
 func _on_exploration_progressed(step: int, total: int, o2_spent: float) -> void:
@@ -725,7 +737,38 @@ func _drop_explore_overlay() -> void:
 
 ## Открытый эффектом узел получает заметную плашку на пять секунд. Кнопка
 ## открывает карту; там сам узел продолжает пульсировать до нажатия или таймера.
+## Плашка ждёт, пока лента допечатает строку «Открыта новая локация» — иначе она
+## перекрывает ещё не прочитанный текст события.
 func _on_map_node_unlocked(node_id: String, title: String) -> void:
+	_pending_map_reveal = {"node": node_id, "title": title}
+	if not _is_story_screen():
+		_flush_pending_map_reveal()
+
+
+## Ставит показ плашки на конец печати ленты (delay — сколько ещё печатать).
+func _queue_pending_map_reveal(delay: float) -> void:
+	if _pending_map_reveal.is_empty() or _map_reveal_scheduled:
+		return
+	if delay <= 0.0 or not SettingsSystem.animations:
+		_flush_pending_map_reveal()
+		return
+	_map_reveal_scheduled = true
+	var tween := create_tween()
+	tween.tween_interval(delay)
+	tween.tween_callback(_flush_pending_map_reveal)
+
+
+func _flush_pending_map_reveal() -> void:
+	_map_reveal_scheduled = false
+	if _pending_map_reveal.is_empty():
+		return
+	var node_id := str(_pending_map_reveal.get("node", ""))
+	var title := str(_pending_map_reveal.get("title", ""))
+	_pending_map_reveal = {}
+	_show_map_reveal_overlay(node_id, title)
+
+
+func _show_map_reveal_overlay(node_id: String, title: String) -> void:
 	_drop_map_reveal_overlay()
 	_pending_map_focus_node = node_id
 	_map_reveal_serial += 1
@@ -816,8 +859,8 @@ func _update_hud() -> void:
 	hp_bar.value = ResourceSystem.hp
 	hp_label.text = "%d/%d" % [ResourceSystem.hp, ResourceSystem.max_hp]
 	var o2i := int(ResourceSystem.o2)
-	o2_label.text = "💨 O2 %d" % o2i
-	o2_label.add_theme_color_override("font_color", UiKit.BAD_COLOR if o2i <= ResourceSystem.LOW_O2 else Color("#eef3ff"))
+	o2_label.text = "💨 O2 %d/%d" % [o2i, roundi(ResourceSystem.max_o2)]
+	o2_label.add_theme_color_override("font_color", UiKit.BAD_COLOR if o2i <= ResourceSystem.low_o2() else Color("#eef3ff"))
 	weapon_label.text = _weapon_text()
 	weapon_label.add_theme_color_override("font_color",
 		UiKit.BAD_COLOR if CharacterSystem.has_firearm() and ResourceSystem.ammo <= 0 else Color("#eef3ff"))
@@ -1598,7 +1641,7 @@ func _route_warnings(path: Array, cost: float) -> Array:
 	var o2 := ResourceSystem.o2
 	if cost >= o2:
 		warnings.append("⛔ Кислорода не хватит: нужно ≈ %d, в баллоне %d." % [roundi(cost), int(o2)])
-	elif o2 - cost <= ResourceSystem.LOW_O2:
+	elif o2 - cost <= ResourceSystem.low_o2():
 		warnings.append("⚠️ После перехода останется ≈ %d O2 — это мало." % roundi(o2 - cost))
 	if NeedsSystem.is_tired():
 		warnings.append("😵 Сил ≈ %d — можно вырубиться в пути. Выспитесь на базе." % roundi(NeedsSystem.energy))
@@ -1632,20 +1675,67 @@ func _map_node_name(node_id: String) -> String:
 ## Экран модуля и ситуация используют общий буфер, но при переходе старый
 ## контекст очищается: описание локации не остаётся под событием.
 func _render_situation() -> void:
-	_render_story()
+	var now := _now_seconds()
+	var reveal_delay := _render_story()
+	# Срок открытия кнопок считается от конца печати и не откатывается назад
+	# перерисовками: допечатанные записи лишь отодвигают его вперёд.
+	if _buttons_ready_at <= now:
+		_buttons_ready_at = now + reveal_delay
+	elif reveal_delay > 0.0:
+		_buttons_ready_at = maxf(_buttons_ready_at, now + reveal_delay)
+	var buttons: Array[Button] = []
 	if SituationEngine.awaiting_continue:
-		_add_button("▶️ Продолжить", _continue_situation, "exit")
+		buttons.append(_add_button("▶️ Продолжить", _continue_situation, "exit"))
+		_gate_story_buttons(buttons, _buttons_ready_at - now)
 		return
 	var options := SituationEngine.get_available_options()
 	if options.is_empty():
 		# Некуда выбирать — единственная кнопка закрывает ситуацию.
-		_add_button("▶️ Продолжить", _continue_situation, "exit")
+		buttons.append(_add_button("▶️ Продолжить", _continue_situation, "exit"))
+		_gate_story_buttons(buttons, _buttons_ready_at - now)
 		return
 	for opt in options:
 		var opt_id: String = opt.get("id", "")
 		# Завершающие варианты (выход на карту, конец события, финал) выделены цветом.
 		var kind := "exit" if SituationEngine.is_closing_option(opt) else "default"
-		_add_button(str(opt.get("label", opt_id)), _make_option_callback(opt_id), kind)
+		buttons.append(_add_button(str(opt.get("label", opt_id)), _make_option_callback(opt_id), kind))
+	_gate_story_buttons(buttons, _buttons_ready_at - now)
+
+
+func _now_seconds() -> float:
+	return float(Time.get_ticks_msec()) / 1000.0
+
+
+## Кнопки ситуации появляются, только когда весь её текст допечатан, и всплывают
+## по одной: решение не принимается вслепую и выбор читается как список.
+func _gate_story_buttons(buttons: Array[Button], delay: float) -> void:
+	if buttons.is_empty() or not SettingsSystem.animations:
+		return
+	for btn in buttons:
+		btn.disabled = true
+		btn.modulate.a = 0.0
+	var cursor := maxf(delay, BUTTON_REVEAL_DELAY)
+	for btn in buttons:
+		var tween := btn.create_tween()
+		tween.tween_interval(cursor)
+		tween.tween_callback(_reveal_story_button.bind(btn))
+		cursor += BUTTON_REVEAL_STEP
+
+
+## Одна кнопка проявляется из чуть уменьшенного состояния; включается, когда
+## анимация закончилась, — до этого нажатие невозможно.
+func _reveal_story_button(btn: Button) -> void:
+	if not is_instance_valid(btn):
+		return
+	btn.pivot_offset = btn.size * 0.5
+	btn.scale = Vector2(0.94, 0.94)
+	var tween := btn.create_tween().set_parallel(true)
+	tween.tween_property(btn, "modulate:a", 1.0, BUTTON_REVEAL_TIME).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(btn, "scale", Vector2.ONE, BUTTON_REVEAL_TIME) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.chain().tween_callback(func() -> void:
+		if is_instance_valid(btn):
+			btn.disabled = false)
 
 
 func _continue_situation() -> void:
@@ -1653,7 +1743,9 @@ func _continue_situation() -> void:
 
 
 ## Текущий контекст: новые записи печатаются по очереди и подматываются вниз.
-func _render_story() -> void:
+## Возвращает время, через которое допечатаются все новые записи (0 — печатать
+## нечего): по нему кнопки ситуации ждут текст, а плашка новой локации — ленту.
+func _render_story() -> float:
 	var entries := NarrativeSystem.get_entries()
 	var fresh_from := _story_shown if _story_shown <= entries.size() else 0
 	var reveal_at := 0.0
@@ -1668,6 +1760,8 @@ func _render_story() -> void:
 			reveal_at = _reveal_story_entry(entry, nodes, reveal_at)
 	_story_shown = entries.size()
 	_scroll_to_bottom()
+	_queue_pending_map_reveal(reveal_at)
+	return reveal_at
 
 
 ## Есть ли в ленте картинка событий или ситуации: она важнее картинки отсека.
