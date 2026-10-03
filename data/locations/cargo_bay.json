@@ -38,19 +38,17 @@
       ]
     },
     {
-      "id": "force_shuttle_airlock",
+      "id": "find_shuttle_airlock",
       "start": "manual",
-      "label": "Вскрыть шлюз к шаттлу обломком трубы",
+      "label": "Найти вход к шаттлу за грузовым шлюзом",
       "repeatable": false,
       "triggers": [
         { "type": "flag", "flag": "drone_cargo_down" },
         { "type": "has_item", "item": "pipe_scrap" }
       ],
-      "text": "Обломок трубы гнётся, но замок сдаётся первым. Створка со скрежетом уходит в переборку. За шлюзом висит пиратский шаттл — обесточенный, но целый.",
-      "image": "shuttle_airlock_open",
-      "sound": "shuttle_door",
+      "text": "Обломок трубы сдвигает заклинившую сервисную створку ровно настолько, чтобы увидеть шлюз к пиратскому шаттлу. Сам замок шлюза ещё держится — его придётся вскрывать уже на входе.",
+      "image": "cargo_drone_down",
       "effects": [
-        { "type": "o2_delta", "value": -15 },
         { "type": "open_map_node", "node": "alien_shuttle" }
       ]
     },

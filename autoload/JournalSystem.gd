@@ -61,6 +61,14 @@ func get_entries() -> Array:
 func entry_count() -> int:
 	return _entries.size()
 
+func export_recent_to_log(limit: int = 100) -> void:
+	_export_to_log(_entries.slice(maxi(0, _entries.size() - maxi(1, limit))))
+
+
+func export_all_to_log() -> void:
+	_export_to_log(_entries)
+
+
 
 func to_save_data() -> Array:
 	return _entries.duplicate(true)
@@ -125,6 +133,16 @@ func _on_fragment_unlocked(id: String) -> void:
 
 func _on_player_died(cause: String) -> void:
 	add("death", "Смерть: %s." % ("закончился кислород" if cause == "o2" else "здоровье упало до нуля"))
+
+func _export_to_log(entries: Array) -> void:
+	print("=== Хроника забега: %d записей ===" % entries.size())
+	for entry in entries:
+		print("O2 %d · %s%s" % [
+			int(entry.get("o2", 0)),
+			str(entry.get("text", "")),
+			" ×%d" % int(entry.get("count", 1)) if int(entry.get("count", 1)) > 1 else "",
+		])
+
 
 
 func _trim(text: String) -> String:

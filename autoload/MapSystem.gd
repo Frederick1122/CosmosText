@@ -494,7 +494,7 @@ func _open_node_lock(node_id: String) -> bool:
 	if lock.is_empty() or not EffectResolver.can_open_lock(lock):
 		return false
 	var key_name := EffectResolver.open_lock(lock)
-	unlock_node(node_id)
+	set_node_state(node_id, "available")
 	var opened := str(lock.get("text", "Замок поддался."))
 	if key_name != "":
 		opened += " (%s)" % key_name

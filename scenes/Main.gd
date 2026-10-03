@@ -208,7 +208,7 @@ func _ready() -> void:
 	NotificationSystem.mark_character_seen()
 	_expect(NotificationSystem.has_character_alert() and NotificationSystem.unspent_skill_points() == 3,
 		"неистраченные очки навыков держат уведомление и после просмотра персонажа")
-	_expect(not _has_manual("force_shuttle_airlock"), "шлюз недоступен без трубы")
+	_expect(not _has_manual("find_shuttle_airlock"), "проход к шаттлу недоступен без трубы")
 
 	ExplorationSystem.reveal("search_containers")
 	GameState.start_location_event("search_containers")
@@ -235,7 +235,7 @@ func _ready() -> void:
 
 	_expect(CharacterSystem.equip("pipe_scrap") == "" and CharacterSystem.get_stat("melee_damage") == 6.0,
 		"труба надета в руки: +6 к ближнему бою")
-	_expect(_has_manual("force_shuttle_airlock"), "надетая труба засчитывается в has_item")
+	_expect(_has_manual("find_shuttle_airlock"), "надетая труба засчитывается в has_item")
 	_expect(CraftingSystem.craft("plate_vest") != "", "жилет без Инженерии не крафтится")
 	var xp_before_craft := ProgressionSystem.xp
 	_expect(CraftingSystem.craft("makeshift_backpack") == "" and InventorySystem.count_item("cloth_rags") == 1,
@@ -261,15 +261,14 @@ func _ready() -> void:
 	var revealed_nodes: Array[String] = []
 	var capture_reveal := func(node_id: String, _title: String) -> void: revealed_nodes.append(node_id)
 	MapSystem.node_unlocked.connect(capture_reveal)
-	GameState.start_location_event("force_shuttle_airlock")
+	GameState.start_location_event("find_shuttle_airlock")
 	MapSystem.node_unlocked.disconnect(capture_reveal)
 	_expect(_node_state("alien_shuttle") == "available"
 		and MapSystem.is_node_fog_visible("alien_shuttle")
 		and revealed_nodes == ["alien_shuttle"]
 		and _notice_contains("[Открыта новая локация \"Пиратский шаттл\"]")
-		and _narrative_image_last("text") == "shuttle_airlock_open"
-		and _narrative_sound_last("text") == "shuttle_door",
-		"действие показало шаттл и выделило открытие")
+		and not QuestSystem.is_step_done("escape_persephone", "open_airlock"),
+		"действие в грузовом отсеке только показывает вход к шаттлу")
 
 	GameState.leave_location()
 	MapSystem.travel_to("cargo_bay")
@@ -336,7 +335,11 @@ func _ready() -> void:
 	# --- Шаттл: выбор одного из двух ---
 	GameState.leave_location()
 	MapSystem.travel_to("alien_shuttle")
-	_expect(LocationSystem.current_id == "alien_shuttle", "открытый модуль доступен")
+	_expect(LocationSystem.current_id == "alien_shuttle" and LocationSystem.is_event_done("force_shuttle_airlock")
+		and QuestSystem.is_step_done("escape_persephone", "open_airlock")
+		and _narrative_image_last("text") == "shuttle_airlock_open"
+		and _narrative_sound_last("text") == "shuttle_door",
+		"взлом шлюза срабатывает на входе в отсек шаттла")
 	ExplorationSystem.reveal("search_cockpit")
 	GameState.start_location_event("search_cockpit")
 	_expect(CharacterSystem.equip("mag_boots") == "" and is_equal_approx(CharacterSystem.get_stat("flee_chance"), 0.15),

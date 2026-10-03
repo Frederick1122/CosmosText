@@ -21,6 +21,18 @@
   },
   "events": [
     {
+      "id": "force_shuttle_airlock",
+      "start": "auto",
+      "repeatable": false,
+      "triggers": [],
+      "text": "У входа в шаттл замок всё ещё держится. Обломок трубы гнётся, но створка сдаётся первой и со скрежетом уходит в переборку. За шлюзом — пиратский шаттл: обесточенный, но целый.",
+      "image": "shuttle_airlock_open",
+      "sound": "shuttle_door",
+      "effects": [
+        { "type": "o2_delta", "value": -15 }
+      ]
+    },
+    {
       "id": "search_cockpit",
       "start": "manual",
       "label": "Обыскать кабину",

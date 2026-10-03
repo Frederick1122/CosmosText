@@ -156,7 +156,9 @@ func explore_location() -> void:
 		_finish_exploring()
 		return
 	EffectResolver.report_change("o2", -spent, "O2")
+	var journal_text := _exploration_journal_text(plan)
 	ExplorationSystem.resolve(plan)
+	JournalSystem.add("event", journal_text)
 	_finish_exploring()
 	if ResourceSystem.is_dead():
 		return
@@ -167,6 +169,18 @@ func _finish_exploring() -> void:
 	_exploring = false
 	_exploration_progress.clear()
 	exploration_finished.emit()
+
+func _exploration_journal_text(plan: Dictionary) -> String:
+	var location_title := LocationSystem.get_title()
+	if str(plan.get("kind", "")) == "event":
+		var ev := LocationSystem.find_event(str(plan.get("event_id", "")))
+		var label := str(ev.get("label", plan.get("event_id", "")))
+		return "Исследование: %s — найдено «%s»" % [location_title, label]
+	if str(plan.get("kind", "")) == "pool":
+		var entry: Dictionary = plan.get("entry", {})
+		return "Исследование: %s — %s" % [location_title, str(entry.get("text", "находка"))]
+	return "Исследование: %s" % location_title
+
 
 
 func is_exploring() -> bool:

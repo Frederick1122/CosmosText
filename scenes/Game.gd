@@ -370,7 +370,7 @@ func _apply_hud_fonts() -> void:
 		lbl.add_theme_font_size_override("font_size", UiKit.fs(18))
 	for bar in [hp_bar, energy_bar, hunger_bar]:
 		bar.custom_minimum_size.y = UiKit.fs(16)
-	for btn in [map_button, character_button, journal_button, settings_button]:
+	for btn in [map_button, character_button, skill_button, journal_button, settings_button]:
 		btn.custom_minimum_size = Vector2(0, UiKit.fs(78))
 		btn.add_theme_font_size_override("font_size", UiKit.fs(19))
 	xp_bar.apply_fonts()
@@ -812,9 +812,9 @@ func _show_map_reveal_overlay(node_id: String, title: String) -> void:
 func _show_revealed_node_on_map() -> void:
 	_drop_map_reveal_overlay()
 	if journal_open:
-		NotificationSystem.mark_journal_seen()
+		_mark_active_journal_seen()
 	if character_open:
-		NotificationSystem.mark_character_seen()
+		_mark_active_character_seen()
 	journal_open = false
 	character_open = false
 	settings_open = false
@@ -838,9 +838,9 @@ func _drop_map_reveal_overlay() -> void:
 
 func _on_screen_changed(screen: int) -> void:
 	if character_open:
-		NotificationSystem.mark_character_seen()
+		_mark_active_character_seen()
 	if journal_open:
-		NotificationSystem.mark_journal_seen()
+		_mark_active_journal_seen()
 	map_open = false
 	journal_open = false
 	character_open = false
@@ -945,11 +945,12 @@ func _toggle_journal() -> void:
 	if journal_button.disabled:
 		return
 	if journal_open:
-		NotificationSystem.mark_journal_seen()
+		_mark_active_journal_seen()
 		journal_open = false
 	else:
 		if character_open:
-			NotificationSystem.mark_character_seen()
+			_mark_active_character_seen()
+		_mark_active_journal_seen()
 		journal_open = true
 		map_open = false
 		character_open = false
@@ -965,9 +966,9 @@ func _toggle_settings() -> void:
 		settings_open = false
 	else:
 		if journal_open:
-			NotificationSystem.mark_journal_seen()
+			_mark_active_journal_seen()
 		if character_open:
-			NotificationSystem.mark_character_seen()
+			_mark_active_character_seen()
 		settings_open = true
 		map_open = false
 		journal_open = false
@@ -989,9 +990,9 @@ func _toggle_map() -> void:
 	if GameState.current_screen == GameState.Screen.SECTOR_MAP and not _any_overlay_open():
 		return
 	if journal_open:
-		NotificationSystem.mark_journal_seen()
+		_mark_active_journal_seen()
 	if character_open:
-		NotificationSystem.mark_character_seen()
+		_mark_active_character_seen()
 	journal_open = false
 	character_open = false
 	skill_open = false
@@ -1016,7 +1017,7 @@ func _toggle_character() -> void:
 		_close_character()
 		return
 	if journal_open:
-		NotificationSystem.mark_journal_seen()
+		_mark_active_journal_seen()
 	character_open = true
 	map_open = false
 	journal_open = false
@@ -1029,7 +1030,7 @@ func _toggle_character() -> void:
 
 ## Предметы могли измениться — в модуле перепроверяем его автособытия.
 func _close_character() -> void:
-	NotificationSystem.mark_character_seen()
+	_mark_active_character_seen()
 	character_open = false
 	_scroll_to_top()
 	if GameState.current_screen == GameState.Screen.LOCATION:
@@ -1047,9 +1048,9 @@ func _toggle_skills() -> void:
 		skill_open = false
 	else:
 		if journal_open:
-			NotificationSystem.mark_journal_seen()
+			_mark_active_journal_seen()
 		if character_open:
-			NotificationSystem.mark_character_seen()
+			_mark_active_character_seen()
 		skill_open = true
 		map_open = false
 		journal_open = false
@@ -1058,6 +1059,22 @@ func _toggle_skills() -> void:
 		workbench_open = false
 	_scroll_to_top()
 	_render_current_screen()
+
+
+
+func _mark_active_character_seen() -> void:
+	if character_tab == "items":
+		NotificationSystem.mark_character_items_seen(character_items_tab)
+
+
+func _mark_active_journal_seen() -> void:
+	match journal_tab:
+		"goals":
+			NotificationSystem.mark_goals_seen()
+		"lore":
+			NotificationSystem.mark_lore_seen()
+		"codex":
+			NotificationSystem.mark_codex_seen(codex_tab)
 
 
 func _render_current_screen() -> void:
@@ -1713,7 +1730,7 @@ func _gate_story_buttons(buttons: Array[Button], delay: float) -> void:
 		return
 	for btn in buttons:
 		btn.disabled = true
-		btn.modulate.a = 0.0
+		btn.modulate.a = 0.45
 	var cursor := maxf(delay, BUTTON_REVEAL_DELAY)
 	for btn in buttons:
 		var tween := btn.create_tween()
@@ -1971,7 +1988,11 @@ func _render_character() -> void:
 		item_tabs.add_theme_constant_override("separation", 8)
 		for entry in CHARACTER_ITEM_TABS:
 			var tab_id := str(entry[0])
-			var btn := UiKit.button(str(entry[1]), "tab_active" if tab_id == character_items_tab else "quiet", 48)
+			var label := str(entry[1])
+			if (tab_id == "bag" and NotificationSystem.has_new_items_in_bag()) \
+					or (tab_id == "info" and NotificationSystem.has_new_items_in_info()):
+				label += " (!)"
+			var btn := UiKit.button(label, "tab_active" if tab_id == character_items_tab else "quiet", 48)
 			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			btn.add_theme_font_size_override("font_size", UiKit.fs(17))
 			btn.pressed.connect(_on_character_item_tab_changed.bind(tab_id))
@@ -2000,12 +2021,15 @@ func _render_workbench() -> void:
 
 func _on_character_tab_changed(new_tab: String) -> void:
 	character_tab = new_tab
+	if character_tab == "items":
+		NotificationSystem.mark_character_items_seen(character_items_tab)
 	_scroll_to_top()
 	_render_current_screen()
 
 
 func _on_character_item_tab_changed(new_tab: String) -> void:
 	character_items_tab = new_tab
+	NotificationSystem.mark_character_items_seen(character_items_tab)
 	_scroll_to_top()
 	_render_current_screen()
 
@@ -2272,6 +2296,7 @@ func _render_journal_goals() -> void:
 
 func _select_journal_tab(tab_id: String) -> void:
 	journal_tab = tab_id
+	_mark_active_journal_seen()
 	_scroll_to_top()
 	_render_current_screen()
 
@@ -2282,6 +2307,15 @@ func _render_journal_log() -> void:
 	if entries.is_empty():
 		_add_text("Пока ничего не произошло.")
 		return
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 8)
+	var recent_btn := UiKit.button("Выгрузить последние 100 в лог", "quiet", 52)
+	recent_btn.pressed.connect(JournalSystem.export_recent_to_log.bind(100))
+	actions.add_child(recent_btn)
+	var all_btn := UiKit.button("Выгрузить всё в лог", "quiet", 52)
+	all_btn.pressed.connect(JournalSystem.export_all_to_log)
+	actions.add_child(all_btn)
+	body.add_child(actions)
 	_add_section("Записей: %d" % entries.size())
 	for i in range(entries.size() - 1, -1, -1):
 		var entry: Dictionary = entries[i]
@@ -2319,7 +2353,10 @@ func _render_journal_codex() -> void:
 	tabs.add_theme_constant_override("separation", 8)
 	for entry in CODEX_TABS:
 		var category := str(entry[0])
-		var btn := UiKit.button(str(entry[1]), "tab_active" if category == codex_tab else "quiet", 52)
+		var label := str(entry[1])
+		if NotificationSystem.has_new_codex_category(category):
+			label += " (!)"
+		var btn := UiKit.button(label, "tab_active" if category == codex_tab else "quiet", 52)
 		btn.name = "CodexTab_%s" % category
 		btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2340,6 +2377,7 @@ func _render_journal_codex() -> void:
 
 func _select_codex_tab(category: String) -> void:
 	codex_tab = category
+	NotificationSystem.mark_codex_seen(codex_tab)
 	_scroll_to_top()
 	_render_current_screen()
 

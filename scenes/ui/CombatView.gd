@@ -57,7 +57,7 @@ const HP_TEXT := "%d/%d HP"
 ## Экран победы: затемнение, отступ панели от низа (над жестами системы) и
 ## порядок появления — затемнение, панель, набор опыта.
 const VICTORY_DIM := 0.72
-const VICTORY_BOTTOM := 150
+const VICTORY_BOTTOM := 260
 const VICTORY_PANEL_DELAY := 0.25
 const VICTORY_XP_DELAY := 0.6
 const XP_COUNT_TIME := 0.6

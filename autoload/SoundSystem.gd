@@ -135,8 +135,8 @@ func _warn_low_o2() -> void:
 		play("low_o2")
 
 
-## Силы и питание меняются только от действий, но предупреждение должно
-## повторяться и пока игрок читает экран. Таймер выключен вне активного забега.
+## Силы и питание меняются только от действий. Предупреждаем на переходе в
+## критическую зону, но не держим периодическую сирену поверх чтения ленты.
 func _on_needs_changed() -> void:
 	var low := NeedsSystem.is_tired() or NeedsSystem.is_hungry()
 	if low and not _needs_low:
@@ -151,12 +151,7 @@ func _warn_low_needs() -> void:
 
 
 func _sync_need_warning_timer() -> void:
-	if _needs_low and _is_active_run_screen():
-		if _need_warning_timer.is_stopped():
-			_need_warning_timer.start()
-	else:
-		_need_warning_timer.stop()
-
+	_need_warning_timer.stop()
 
 func _is_active_run_screen() -> bool:
 	return GameState.current_screen != GameState.Screen.MAIN_MENU \

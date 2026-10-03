@@ -49,7 +49,7 @@
       "requires": [
         {
           "type": "event_done",
-          "event": "cargo_bay/force_shuttle_airlock"
+          "event": "alien_shuttle/force_shuttle_airlock"
         }
       ],
       "text": "За грузовым отсеком — пиратский шаттл. Диагностика прямо пишет: гнездо пусто, нужна реакторная энергоячейка серии П-12. Такая ячейка одна — в стойке реактора «Персефоны», за гермодверью с допуском экипажа."
@@ -128,7 +128,7 @@
           "done": [
             {
               "type": "event_done",
-              "event": "cargo_bay/force_shuttle_airlock"
+              "event": "alien_shuttle/force_shuttle_airlock"
             }
           ]
         },

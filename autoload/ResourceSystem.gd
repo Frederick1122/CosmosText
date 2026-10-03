@@ -71,10 +71,10 @@ func reset_for_new_run(config: Dictionary) -> void:
 	max_hp_bonus = 0
 	max_hp = base_max_hp
 	hp = max_hp
-	base_max_o2 = maxf(1.0, float(config.get("max_o2", 150.0)))
+	base_max_o2 = maxf(1.0, float(config.get("max_o2", 100.0)))
 	max_o2_bonus = 0.0
 	max_o2 = base_max_o2
-	o2 = clampf(float(config.get("start_o2", 252.0)), 0.0, max_o2)
+	o2 = clampf(float(config.get("start_o2", 100.0)), 0.0, max_o2)
 	ammo = int(config.get("start_ammo", 0))
 	_died_this_run = false
 	hp_changed.emit(hp)
@@ -206,7 +206,7 @@ func load_save_data(data: Dictionary) -> void:
 func environment_multiplier(node_id: String = "") -> float:
 	var target := node_id if node_id != "" else LocationSystem.current_node_id
 	if target == "":
-		return 1.0
+		return 0.0 if LocationSystem.is_breathable(LocationSystem.current_id) else 1.0
 	if LocationSystem.is_breathable(str(MapSystem.nodes.get(target, {}).get("location_id", ""))):
 		return 0.0
 	if MapSystem.is_node_sealed(target):

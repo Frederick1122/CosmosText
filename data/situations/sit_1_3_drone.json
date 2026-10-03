@@ -15,6 +15,8 @@
 		  "clear_node": "cargo_bay",
 		  "on_win": [
 			{ "type": "flag_set", "flag": "drone_cargo_down" },
+			{ "type": "unlock_knowledge", "knowledge": "k_combat_school" },
+			{ "type": "practice_add", "practice": "command" },
 			{ "type": "skill_points_add", "value": 1 }
 		  ]
 		}
