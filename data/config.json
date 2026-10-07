@@ -30,6 +30,8 @@
   "needs": {
     "max_energy": 100,
     "max_hunger": 100,
+    "start_time_minutes": 480,
+    "time_costs": { "move": 10, "elevator": 5, "action": 15, "choice": 5, "combat_turn": 5 },
     "energy_costs": { "move": 3, "elevator": 1, "action": 2, "choice": 1, "combat_turn": 2 },
     "hunger_costs": { "move": 1, "elevator": 0.5, "action": 1, "choice": 0.5, "combat_turn": 0.5 },
     "tired_energy": 25,
@@ -37,10 +39,11 @@
     "hungry_hunger": 75,
     "hungry_energy_multiplier": 1.5,
     "starving_hp": 3,
-    "sleep_hunger": 15,
-    "sleep_hp": 10,
+    "sleep_energy_per_hour": 12.5,
+    "sleep_hunger_per_hour": 2,
+    "sleep_hp_per_hour": 1.25,
+    "pass_out_hours": 4,
     "pass_out_o2": 30,
-    "pass_out_energy": 30,
     "pass_out_hunger": 10
   }
 }

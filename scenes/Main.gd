@@ -29,7 +29,8 @@ func _ready() -> void:
 	_expect(GameState.current_screen == Screen.SITUATION and SituationEngine.current_id == "sit_1_1_capsule",
 		"новая игра: автособытие пробуждения в капсуле")
 	_expect(CharacterSystem.get_equipped("body") == "flight_suit" and CharacterSystem.get_stat("armor") == 1.0
-		and CharacterSystem.skill_points == 1, "стартовое снаряжение и очки навыков из config")
+		and CharacterSystem.skill_points == 1 and NeedsSystem.clock_text() == "08:10",
+		"стартовое снаряжение, очки навыков и время 08:00 плюс переход в хаб")
 	_expect(SituationEngine.awaiting_continue == false, "до выбора ситуация не ждёт «Продолжить»")
 	SituationEngine.select_option("C")
 	_expect(SituationEngine.awaiting_continue and GameState.current_screen == Screen.SITUATION
@@ -46,8 +47,8 @@ func _ready() -> void:
 		"после «Продолжить» событие заменено описанием локации")
 	_expect(QuestSystem.is_step_done("escape_persephone", "leave_capsule") and not QuestSystem.is_completed("escape_persephone")
 		and NotificationSystem.has_journal_alert() and NotificationSystem.has_new_codex()
-		and QuestSystem.get_thoughts().contains("летел работать"),
-		"цели и справочник: первый шаг засчитан, мысли о работе на Мейер-4, (!) у журнала")
+		and QuestSystem.get_thoughts().contains("спал с самого вылета"),
+		"цели и справочник: первый шаг засчитан, герой помнит только начало перелёта, (!) у журнала")
 	var escape: Dictionary = QuestSystem.get_quests()[0]
 	_expect(escape["steps"].size() == 2 and bool(escape["steps"][1]["current"]),
 		"видны засчитанные шаги и один текущий, дальше цель не раскрывается")
@@ -119,13 +120,23 @@ func _ready() -> void:
 		"в капсуле есть воздух: действия на базе кислорода не тратят")
 	_expect(NeedsSystem.energy < NeedsSystem.max_energy() and NeedsSystem.hunger > 0.0,
 		"действия отнимают силы и копят голод")
+	var action_time_before := (NeedsSystem.day - 1) * 1440 + NeedsSystem.time_minutes
+	ResourceSystem.spend_o2("action")
+	var action_time_after := (NeedsSystem.day - 1) * 1440 + NeedsSystem.time_minutes
+	_expect(action_time_after - action_time_before == 15 and NeedsSystem.time_minutes % 5 == 0,
+		"действие продвинуло часы на 15 минут с шагом 5")
 	var hunger_before_sleep := NeedsSystem.hunger
+	var energy_before_sleep := NeedsSystem.energy
+	ResourceSystem.apply_hp_delta(-20)
+	var hp_before_sleep := ResourceSystem.hp
+	var sleep_time_before := (NeedsSystem.day - 1) * 1440 + NeedsSystem.time_minutes
 	_delete_save(SaveManager.CHECKPOINT_PATH)
-	GameState.end_day()
-	_expect(NeedsSystem.day == 2 and is_equal_approx(NeedsSystem.energy, NeedsSystem.max_energy())
-		and NeedsSystem.hunger > hunger_before_sleep and FileAccess.file_exists(SaveManager.CHECKPOINT_PATH)
-		and GameState.current_screen == Screen.LOCATION,
-		"сон на базе: новый день, силы восстановлены, голод вырос, чекпойнт записан")
+	GameState.sleep(8)
+	var sleep_time_after := (NeedsSystem.day - 1) * 1440 + NeedsSystem.time_minutes
+	_expect(sleep_time_after - sleep_time_before == 480 and NeedsSystem.energy > energy_before_sleep
+		and ResourceSystem.hp > hp_before_sleep and NeedsSystem.hunger > hunger_before_sleep
+		and FileAccess.file_exists(SaveManager.CHECKPOINT_PATH) and GameState.current_screen == Screen.LOCATION,
+		"сон на базе: 8 часов, силы и здоровье восстановлены, питание потрачено, чекпойнт записан")
 	InventorySystem.add_item("ration_bar")
 	var hunger_before_meal := NeedsSystem.hunger
 	InventorySystem.use_item("ration_bar")
@@ -206,8 +217,8 @@ func _ready() -> void:
 		and _notice_contains("[+1 Металлолом]"),
 		"после победы у отсека другая картинка уже в ленте, трофей под ней")
 	NotificationSystem.mark_character_seen()
-	_expect(NotificationSystem.has_character_alert() and NotificationSystem.unspent_skill_points() == 3,
-		"неистраченные очки навыков держат уведомление и после просмотра персонажа")
+	_expect(NotificationSystem.has_development_alert() and NotificationSystem.unspent_skill_points() == 3,
+		"неистраченные очки навыков держат уведомление «Развитие» и после просмотра персонажа")
 	_expect(not _has_manual("find_shuttle_airlock"), "проход к шаттлу недоступен без трубы")
 
 	ExplorationSystem.reveal("search_containers")
@@ -301,6 +312,9 @@ func _ready() -> void:
 
 	GameState.leave_location()
 	_expect(MapSystem.can_unlock_node("maintenance_bay"), "с шестигранником узел подсвечен как открываемый")
+	# Срез длиннее одного баллона: запас пополняем, иначе игрок задохнётся в пути
+	# и вся дальнейшая часть сценария не пройдёт (как пополнение в хабе выше).
+	ResourceSystem.apply_o2_delta(ResourceSystem.max_o2 - ResourceSystem.o2)
 	MapSystem.travel_to("maintenance_bay")
 	_expect(LocationSystem.current_id == "maintenance_bay" and _node_state("maintenance_bay") == "available"
 		and InventorySystem.has_item("hex_key"), "ключ открыл служебную панель и не израсходовался")
@@ -395,7 +409,9 @@ func _ready() -> void:
 	# --- Палуба 03: коридор и реактор ---
 	GameState.leave_location()
 	MapSystem.travel_to("hub")
-	GameState.end_day()  # выспаться перед спуском: иначе вырубится по дороге к реактору
+	GameState.sleep(8)  # выспаться перед спуском: иначе вырубится по дороге к реактору
+	# Спуск к реактору длиннее одного баллона — пополняем запас под срез.
+	ResourceSystem.apply_o2_delta(ResourceSystem.max_o2 - ResourceSystem.o2)
 	GameState.leave_location()
 	MapSystem.travel_to("lift_01_to_02")
 	MapSystem.travel_to("lift_02_to_03")
@@ -546,11 +562,12 @@ func _ready() -> void:
 	MapSystem.travel_to("crew_quarters")
 	while InventorySystem.has_item("ration_bar"):
 		InventorySystem.use_item("ration_bar")
-	var day_before_quarters := NeedsSystem.day
-	GameState.end_day()
-	_expect(LocationSystem.is_base() and NeedsSystem.day == day_before_quarters + 1
+	var sleep_before_quarters := (NeedsSystem.day - 1) * 1440 + NeedsSystem.time_minutes
+	GameState.sleep(12)
+	var sleep_after_quarters := (NeedsSystem.day - 1) * 1440 + NeedsSystem.time_minutes
+	_expect(LocationSystem.is_base() and sleep_after_quarters - sleep_before_quarters == 720
 		and is_equal_approx(NeedsSystem.energy, NeedsSystem.max_energy()) and not NeedsSystem.is_hungry(),
-		"каюты смены — вторая база: поели и выспались на станции")
+		"каюты смены — вторая база: поели и проспали 12 часов на станции")
 	ExplorationSystem.reveal("search_bunks")
 	GameState.start_location_event("search_bunks")
 	_expect(InventorySystem.has_item("medkit"), "в каютах найдена аптечка")
@@ -711,6 +728,9 @@ func _ready() -> void:
 		"голод на максимуме: каждое действие отнимает здоровье")
 
 	# --- Исследование: пул без спрятанных событий и навык «Поиск» ---
+	# Срез длиннее баллона: перед длительным поиском пополняем запас, иначе
+	# игрок задохнётся на такте и исследование оборвётся.
+	ResourceSystem.apply_o2_delta(ResourceSystem.max_o2 - ResourceSystem.o2)
 	_expect(LocationSystem.current_id == "service_corridor" and ExplorationSystem.remaining("service_corridor") == 2,
 		"в коридоре два случайных поиска")
 	var exploration_probe := {"runs": 0, "steps": 0, "spent": 0.0}

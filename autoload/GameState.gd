@@ -197,13 +197,16 @@ func refresh_location() -> void:
 	_resume_location()
 
 
-## Сон на базе: новый день (NeedsSystem.sleep). Экран базы пишет чекпойнт
-## (_show_location → returned_to_hub) — откат вернёт к началу этого дня.
-func end_day() -> void:
+## Сон на базе на 4 / 8 / 12 часов. Качество задаёт сама база; _show_location
+## после отдыха записывает чекпойнт с новым временем и ресурсами.
+func sleep(hours: int) -> void:
 	if not LocationSystem.is_base():
 		push_warning("GameState: спать можно только на базе")
 		return
-	NeedsSystem.sleep()
+	if not [4, 8, 12].has(hours):
+		push_warning("GameState: длительность сна должна быть 4, 8 или 12 часов")
+		return
+	NeedsSystem.sleep(hours, LocationSystem.get_sleep_quality())
 	_show_location()
 
 

@@ -26,6 +26,8 @@ const TRAVEL_STEP_PAUSE := 0.2
 const BUTTON_REVEAL_DELAY := 0.05
 const BUTTON_REVEAL_STEP := 0.07
 const BUTTON_REVEAL_TIME := 0.18
+## Один экранный такт анимации сна соответствует одному игровому часу.
+const REST_STEP_SECONDS := 0.18
 
 var body: VBoxContainer
 var content_margin: MarginContainer
@@ -60,10 +62,12 @@ var section_separator: HSeparator
 var map_open: bool = false
 var journal_open: bool = false
 var character_open: bool = false
-## Кольцевое дерево навыков: оверлей поверх модуля.
+## Общее развитие: кольцевое дерево и базовые навыки.
 var skill_open: bool = false
-## Экран создания героя: выбор происхождения перед новой игрой.
+var skill_tab: String = "tree"
+## Экран создания героя: одна листаемая анкета за раз.
 var origin_picker_open: bool = false
+var origin_index: int = 0
 var settings_open: bool = false
 ## Верстак базы: оверлей с рецептами поверх экрана модуля.
 var workbench_open: bool = false
@@ -108,6 +112,13 @@ var _explore_card: PanelContainer
 var _explore_caption: Label
 var _explore_bar: ProgressBar
 var _explore_total: int = 1
+## Итог сна/обморока: отдельная блокирующая плашка с почасовым прогрессом.
+var _rest_overlay: Control
+var _rest_card: PanelContainer
+var _rest_caption: Label
+var _rest_stats: Label
+var _rest_bar: ProgressBar
+var _rest_animation_serial: int = 0
 var _energy_alert_tween: Tween
 var _hunger_alert_tween: Tween
 var _energy_alert_active: bool = false
@@ -271,6 +282,7 @@ func _connect_signals() -> void:
 	ProgressionSystem.changed.connect(_update_hud)
 	NeedsSystem.changed.connect(_update_hud)
 	NeedsSystem.passed_out.connect(_on_passed_out)
+	NeedsSystem.rest_completed.connect(_on_rest_completed)
 
 func _fill_parent(control: Control) -> void:
 	control.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -735,6 +747,122 @@ func _drop_explore_overlay() -> void:
 		_explore_overlay = null
 		_explore_card = null
 
+## Сон и обморок уже применены системой; UI почасово показывает прошедшее
+## время и фактические изменения ресурсов, не давая нажимать экран под плашкой.
+func _on_rest_completed(result: Dictionary) -> void:
+	if SettingsSystem.animations:
+		_animate_rest_overlay(result)
+
+
+func _animate_rest_overlay(result: Dictionary) -> void:
+	_drop_rest_overlay()
+	_rest_animation_serial += 1
+	var serial := _rest_animation_serial
+	var hours := maxi(1, int(result.get("hours", 1)))
+	_show_rest_overlay(result, hours)
+	for elapsed in range(hours + 1):
+		if elapsed > 0:
+			await get_tree().create_timer(REST_STEP_SECONDS).timeout
+		if serial != _rest_animation_serial or _rest_overlay == null:
+			return
+		_update_rest_overlay(result, elapsed, hours)
+	await get_tree().create_timer(0.8).timeout
+	if serial == _rest_animation_serial:
+		_hide_rest_overlay()
+
+
+func _show_rest_overlay(result: Dictionary, hours: int) -> void:
+	_rest_overlay = Control.new()
+	_rest_overlay.name = "RestOverlay"
+	_rest_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_rest_overlay)
+	_fill_parent(_rest_overlay)
+	var dim := ColorRect.new()
+	dim.color = Color(0.03, 0.04, 0.07, 0.72)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_rest_overlay.add_child(dim)
+	_fill_parent(dim)
+	var center := CenterContainer.new()
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_rest_overlay.add_child(center)
+	_fill_parent(center)
+	_rest_card = PanelContainer.new()
+	_rest_card.name = "RestProgress"
+	_rest_card.custom_minimum_size.x = 760.0
+	_rest_card.add_theme_stylebox_override("panel", UiKit.box(Color("#171d27"), Color("#8a78b8"), 2, 30))
+	center.add_child(_rest_card)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 18)
+	_rest_card.add_child(column)
+	var title_text := "😵 Обморок" if bool(result.get("forced", false)) else "🛏️ Сон · %d ч." % hours
+	var title := UiKit.text(title_text, 30, UiKit.TITLE_COLOR)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(title)
+	var quality := UiKit.text("Качество сна: %s" % str(result.get("quality_title", "")), 22,
+		UiKit.BAD_COLOR if str(result.get("quality", "")) == "poor" else UiKit.ACCENT_COLOR)
+	quality.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(quality)
+	_rest_bar = ProgressBar.new()
+	_rest_bar.name = "RestProgressBar"
+	_rest_bar.max_value = 1.0
+	_rest_bar.value = 0.0
+	_rest_bar.show_percentage = false
+	_rest_bar.custom_minimum_size.y = UiKit.fs(22)
+	_rest_bar.add_theme_stylebox_override("background", UiKit.box(Color("#202733"), Color("#323d4e"), 1, 0))
+	_rest_bar.add_theme_stylebox_override("fill", UiKit.box(Color("#6c5ca4"), Color("#c6b6ff"), 1, 0))
+	column.add_child(_rest_bar)
+	_rest_caption = UiKit.text("", 22, UiKit.ACCENT_COLOR)
+	_rest_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(_rest_caption)
+	_rest_stats = UiKit.text("", 22, UiKit.TEXT_COLOR)
+	_rest_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(_rest_stats)
+	_rest_overlay.modulate.a = 0.0
+	_rest_card.pivot_offset = Vector2(380.0, 120.0)
+	_rest_card.scale = Vector2(0.88, 0.88)
+	var appear := create_tween().set_parallel(true)
+	appear.tween_property(_rest_overlay, "modulate:a", 1.0, 0.22).set_trans(Tween.TRANS_SINE)
+	appear.tween_property(_rest_card, "scale", Vector2.ONE, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	var fill := _rest_overlay.create_tween()
+	fill.tween_property(_rest_bar, "value", 1.0, float(hours) * REST_STEP_SECONDS).set_trans(Tween.TRANS_LINEAR)
+
+
+func _update_rest_overlay(result: Dictionary, elapsed: int, hours: int) -> void:
+	if _rest_overlay == null:
+		return
+	var total_minutes := (int(result.get("start_day", 1)) - 1) * 1440 \
+		+ int(result.get("start_time", 0)) + elapsed * 60
+	var shown_day := floori(float(total_minutes) / 1440.0) + 1
+	var shown_time := total_minutes % 1440
+	_rest_caption.text = ("Засыпаем…" if elapsed == 0 else "Прошло %d из %d ч. · День %d, %02d:%02d" % [
+		elapsed, hours, shown_day, floori(float(shown_time) / 60.0), shown_time % 60])
+	var ratio := float(elapsed) / float(hours)
+	_rest_stats.text = "⚡ +%d сил · ❤️ +%d HP · 🍖 −%d питания" % [
+		roundi(float(result.get("energy_restored", 0.0)) * ratio),
+		roundi(float(result.get("hp_restored", 0)) * ratio),
+		roundi(float(result.get("nutrition_spent", 0.0)) * ratio)]
+
+
+func _hide_rest_overlay() -> void:
+	if _rest_overlay == null:
+		return
+	var overlay := _rest_overlay
+	var card := _rest_card
+	_rest_overlay = null
+	_rest_card = null
+	var fade := overlay.create_tween().set_parallel(true)
+	fade.tween_property(overlay, "modulate:a", 0.0, 0.25).set_trans(Tween.TRANS_SINE)
+	fade.tween_property(card, "scale", Vector2(0.92, 0.92), 0.25).set_trans(Tween.TRANS_SINE)
+	fade.chain().tween_callback(overlay.queue_free)
+
+
+func _drop_rest_overlay() -> void:
+	_rest_animation_serial += 1
+	if _rest_overlay != null:
+		_rest_overlay.queue_free()
+	_rest_overlay = null
+	_rest_card = null
+
 ## Открытый эффектом узел получает заметную плашку на пять секунд. Кнопка
 ## открывает карту; там сам узел продолжает пульсировать до нажатия или таймера.
 ## Плашка ждёт, пока лента допечатает строку «Открыта новая локация» — иначе она
@@ -872,7 +1000,7 @@ func _update_hud() -> void:
 	hunger_bar.max_value = maxf(1.0, NeedsSystem.max_hunger())
 	hunger_bar.value = nutrition
 	hunger_label.text = "%d/%d" % [roundi(nutrition), roundi(NeedsSystem.max_hunger())]
-	day_label.text = "☀️ День %d" % NeedsSystem.day
+	day_label.text = "☀️ День %d · %s" % [NeedsSystem.day, NeedsSystem.clock_text()]
 	_sync_need_alerts()
 	xp_bar.sync()
 
@@ -935,7 +1063,8 @@ func _weapon_text() -> String:
 ## Вырубился посреди карты — ленты там не видно, причина пишется под картой.
 func _on_passed_out(o2: float) -> void:
 	if GameState.current_screen == GameState.Screen.SECTOR_MAP:
-		_map_message = "😵 Силы кончились — вы вырубились прямо в пути (−%d O2). Выспитесь на базе." % roundi(o2)
+		_map_message = "😵 Силы кончились — плохой сон на %d ч. прямо в пути (−%d O2)." % [
+			NeedsSystem.pass_out_hours(), roundi(o2)]
 		_refresh_route_panel()
 
 
@@ -1160,7 +1289,7 @@ func _update_nav_buttons() -> void:
 	settings_button.disabled = GameState.current_screen == GameState.Screen.COMBAT or MapSystem.is_travelling() or GameState.is_exploring()
 	_set_nav_label(map_button, "🗺️", "Карта", false)
 	_set_nav_label(character_button, "🧑‍🚀", "Персонаж", NotificationSystem.has_character_alert())
-	_set_nav_label(skill_button, "🌐", "Развитие", SkillTreeSystem.has_available())
+	_set_nav_label(skill_button, "🌐", "Развитие", NotificationSystem.has_development_alert())
 	_set_nav_label(journal_button, "📓", "Журнал", NotificationSystem.has_journal_alert())
 	_set_nav_label(settings_button, "⚙️", "Настройки", false)
 	var map_active := not journal_open and not character_open and not skill_open and not settings_open and (
@@ -1337,45 +1466,93 @@ func _start_new_game() -> void:
 	if SkillTreeSystem.get_origins().is_empty():
 		GameState.start_new_game()
 		return
+	origin_index = 0
 	origin_picker_open = true
 	_scroll_to_top()
 	_render_current_screen()
 
 
-## Создание героя: биография важнее характеристик — экран объясняет, кем был
-## пассажир, что это даёт и чего лишает.
+## Создание героя: одна анкета на страницу. Сюжетные крючки здесь скрыты —
+## герой вспомнит профессию, но не узнает события, случившиеся во время анабиоза.
 func _render_origin_picker() -> void:
 	_set_body_stretch(false)
-	_add_title("Кем вы были до «Персефоны»")
-	_add_section("Происхождение задаёт старт в дереве развития — потом его не сменить.")
-	for origin in SkillTreeSystem.get_origins():
-		var origin_id := str(origin.get("id", ""))
-		var card := UiKit.card(body)
-		card.add_child(UiKit.text(str(origin.get("name", origin_id)), 26, UiKit.TITLE_COLOR))
-		var why := str(origin.get("why", ""))
-		if why != "":
-			card.add_child(UiKit.text(why, 20))
-		var sectors := str(origin.get("sectors_text", ""))
-		if sectors != "":
-			card.add_child(UiKit.text("Старт в дереве: %s" % sectors, 20, UiKit.ACCENT_COLOR))
-		var buff := str(origin.get("buff", ""))
-		if buff != "":
-			card.add_child(UiKit.text("Черта: %s" % buff, 20, UiKit.GOOD_COLOR))
-		var debuff := str(origin.get("debuff", ""))
-		if debuff != "":
-			card.add_child(UiKit.text("Цена: %s" % debuff, 20, UiKit.BAD_COLOR))
-		var hook := str(origin.get("hook", ""))
-		if hook != "":
-			card.add_child(UiKit.text("Крючок: %s" % hook, 20))
-		var goal := str(origin.get("goal", ""))
-		if goal != "":
-			card.add_child(UiKit.text("Цель: %s" % goal, 20, UiKit.MUTED_COLOR))
-		var btn := UiKit.button("🧬 Начать за этого героя", "default", 62)
-		btn.pressed.connect(_choose_origin.bind(origin_id))
-		card.add_child(btn)
+	var origins := SkillTreeSystem.get_origins()
+	if origins.is_empty():
+		GameState.start_new_game()
+		return
+	origin_index = clampi(origin_index, 0, origins.size() - 1)
+	var origin: Dictionary = origins[origin_index]
+	var origin_id := str(origin.get("id", ""))
+	_add_title("Личное дело пассажира")
+	_add_section("Профессия задаёт старт в развитии и не меняется после пробуждения.")
+	var card := UiKit.card(body)
+	card.add_child(UiKit.section("АНКЕТА %02d / %02d" % [origin_index + 1, origins.size()]))
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 18)
+	card.add_child(header)
+	var identity := VBoxContainer.new()
+	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	identity.add_theme_constant_override("separation", 6)
+	header.add_child(identity)
+	identity.add_child(UiKit.text(str(origin.get("name", origin_id)), 30, UiKit.TITLE_COLOR))
+	identity.add_child(UiKit.text("Статус: пассажир колониального рейса", 19, UiKit.MUTED_COLOR))
+	var portrait := UiKit.portrait("player", false, 148)
+	if portrait != null:
+		portrait.name = "OriginPortrait"
+		header.add_child(portrait)
+	_add_origin_field(card, "НАЗНАЧЕНИЕ", str(origin.get("why", "")), UiKit.TEXT_COLOR)
+	_add_origin_field(card, "ПРОФИЛЬ ПОДГОТОВКИ", str(origin.get("sectors_text", "")), UiKit.ACCENT_COLOR)
+	_add_origin_field(card, "СИЛЬНАЯ СТОРОНА", str(origin.get("buff", "")), UiKit.GOOD_COLOR)
+	_add_origin_field(card, "ОГРАНИЧЕНИЕ", str(origin.get("debuff", "")), UiKit.BAD_COLOR)
+	var choose := UiKit.button("🧬 Выбрать эту профессию", "default", 66)
+	choose.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	choose.pressed.connect(_choose_origin.bind(origin_id))
+	card.add_child(choose)
+
+	var nav := HBoxContainer.new()
+	nav.name = "OriginPager"
+	nav.add_theme_constant_override("separation", 10)
+	var previous := UiKit.button("← Предыдущая", "quiet", 58)
+	previous.disabled = origin_index == 0
+	previous.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	previous.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	previous.pressed.connect(_change_origin.bind(-1))
+	nav.add_child(previous)
+	var next := UiKit.button("Следующая →", "quiet", 58)
+	next.disabled = origin_index >= origins.size() - 1
+	next.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	next.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	next.pressed.connect(_change_origin.bind(1))
+	nav.add_child(next)
+	body.add_child(nav)
+	var dots := UiKit.text(_origin_dots(origins.size()), 19, UiKit.ACCENT_COLOR)
+	dots.name = "OriginPageDots"
+	dots.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_child(dots)
 	var back := UiKit.button("← В меню", "quiet", 62)
+	back.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	back.pressed.connect(_close_origin_picker)
 	body.add_child(back)
+
+
+func _add_origin_field(card: VBoxContainer, title: String, value: String, color: Color) -> void:
+	if value == "":
+		return
+	card.add_child(UiKit.section(title))
+	card.add_child(UiKit.text(value, 20, color))
+
+
+func _origin_dots(total: int) -> String:
+	var dots := PackedStringArray()
+	for i in range(total):
+		dots.append("●" if i == origin_index else "○")
+	return " ".join(dots)
+
+
+func _change_origin(delta: int) -> void:
+	origin_index = clampi(origin_index + delta, 0, SkillTreeSystem.get_origins().size() - 1)
+	_scroll_to_top()
+	_render_current_screen()
 
 
 func _choose_origin(origin_id: String) -> void:
@@ -1613,8 +1790,6 @@ func _refresh_route_panel() -> void:
 		_route_panel.add_child(stop)
 		return
 	if _route_plan.is_empty():
-		if _map_message == "":
-			_route_panel.add_child(UiKit.text("Нажми на отсек — проложу маршрут и посчитаю кислород.", 20, UiKit.MUTED_COLOR))
 		return
 	var plan_path: Array = _route_plan["path"]
 	var names: Array = []
@@ -1659,7 +1834,7 @@ func _route_warnings(path: Array, cost: float) -> Array:
 	if cost >= o2:
 		warnings.append("⛔ Кислорода не хватит: нужно ≈ %d, в баллоне %d." % [roundi(cost), int(o2)])
 	elif o2 - cost <= ResourceSystem.low_o2():
-		warnings.append("⚠️ После перехода останется ≈ %d O2 — это мало." % roundi(o2 - cost))
+		warnings.append("Внимание! Мало кислорода!")
 	if NeedsSystem.is_tired():
 		warnings.append("😵 Сил ≈ %d — можно вырубиться в пути. Выспитесь на базе." % roundi(NeedsSystem.energy))
 	var hostile: Array = []
@@ -1896,8 +2071,10 @@ func _add_explore_button(total: int) -> void:
 
 ## Модуль-база: ручное сохранение, верстак и разгрузка сумки на склад.
 func _render_base_section() -> void:
-	_add_section("База")
-	_add_button("🛏️ Закончить день — сон и сохранение", GameState.end_day, "quiet")
+	var quality := LocationSystem.get_sleep_quality()
+	_add_section("База · качество сна: %s" % NeedsSystem.sleep_quality_title(quality).to_lower())
+	for hours in [4, 8, 12]:
+		_add_button("🛏️ Спать %d ч." % hours, GameState.sleep.bind(hours), "quiet")
 	_add_button("🛠️ Верстак", _open_workbench, "quiet")
 	var droppable: Array = []
 	for entry in InventorySystem.get_slots():
@@ -1958,10 +2135,13 @@ func _make_stash_take_callback(item_id: String) -> Callable:
 
 
 const CHARACTER_TABS := [
-	["items", "🎒 Предметы"], ["equipment", "🛡️ Снаряжение"], ["skills", "⭐ Навыки"],
+	["items", "🎒 Предметы"], ["equipment", "🛡️ Снаряжение"],
 ]
 const CHARACTER_ITEM_TABS := [
 	["bag", "Сумка"], ["info", "Записи и ключи"],
+]
+const DEVELOPMENT_TABS := [
+	["tree", "🌐 Дерево"], ["skills", "⭐ Навыки"],
 ]
 
 
@@ -2004,13 +2184,33 @@ func _render_character() -> void:
 	body.add_child(panel)
 
 
-## Кольцевое дерево развития: карта колец и карточка выбранного узла.
+## Общее развитие: кольцевое дерево и базовые навыки делят один оверлей.
 func _render_skill_tree() -> void:
 	pinned_header.visible = true
 	pinned_header.add_child(UiKit.title("Развитие"))
-	var panel: VBoxContainer = SKILL_TREE_PANEL_SCRIPT.new()
-	panel.name = "SkillTreePanel"
-	body.add_child(panel)
+	var tabs := HBoxContainer.new()
+	tabs.name = "DevelopmentTabs"
+	tabs.add_theme_constant_override("separation", 8)
+	for entry in DEVELOPMENT_TABS:
+		var tab_id := str(entry[0])
+		var label := str(entry[1])
+		if tab_id == "skills" and CharacterSystem.skill_points > 0:
+			label += " (+%d)" % CharacterSystem.skill_points
+		var btn := UiKit.button(label, "tab_active" if tab_id == skill_tab else "quiet", 56)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.add_theme_font_size_override("font_size", UiKit.fs(18))
+		btn.pressed.connect(_on_development_tab_changed.bind(tab_id))
+		tabs.add_child(btn)
+	pinned_header.add_child(tabs)
+	if skill_tab == "skills":
+		var skills_panel: VBoxContainer = CHARACTER_PANEL_SCRIPT.new()
+		skills_panel.name = "DevelopmentSkills"
+		skills_panel.tab = "skills"
+		body.add_child(skills_panel)
+	else:
+		var tree_panel: VBoxContainer = SKILL_TREE_PANEL_SCRIPT.new()
+		tree_panel.name = "SkillTreePanel"
+		body.add_child(tree_panel)
 
 
 func _render_workbench() -> void:
@@ -2032,6 +2232,12 @@ func _on_character_item_tab_changed(new_tab: String) -> void:
 	NotificationSystem.mark_character_items_seen(character_items_tab)
 	_scroll_to_top()
 	_render_current_screen()
+
+func _on_development_tab_changed(new_tab: String) -> void:
+	skill_tab = new_tab
+	_scroll_to_top()
+	_render_current_screen()
+
 
 ## Эффекты ударов проигрываются один раз на ход: повторная перерисовка того
 ## же хода (смена настроек) их не повторяет. Экран боя прижат к низу —

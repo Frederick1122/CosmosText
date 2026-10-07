@@ -149,6 +149,14 @@ func is_base(location_id: String = "") -> bool:
 		location_id = current_id
 	return bool(_locations.get(location_id, {}).get("base", false))
 
+## Качество сна в модуле-базе. Контент может дать normal / good / excellent;
+## отсутствие поля сохраняет нормальный сон.
+func get_sleep_quality(location_id: String = "") -> String:
+	if location_id == "":
+		location_id = current_id
+	var quality := str(_locations.get(location_id, {}).get("sleep_quality", "normal"))
+	return quality if NeedsSystem.SLEEP_QUALITIES.has(quality) else "normal"
+
 
 ## В модуле есть воздух ("breathable": true, например база): действия здесь
 ## кислорода не тратят (ResourceSystem.environment_multiplier).

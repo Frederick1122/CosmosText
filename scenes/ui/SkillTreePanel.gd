@@ -152,9 +152,9 @@ func _build_legend() -> void:
 	add_child(row)
 
 
-## Кольцевая карта дерева. Только отрисовка и выбор узла: состояние и покупку
-## держит SkillTreeSystem. Радиусы колец — доли R = 0.46·min(сторона), поэтому
-## карта одинаково выглядит на любой ширине тела экрана.
+## Кольцевая карта дерева. Только отрисовка и выбор узла: вокруг внешнего
+## кольца оставлен отдельный пояс для названий секторов, поэтому разделители
+## и ветки не заходят на текст даже при увеличенном шрифте.
 class RingView extends Control:
 	const UiKit = preload("res://scenes/ui/UiKit.gd")
 	const RING_R := {"inner": 0.36, "middle": 0.66, "outer": 0.95}
@@ -175,7 +175,7 @@ class RingView extends Control:
 
 	func _init() -> void:
 		name = "SkillRingMap"
-		custom_minimum_size = Vector2(0, 760)
+		custom_minimum_size = Vector2(0, 800)
 		size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		mouse_filter = Control.MOUSE_FILTER_STOP
 
@@ -205,7 +205,7 @@ class RingView extends Control:
 		if side <= 0.0:
 			return
 		_center = size * 0.5
-		_r = side * 0.46
+		_r = side * 0.40
 		_hit.clear()
 		_draw_frame()
 		_draw_bridges()
@@ -234,7 +234,7 @@ class RingView extends Control:
 					Color(GRID_COLOR, 0.9), 1.5, true)
 			var label := str(data.get("name", ""))
 			var sz := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, label_size)
-			draw_string(font, _center + _dir(a) * (_r * 1.05) - Vector2(sz.x * 0.5, sz.y * 0.35),
+			draw_string(font, _center + _dir(a) * (_r * 1.14) - Vector2(sz.x * 0.5, sz.y * 0.35),
 				label, HORIZONTAL_ALIGNMENT_LEFT, -1, label_size, _color_of(str(data.get("id", ""))))
 
 	func _wedge(a0: float, a1: float, r_in: float, r_out: float, color: Color) -> void:

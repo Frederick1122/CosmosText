@@ -4,7 +4,7 @@ extends Node
 ##
 ## Новые предметы, записи архива, справочника и цели (новая или засчитанный
 ## шаг) помечаются до просмотра. Очки навыков — не «новость», а долг: пока
-## они не потрачены, кнопка «Персонаж» и вкладка «Навыки» показывают (!) и «(+N)».
+## они не потрачены, кнопка «Развитие» показывает (!).
 
 signal changed()
 
@@ -61,7 +61,18 @@ func unspent_skill_points() -> int:
 
 
 func has_character_alert() -> bool:
-	return has_new_items() or unspent_skill_points() > 0
+	return has_new_items()
+
+
+func has_development_alert() -> bool:
+	if unspent_skill_points() <= 0:
+		return false
+	if SkillTreeSystem.has_available():
+		return true
+	for skill in CharacterSystem.get_skills():
+		if CharacterSystem.can_learn(str(skill.get("id", ""))):
+			return true
+	return false
 
 
 func has_new_lore() -> bool:

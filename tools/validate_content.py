@@ -23,9 +23,11 @@ O2_COST_KINDS = ("move", "elevator", "action", "explore_tick", "choice", "combat
 # Должны совпадать с ProgressionSystem.DEFAULT_CONFIG (секция config.json → xp).
 XP_CONFIG_KEYS = ("explore", "craft", "lore", "kill", "level_base", "level_step", "skill_points_per_level")
 # Должны совпадать с NeedsSystem.DEFAULT_CONFIG (секция config.json → needs).
-NEEDS_CONFIG_KEYS = ("max_energy", "max_hunger", "energy_costs", "hunger_costs", "tired_energy",
-                     "tired_hit_penalty", "hungry_hunger", "hungry_energy_multiplier", "starving_hp",
-                     "sleep_hunger", "sleep_hp", "pass_out_o2", "pass_out_energy", "pass_out_hunger")
+NEEDS_CONFIG_KEYS = ("max_energy", "max_hunger", "start_time_minutes", "time_costs",
+                     "energy_costs", "hunger_costs", "tired_energy", "tired_hit_penalty",
+                     "hungry_hunger", "hungry_energy_multiplier", "starving_hp",
+                     "sleep_energy_per_hour", "sleep_hunger_per_hour", "sleep_hp_per_hour",
+                     "pass_out_hours", "pass_out_o2", "pass_out_hunger")
 # Должны совпадать с CombatSystem: типы ИИ и предел дистанции.
 ENEMY_AI_TYPES = ("brawler", "shooter", "turret")
 MAX_COMBAT_RANGE = 5
@@ -665,6 +667,11 @@ def main():
             errors.append(f"{ctx}.base: должно быть true/false")
         if "breathable" in loc and not isinstance(loc["breathable"], bool):
             errors.append(f"{ctx}.breathable: должно быть true/false")
+        sleep_quality = loc.get("sleep_quality")
+        if sleep_quality is not None and sleep_quality not in ("normal", "good", "excellent"):
+            errors.append(f"{ctx}.sleep_quality: допустимы normal, good, excellent")
+        if sleep_quality is not None and not loc.get("base", False):
+            errors.append(f"{ctx}.sleep_quality: задаётся только у base-локации")
         explore = loc.get("explore")
         if explore is not None:
             if not isinstance(explore, dict):
@@ -1121,7 +1128,7 @@ def main():
         for key, value in needs_config.items():
             if key not in NEEDS_CONFIG_KEYS:
                 errors.append(f"config.json: needs — неизвестный ключ '{key}' (допустимы: {', '.join(NEEDS_CONFIG_KEYS)})")
-            elif key in ("energy_costs", "hunger_costs"):
+            elif key in ("time_costs", "energy_costs", "hunger_costs"):
                 if not isinstance(value, dict):
                     errors.append(f"config.json: needs.{key} должен быть объектом {{действие: цена}}")
                     continue
@@ -1130,11 +1137,16 @@ def main():
                         errors.append(f"config.json: needs.{key} — неизвестное действие '{kind}' (допустимы: {', '.join(O2_COST_KINDS)})")
                     elif not is_number(cost) or cost < 0:
                         errors.append(f"config.json: needs.{key}.{kind} — неотрицательное число")
+                    elif key == "time_costs" and (not isinstance(cost, int) or isinstance(cost, bool) or cost % 5 != 0):
+                        errors.append(f"config.json: needs.time_costs.{kind} — целое число минут, кратное 5")
             elif not is_number(value) or value < 0:
                 errors.append(f"config.json: needs.{key} — неотрицательное число")
         for key in ("max_energy", "max_hunger"):
             if key in needs_config and is_number(needs_config[key]) and needs_config[key] <= 0:
                 errors.append(f"config.json: needs.{key} должен быть больше нуля")
+        start_time = needs_config.get("start_time_minutes", 0)
+        if not isinstance(start_time, int) or isinstance(start_time, bool) or start_time < 0 or start_time >= 1440 or start_time % 5 != 0:
+            errors.append("config.json: needs.start_time_minutes — минуты 0..1435, кратные 5")
 
     xp_config = config.get("xp", {})
     if not isinstance(xp_config, dict):
