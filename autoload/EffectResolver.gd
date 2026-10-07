@@ -68,6 +68,12 @@ func apply_effect(effect: Dictionary) -> void:
 				_as_array(effect.get("on_win", [])),
 				_as_array(effect.get("on_flee", []))
 			)
+		"start_dialogue":
+			DialogueSystem.start(str(effect.get("dialogue", "")))
+		"fuel_delta":
+			var fuel_before := GalaxySystem.fuel
+			GalaxySystem.apply_fuel_delta(float(effect.get("value", 0.0)))
+			report_change("fuel", GalaxySystem.fuel - fuel_before, "топлива", true)
 		"end_run":
 			GameState.finish_run(str(effect.get("ending", "")))
 		_:
@@ -164,6 +170,10 @@ func check_requirement(req: Dictionary) -> bool:
 			return LocationSystem.get_visits() >= int(req.get("value", 0))
 		"visits_lte":
 			return LocationSystem.get_visits() <= int(req.get("value", 0))
+		"dialogue_done":
+			return DialogueSystem.is_done(str(req.get("dialogue", ""))) == bool(req.get("value", true))
+		"has_ship":
+			return GalaxySystem.has_ship() == bool(req.get("value", true))
 		_:
 			push_warning("EffectResolver: неизвестный тип условия '%s'" % req.get("type", ""))
 			return true

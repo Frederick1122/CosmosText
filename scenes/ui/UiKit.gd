@@ -20,6 +20,7 @@ const SCENE_ART_DIR := "res://assets/art/scenes/"
 const ITEM_ART_DIR := "res://assets/art/items/"
 const ENEMY_ART_DIR := "res://assets/art/enemies/"
 const PORTRAIT_ART_DIR := "res://assets/art/portraits/"
+const GALAXY_ART_DIR := "res://assets/art/galaxy/"
 
 
 ## Размер шрифта с учётом настройки «Размер шрифта» (SettingsSystem).
@@ -234,6 +235,14 @@ static func portrait(name: String, is_enemy: bool, side: int = 96) -> TextureRec
 	rect.custom_minimum_size = Vector2(side, side)
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return rect
+
+
+## Иконка глобальной карты системы: `assets/art/galaxy/<тип узла>.png`
+## (звезда, планета, газовый гигант, луна, астероиды, станция, обломок,
+## шаттл, комета). Рисуется вручную в `GalaxyMapView`, поэтому возвращается
+## текстура, а не готовый узел. null — иконки нет.
+static func galaxy_texture(node_type: String) -> Texture2D:
+	return _load_texture(GALAXY_ART_DIR, node_type)
 
 
 static func _load_texture(dir: String, name: String) -> Texture2D:

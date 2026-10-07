@@ -9,6 +9,7 @@
   assets/art/scenes/<name>.png  — 160x96, RGB (цветовой тип 2), без альфы;
   assets/art/scenes/title_screen.png — 240x150, RGB, заглавный кадр меню;
   assets/art/items/<item_id>.png — 16x16, RGBA (цветовой тип 6), фон прозрачный.
+  assets/art/galaxy/<name>.png — 48x48, RGBA, космические иконки.
   assets/art/portraits/player.png — 64x64, RGBA, портрет игрока для боя;
   assets/art/enemies/<enemy_id>.png — 64x64, RGBA, портреты противников.
 Все файлы перезаписываются, список записанного печатается в stdout.
@@ -22,12 +23,14 @@ import zlib
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCENES_DIR = os.path.join(ROOT, "assets", "art", "scenes")
 ITEMS_DIR = os.path.join(ROOT, "assets", "art", "items")
+GALAXY_DIR = os.path.join(ROOT, "assets", "art", "galaxy")
 PORTRAITS_DIR = os.path.join(ROOT, "assets", "art", "portraits")
 ENEMIES_DIR = os.path.join(ROOT, "assets", "art", "enemies")
 
 SEED = 20260929
 SCENE_W, SCENE_H = 160, 96
 ICON_W, ICON_H = 16, 16
+GALAXY_W = GALAXY_H = 48
 PORTRAIT_W, PORTRAIT_H = 64, 64
 TITLE_W, TITLE_H = 240, 150
 
@@ -2439,6 +2442,20 @@ FLESH_LIT = (206, 104, 104)
 VEIN = (58, 32, 46)
 VEIN_D = (34, 18, 28)
 
+# Шейла: светлый комбинезон гибернации, тёмно-русая стрижка, оранжевая нашивка
+SHEILA_SUIT_L = (212, 214, 220)
+SHEILA_SUIT = (164, 168, 178)
+SHEILA_SUIT_D = (112, 118, 130)
+SHEILA_SUIT_XD = (74, 80, 92)
+SHEILA_HAIR_L = (98, 70, 50)
+SHEILA_HAIR = (62, 44, 34)
+SHEILA_HAIR_D = (38, 28, 24)
+SHEILA_PATCH_L = (250, 184, 86)
+SHEILA_PATCH = (226, 132, 42)
+SHEILA_PATCH_D = (158, 82, 28)
+SHEILA_IRIS = (58, 64, 78)
+SHEILA_LIP = (150, 106, 108)
+
 
 def _blob(c, pts, col):
     """Цепочка кругов по опорным точкам (x, y, r) — для органических форм."""
@@ -2735,12 +2752,448 @@ def portrait_pirate_raider(c, rng):
     c.specks_on(rng, 14, 8, 51, 60, (101, 90, 82), (62, 58, 63), 24)
 
 
+def portrait_sheila(c, rng):
+    """Шейла: женщина в светлом комбинезоне гибернации, короткая стрижка, тихий шрам на виске."""
+    # плечи и корпус комбинезона
+    c.fill_rect(7, 49, 56, 59, SHEILA_SUIT_XD)
+    c.fill_rect(9, 46, 54, 59, SHEILA_SUIT)
+    c.fill_rect(13, 44, 50, 59, SHEILA_SUIT_L)
+    # скосы плеч
+    c.fill_rect(7, 49, 10, 59, SHEILA_SUIT_D)
+    c.fill_rect(53, 49, 56, 59, SHEILA_SUIT_D)
+    # воротник-стойка
+    c.fill_rect(20, 39, 43, 47, SHEILA_SUIT)
+    c.hline(20, 43, 39, SHEILA_SUIT_L)
+    c.hline(20, 43, 47, SHEILA_SUIT_D)
+    c.hline(20, 43, 40, SHEILA_SUIT_D)
+    # центральная застёжка с заклёпками
+    c.vline(31, 47, 59, SHEILA_SUIT_D)
+    c.vline(32, 47, 59, SHEILA_SUIT_L)
+    for y in range(49, 59, 3):
+        c.pixel(31, y, STEEL_L)
+    # оранжевая нашивка на груди (справа от зрителя)
+    c.fill_rect(38, 50, 47, 58, SHEILA_PATCH)
+    c.rect(38, 50, 47, 58, SHEILA_PATCH_D)
+    c.fill_rect(40, 52, 45, 56, SHEILA_PATCH_L)
+    c.hline(40, 45, 53, SHEILA_PATCH_D)
+    c.pixel(42, 54, SHEILA_PATCH_D)
+    c.pixel(44, 55, SHEILA_PATCH_D)
+    # накладной карман слева
+    c.fill_rect(16, 51, 23, 57, SHEILA_SUIT_D)
+    c.rect(16, 51, 23, 57, SHEILA_SUIT_XD)
+    c.hline(17, 22, 52, SHEILA_SUIT)
+    # фактура ткани
+    c.specks_on(rng, 10, 44, 53, 59, SHEILA_SUIT, SHEILA_SUIT_D, 28)
+    c.specks_on(rng, 10, 44, 53, 59, SHEILA_SUIT_L, SHEILA_SUIT, 16)
+    # шея
+    c.fill_rect(27, 34, 37, 44, FLESH_M)
+    c.fill_rect(28, 34, 35, 42, FLESH)
+    c.hline(27, 37, 42, FLESH_D)
+    # задняя масса волос (силуэт)
+    c.ellipse(32, 23, 15, 16, SHEILA_HAIR_D)
+    # голова: тень, основной тон, светлая левая половина
+    c.ellipse(32, 27, 12, 14, FLESH_M)
+    c.ellipse(31, 26, 11, 13, FLESH)
+    c.ellipse(29, 24, 8, 10, FLESH_L)
+    # затемнение правой щеки и шеи
+    c.specks_on(rng, 33, 18, 44, 40, FLESH, FLESH_M, 26)
+    c.specks_on(rng, 36, 20, 44, 40, FLESH_M, FLESH_D, 12)
+    # волосы: шапка, объём, боковые пряди
+    c.ellipse(32, 15, 14, 10, SHEILA_HAIR)
+    c.ellipse(30, 12, 10, 7, SHEILA_HAIR_L)
+    c.line(23, 10, 19, 20, SHEILA_HAIR_D)
+    c.line(41, 10, 45, 20, SHEILA_HAIR_D)
+    c.fill_rect(18, 16, 22, 33, SHEILA_HAIR)
+    c.fill_rect(42, 16, 46, 33, SHEILA_HAIR_D)
+    c.hline(21, 30, 11, SHEILA_HAIR_L)
+    c.line(33, 8, 41, 12, SHEILA_HAIR_L)
+    c.specks_on(rng, 18, 8, 46, 33, SHEILA_HAIR, SHEILA_HAIR_L, 18)
+    c.specks_on(rng, 18, 8, 46, 33, SHEILA_HAIR, SHEILA_HAIR_D, 14)
+    # чёлка рваным краем над бровями
+    c.hline(23, 33, 17, SHEILA_HAIR)
+    c.pixel(22, 18, SHEILA_HAIR)
+    c.pixel(34, 18, SHEILA_HAIR_D)
+    c.pixel(31, 19, SHEILA_HAIR_D)
+    c.pixel(26, 19, SHEILA_HAIR_L)
+    # брови
+    c.hline(24, 29, 26, SHEILA_HAIR_D)
+    c.pixel(23, 27, SHEILA_HAIR_D)
+    c.hline(35, 40, 26, SHEILA_HAIR_D)
+    c.pixel(41, 27, SHEILA_HAIR_D)
+    # глаза: тень глазницы, радужка, блик
+    for ex0 in (24, 34):
+        c.fill_rect(ex0, 28, ex0 + 5, 30, FLESH_D)
+        c.fill_rect(ex0 + 1, 28, ex0 + 4, 29, SHEILA_IRIS)
+        c.pixel(ex0 + 2, 29, (30, 34, 44))
+        c.pixel(ex0 + 2, 28, WHITE)
+        c.hline(ex0, ex0 + 5, 27, FLESH_M)
+    # нос и тень под ним
+    c.pixel(31, 32, FLESH_M)
+    c.pixel(32, 32, FLESH_D)
+    c.pixel(31, 33, FLESH_D)
+    c.pixel(33, 32, FLESH_L)
+    c.pixel(32, 34, FLESH_M)
+    # губы и подбородок
+    c.hline(29, 35, 36, SHEILA_LIP)
+    c.hline(30, 34, 37, FLESH_D)
+    c.hline(29, 35, 40, FLESH_M)
+    # лёгкий шрам-ссадина на левом виске
+    c.line(22, 25, 24, 30, (196, 130, 122))
+    c.pixel(23, 27, (224, 160, 152))
+    c.pixel(22, 24, FLESH_D)
+    c.pixel(24, 31, FLESH_D)
+    # румяна на скулах
+    c.specks_on(rng, 23, 31, 28, 34, FLESH, FLESH_M, 6)
+    c.specks_on(rng, 36, 31, 41, 34, FLESH_M, FLESH_D, 5)
+
+
 PORTRAITS = (
     (PORTRAITS_DIR, "player", portrait_player),
     (ENEMIES_DIR, "drone_cargo", portrait_drone_cargo),
     (ENEMIES_DIR, "station_sentry", portrait_station_sentry),
     (ENEMIES_DIR, "strain_l7", portrait_strain_l7),
     (ENEMIES_DIR, "pirate_raider", portrait_pirate_raider),
+    (PORTRAITS_DIR, "sheila", portrait_sheila),
+)
+
+
+# ----------------------------------------------------------------------------
+# Космические иконки 48x48 (силуэт держим в пределах 3..44, чтобы контур лёг
+# внутри холста). Палитры — локальные для этой группы.
+# ----------------------------------------------------------------------------
+
+GX_STAR_CORE = (255, 250, 226)
+GX_STAR_L = (255, 226, 150)
+GX_STAR = (246, 190, 84)
+GX_STAR_D = (214, 140, 48)
+GX_STAR_XD = (150, 84, 30)
+PLANET_L = (172, 202, 198)
+PLANET = (128, 162, 162)
+PLANET_M = (88, 118, 126)
+PLANET_D = (52, 78, 92)
+PLANET_XD = (32, 50, 66)
+GAS_L = (228, 212, 178)
+GAS = (200, 174, 140)
+GAS_M = (166, 134, 108)
+GAS_D = (126, 98, 86)
+GAS_XD = (92, 70, 66)
+MOON_L = (210, 212, 218)
+MOON = (164, 168, 178)
+MOON_M = (116, 120, 132)
+MOON_D = (78, 82, 94)
+MOON_XD = (52, 56, 68)
+ROCK_L = (170, 148, 120)
+ROCK = (128, 106, 84)
+ROCK_D = (88, 70, 56)
+ICE_L = (234, 246, 252)
+ICE = (178, 218, 238)
+ICE_M = (120, 172, 208)
+ICE_D = (74, 122, 164)
+
+
+def icon_galaxy_star(c):
+    """Звезда: яркое ядро, лучи и тёплая дизерная корона."""
+    rng = random.Random(SEED + 6201)
+    # корона: ступенчатые ореолы
+    c.dither_disc(24, 24, 21, GX_STAR_XD, 0)
+    c.dither_disc(24, 24, 17, GX_STAR_D, 1)
+    c.dither_disc(24, 24, 13, GX_STAR, 0)
+    # лучи: четыре главных и четыре косых, посветлее — к верхнему левому краю
+    for dx, dy, ln, col in (
+        (0, -1, 21, GX_STAR_L), (0, 1, 21, GX_STAR_D),
+        (-1, 0, 21, GX_STAR_L), (1, 0, 21, GX_STAR_D),
+        (-1, -1, 15, GX_STAR_L), (1, 1, 15, GX_STAR_D),
+        (1, -1, 15, GX_STAR), (-1, 1, 15, GX_STAR_D),
+    ):
+        c.line(24, 24, 24 + dx * ln, 24 + dy * ln, col)
+    # диск
+    c.circle(24, 24, 12, GX_STAR_D)
+    c.circle(24, 24, 11, GX_STAR)
+    c.circle(24, 24, 9, GX_STAR_L)
+    c.circle(24, 24, 6, GX_STAR_CORE)
+    c.circle(24, 24, 3, WHITE)
+    # крапины и блики
+    c.specks_on(rng, 13, 13, 35, 35, GX_STAR_L, GX_STAR_CORE, 10)
+    c.specks_on(rng, 13, 13, 35, 35, GX_STAR, GX_STAR_L, 8)
+    c.specks_on(rng, 13, 13, 35, 35, GX_STAR_D, GX_STAR, 6)
+    c.pixel(21, 20, WHITE)
+    c.pixel(19, 19, WHITE)
+    c.pixel(28, 30, GX_STAR_D)
+
+
+def icon_galaxy_planet(c):
+    """Каменистая планета: терминатор, кратеры, холодный сине-зелёный тон."""
+    rng = random.Random(SEED + 6202)
+    cx = cy = 24
+    r = 19
+    # сфера с терминатором: свет сверху-слева
+    for y in range(cy - r, cy + r + 1):
+        for x in range(cx - r, cx + r + 1):
+            if (x - cx) ** 2 + (y - cy) ** 2 > r * r:
+                continue
+            nx = (x - cx) / float(r)
+            ny = (y - cy) / float(r)
+            lit = -(nx * 0.62 + ny * 0.70) + 0.12
+            if lit > 0.52:
+                col = PLANET_L
+            elif lit > 0.18:
+                col = PLANET
+            elif lit > -0.14:
+                col = PLANET_M
+            elif lit > -0.52:
+                col = PLANET_D
+            else:
+                col = PLANET_XD
+            c.pixel(x, y, col)
+    # светлый атмосферный лимб на освещённой дуге
+    for deg in range(178, 273, 4):
+        a = deg * 0.0174533
+        c.pixel(int(round(cx + _cos(a) * (r - 1))),
+                int(round(cy + _sin(a) * (r - 1))), PLANET_L)
+    # кратеры: тёмная впадина и светлый ободок сверху
+    for px, py, pr in ((19, 15, 4), (30, 24, 5), (14, 29, 3), (26, 35, 3)):
+        c.circle(px, py, pr, PLANET_D)
+        c.circle(px, py, max(1, pr - 2), PLANET_XD)
+        c.hline(px - pr + 1, px + pr - 1, py - pr + 1, PLANET_L)
+        c.pixel(px - pr, py, PLANET)
+    # фактура поверхности
+    c.specks_on(rng, 8, 8, 40, 40, PLANET, PLANET_L, 14)
+    c.specks_on(rng, 8, 8, 40, 40, PLANET, PLANET_D, 12)
+    c.specks_on(rng, 20, 20, 40, 42, PLANET_M, PLANET_D, 10)
+
+
+def icon_galaxy_gas_giant(c):
+    """Газовый гигант: 3 полосы, шторм-овал и спутник-точка у края."""
+    rng = random.Random(SEED + 6203)
+    cx = cy = 23
+    r = 19
+    bands = ((GAS_L, -22, -13), (GAS, -13, -4), (GAS_M, -4, 4),
+             (GAS_D, 4, 12), (GAS_XD, 12, 22))
+    for y in range(cy - r, cy + r + 1):
+        dy = y - cy
+        base = GAS_D
+        for col, y0, y1 in bands:
+            if y0 <= dy < y1:
+                base = col
+                break
+        for x in range(cx - r, cx + r + 1):
+            if (x - cx) ** 2 + (y - cy) ** 2 <= r * r:
+                c.pixel(x, y, base)
+    # сферическое затенение: тёмный низ-право, светлый верх-лево
+    for y in range(cy - r, cy + r + 1):
+        for x in range(cx - r, cx + r + 1):
+            if (x - cx) ** 2 + (y - cy) ** 2 > r * r or (x + y) % 2:
+                continue
+            edge = ((x - cx) * 0.65 + (y - cy) * 0.72) / float(r)
+            if edge > 0.42:
+                c.pixel(x, y, GAS_XD)
+            elif edge < -0.55:
+                c.pixel(x, y, GAS_L)
+    # шторм-овал
+    c.ellipse(20, 20, 4, 2, GAS_L)
+    c.ellipse(20, 20, 2, 1, GAS)
+    c.pixel(19, 20, GAS_M)
+    # спутник у края
+    c.circle(40, 10, 3, MOON_D)
+    c.circle(40, 10, 2, MOON)
+    c.pixel(39, 9, MOON_L)
+    c.specks_on(rng, 8, 8, 40, 40, GAS, GAS_M, 10)
+
+
+def icon_galaxy_moon(c):
+    """Небольшая серая луна с кратерами, крупно в кадре."""
+    rng = random.Random(SEED + 6204)
+    cx = cy = 24
+    r = 18
+    c.circle(cx, cy, r, MOON_D)
+    c.circle(cx, cy, r - 1, MOON)
+    c.circle(cx - 2, cy - 2, r - 5, MOON_L)
+    # затенение нижне-правого края
+    for y in range(cy - r, cy + r + 1):
+        for x in range(cx - r, cx + r + 1):
+            if (x - cx) ** 2 + (y - cy) ** 2 > r * r or (x + y) % 2:
+                continue
+            edge = ((x - cx) * 0.6 + (y - cy) * 0.75) / float(r)
+            if edge > 0.5:
+                c.pixel(x, y, MOON_D)
+            elif edge < -0.6:
+                c.pixel(x, y, MOON_L)
+    # кратеры
+    for px, py, pr in ((16, 18, 5), (30, 14, 4), (27, 30, 6), (14, 32, 3),
+                       (36, 24, 3), (21, 27, 2)):
+        c.circle(px, py, pr, MOON_M)
+        c.circle(px, py, max(1, pr - 2), MOON_D)
+        c.ellipse(px - 1, py - 1, pr, pr, MOON_L, filled=False)
+        c.pixel(px - pr, py, MOON_L)
+        c.pixel(px + pr, py + pr - 1, MOON_XD)
+    c.specks_on(rng, 8, 8, 40, 40, MOON, MOON_M, 18)
+    c.specks_on(rng, 8, 8, 40, 40, MOON_L, MOON, 10)
+
+
+def icon_galaxy_asteroids(c):
+    """Скопление из семи камней разного размера вразброс."""
+    rng = random.Random(SEED + 6205)
+    rocks = ((14, 16, 7), (30, 13, 5), (21, 31, 8), (36, 29, 6),
+             (9, 34, 4), (33, 41, 4), (41, 18, 3))
+    for px, py, pr in rocks:
+        c.circle(px, py, pr, ROCK_D)
+        c.circle(px, py - 1, pr - 1, ROCK)
+        c.circle(px - 1, py - 2, max(1, pr - 3), ROCK_L)
+        c.pixel(px - pr + 1, py - pr + 2, ROCK_L)
+        c.pixel(px + pr - 1, py + pr - 2, ROCK_D)
+        c.specks_on(rng, px - pr, py - pr, px + pr, py + pr, ROCK, ROCK_D, 6)
+        c.specks_on(rng, px - pr, py - pr, px + pr, py + pr, ROCK, ROCK_L, 4)
+
+
+def icon_galaxy_station(c):
+    """Станция: тор, ступица, штырь-антенна и огоньки."""
+    # тор
+    c.ring(24, 27, 9, 17, STEEL)
+    c.ring(24, 27, 14, 17, STEEL_D)
+    c.ring(24, 27, 9, 11, STEEL_D)
+    c.ring(24, 27, 11, 14, STEEL)
+    # блик по верхней левой дуге
+    for deg in range(155, 290, 5):
+        a = deg * 0.0174533
+        c.pixel(int(round(24 + _cos(a) * 14)),
+                int(round(27 + _sin(a) * 14)), STEEL_L)
+    # спицы
+    c.line(24, 27, 24, 11, STEEL_D)
+    c.line(24, 27, 24, 43, STEEL)
+    c.line(24, 27, 8, 27, STEEL)
+    c.line(24, 27, 40, 27, STEEL_D)
+    # ступица
+    c.circle(24, 27, 5, STEEL_D)
+    c.circle(24, 27, 4, STEEL)
+    c.circle(24, 27, 2, STEEL_L)
+    # штырь-антенна
+    c.vline(24, 5, 11, STEEL)
+    c.fill_rect(21, 10, 27, 12, STEEL_D)
+    c.hline(21, 27, 10, STEEL_L)
+    c.pixel(24, 4, AMBER)
+    c.pixel(23, 7, STEEL_L)
+    # огоньки наведения
+    for x, y in ((9, 22), (12, 16), (39, 22), (36, 16), (15, 39), (33, 39), (24, 44)):
+        c.pixel(x, y, AMBER)
+    c.pixel(24, 30, CYAN_L)
+
+
+def icon_galaxy_wreck(c):
+    """Обломок: две разломанные половины корпуса, искры и мусор меж ними."""
+    rng = random.Random(SEED + 6206)
+    # левая половина
+    _poly(c, ((5, 18), (19, 14), (21, 25), (18, 30), (6, 32), (4, 25)), STEEL_D)
+    _poly(c, ((7, 19), (17, 16), (19, 25), (17, 28), (8, 30), (6, 25)), STEEL)
+    c.line(7, 19, 17, 16, STEEL_L)
+    c.pixel(9, 28, STEEL_D)
+    c.pixel(16, 18, STEEL_L)
+    # правая половина
+    _poly(c, ((43, 16), (29, 19), (28, 26), (31, 31), (42, 31), (44, 24)), STEEL_D)
+    _poly(c, ((41, 18), (31, 20), (30, 26), (32, 29), (41, 29), (42, 24)), STEEL)
+    c.line(31, 20, 41, 18, STEEL_L)
+    c.pixel(33, 28, STEEL_D)
+    c.pixel(39, 22, STEEL_L)
+    # рваные кромки разлома
+    for x, y in ((20, 16), (21, 20), (20, 24), (22, 28), (19, 30),
+                 (28, 20), (29, 24), (30, 28), (28, 31)):
+        c.pixel(x, y, STEEL_L)
+    # мусор между половинами
+    for _ in range(22):
+        c.pixel(rng.randint(21, 30), rng.randint(15, 33),
+                ROCK if rng.random() < 0.5 else STEEL_D)
+    # искры
+    for x, y in ((23, 21), (26, 24), (25, 27), (28, 22), (22, 25), (27, 30)):
+        c.pixel(x, y, AMBER)
+    c.pixel(24, 23, GOLD_L)
+    c.pixel(26, 26, WHITE)
+    c.pixel(28, 28, AMBER)
+
+
+def icon_galaxy_shuttle(c):
+    """Малый шаттл: корпус с крыльями, сопло и след двигателя."""
+    rng = random.Random(SEED + 6207)
+    # след двигателя влево
+    c.dither_disc(8, 25, 5, GOLD_D, 0)
+    c.dither_disc(6, 25, 3, AMBER, 1)
+    c.pixel(3, 25, GOLD_L)
+    c.pixel(8, 22, AMBER)
+    # крылья
+    _poly(c, ((24, 17), (31, 13), (35, 19), (27, 21)), STEEL_D)
+    _poly(c, ((24, 33), (31, 37), (35, 31), (27, 29)), STEEL_D)
+    _poly(c, ((26, 18), (30, 15), (33, 19), (28, 20)), STEEL)
+    _poly(c, ((26, 32), (30, 35), (33, 31), (28, 30)), STEEL)
+    # хвостовые кили
+    c.line(12, 20, 16, 14, STEEL)
+    c.line(12, 30, 16, 36, STEEL_D)
+    # сопло
+    c.fill_rect(8, 21, 13, 29, STEEL_D)
+    c.fill_rect(9, 23, 12, 27, DARK)
+    c.hline(8, 13, 21, STEEL)
+    c.hline(8, 13, 29, DARK)
+    # корпус
+    c.ellipse(25, 25, 14, 7, STEEL_D)
+    c.ellipse(25, 24, 13, 6, STEEL)
+    c.ellipse(22, 21, 8, 3, STEEL_L)
+    # нос
+    c.ellipse(38, 24, 5, 4, STEEL_D)
+    c.ellipse(38, 24, 4, 3, STEEL)
+    c.pixel(41, 23, STEEL_L)
+    # кабина
+    c.ellipse(31, 22, 5, 3, DARK)
+    c.ellipse(31, 22, 4, 2, GLASS)
+    c.pixel(29, 21, GLASS_LIT)
+    # обшивка и блики
+    c.hline(14, 36, 25, STEEL_D)
+    c.specks_on(rng, 14, 19, 40, 31, STEEL, STEEL_D, 12)
+    c.specks_on(rng, 14, 19, 40, 31, STEEL_L, STEEL, 6)
+
+
+def icon_galaxy_comet(c):
+    """Комета: ядро-льдышка и хвост из отдельных пикселей, уходящий вбок."""
+    rng = random.Random(SEED + 6208)
+    # разрежённый хвост влево-вниз
+    for i in range(46):
+        t = i / 45.0
+        x = max(3, int(round(26 - t * 20 + (rng.random() - 0.5) * 5)))
+        y = int(round(22 + t * 18 + (rng.random() - 0.5) * 9))
+        if t < 0.22:
+            col = ICE_L
+        elif t < 0.5:
+            col = ICE
+        elif t < 0.78:
+            col = ICE_M
+        else:
+            col = ICE_D
+        c.pixel(x, y, col)
+    # плотный сгусток у ядра
+    for i in range(20):
+        t = i / 19.0
+        x = int(round(28 - t * 13 + (rng.random() - 0.5) * 3))
+        y = int(round(22 + t * 8 + (rng.random() - 0.5) * 4))
+        c.pixel(x, y, ICE_L if t < 0.5 else ICE)
+    # ядро
+    c.circle(33, 20, 8, ICE_D)
+    c.circle(33, 19, 7, ICE_M)
+    c.circle(32, 18, 5, ICE)
+    c.circle(31, 17, 3, ICE_L)
+    c.pixel(30, 15, WHITE)
+    c.pixel(35, 21, ICE_D)
+    # трещинки и грани на льду
+    c.line(29, 20, 34, 25, ICE_D)
+    c.pixel(30, 23, ICE_M)
+    c.pixel(35, 17, ICE_L)
+
+
+GALAXY = (
+    ("star", icon_galaxy_star),
+    ("planet", icon_galaxy_planet),
+    ("gas_giant", icon_galaxy_gas_giant),
+    ("moon", icon_galaxy_moon),
+    ("asteroids", icon_galaxy_asteroids),
+    ("station", icon_galaxy_station),
+    ("wreck", icon_galaxy_wreck),
+    ("shuttle", icon_galaxy_shuttle),
+    ("comet", icon_galaxy_comet),
 )
 
 
@@ -2766,6 +3219,7 @@ def _cos(a):
 def main():
     os.makedirs(SCENES_DIR, exist_ok=True)
     os.makedirs(ITEMS_DIR, exist_ok=True)
+    os.makedirs(GALAXY_DIR, exist_ok=True)
     os.makedirs(PORTRAITS_DIR, exist_ok=True)
     os.makedirs(ENEMIES_DIR, exist_ok=True)
     written = []
@@ -2791,6 +3245,14 @@ def main():
         fn(c)
         c.outline_alpha(OUTLINE)
         path = os.path.join(ITEMS_DIR, name + ".png")
+        write_png(path, c, with_alpha=True)
+        written.append((path, c.w, c.h))
+
+    for name, fn in GALAXY:
+        c = Canvas(GALAXY_W, GALAXY_H, (0, 0, 0, 0))
+        fn(c)
+        c.outline_alpha(OUTLINE)
+        path = os.path.join(GALAXY_DIR, name + ".png")
         write_png(path, c, with_alpha=True)
         written.append((path, c.w, c.h))
 

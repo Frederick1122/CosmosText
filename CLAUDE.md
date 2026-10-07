@@ -29,6 +29,8 @@ Godot 4.7 (GDScript) проект: текстовая survival-RPG для тел
 - Цели и мысли героя — `data/quests.json`, засчитывает `QuestSystem.refresh()` (после `EffectResolver.apply_effects` и завершения события); засчитанное не откатывается, вкладка «Цели» в журнале.
 - Ключи — предметы категории `key` с `unlocks`; замок (`lock`) ставится на узел сектора или на событие локации, открывает `EffectResolver.can_open_lock` / `open_lock`.
 - Исследование модулей — `ExplorationSystem` и кнопка «🔍 Исследовать отсек»: находит скрытые ручные события (`discover: true`, текст `found`) или тянет пул локации (`explore: { pool, rolls }` → `data/explore_pools.json`); находки скрывать, сюжетные действия оставлять видимыми.
+- Глобальная карта системы — `GalaxySystem` и `data/galaxy.json` (кнопка «Космос» в HUD, только при корабле): узлы на гексагональной сетке, топливо, часы; узел с `sector_id` грузит сектор прилётом, узел без — ориентир. Рисует `scenes/ui/GalaxyMapView.gd`.
+- Разговоры — `DialogueSystem` и `data/dialogues/*.json` (эффект `start_dialogue`, экран `scenes/ui/DialogueView.gd`): узлы-реплики, варианты ответа, условия и эффекты как везде.
 - Модуль-база — локация с `base: true` (обычно и `breathable: true`): сон с чекпойнтом, склад (stash локации) и верстак.
 - Бой — манёвры и дистанция в духе Neo Scavenger (`CombatSystem` + `scenes/ui/CombatView.gd`), ходы сторон разыгрываются одновременно; экран боя прижат к низу (манёвры у большого пальца), победа — затемнение и панель награды.
 - Уровни — `ProgressionSystem` (опыт за разведку, крафт, лор, победы; награды и формула — `data/config.json` → `xp`, у врага — поле `xp`); уровень даёт очки навыков, UI — `scenes/ui/XpBar.gd`.

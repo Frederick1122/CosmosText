@@ -10,6 +10,8 @@ extends Node
 const Screen = GameState.Screen
 
 var _failures: Array = []
+## Топливо после слива на станции — проверяется ещё раз после сохранения.
+var fuel_after_drain: float = 0.0
 
 
 func _ready() -> void:
@@ -538,10 +540,32 @@ func _ready() -> void:
 	_expect(LocationSystem.current_id == "alien_shuttle" and InventorySystem.has_item("power_cell")
 		and _has_manual("install_power_cell"), "отказ от старта возвращает в шаттл, ячейка цела")
 	GameState.start_location_event("install_power_cell")
+	var fuel_before_flight := GalaxySystem.fuel
+	var time_before_flight := (NeedsSystem.day - 1) * 1440 + NeedsSystem.time_minutes
 	_choose("A")
-	_expect(MapSystem.current_sector_id == "wreck_02" and GameState.current_screen == Screen.SECTOR_MAP
-		and not InventorySystem.has_item("power_cell"), "прыжок выполнен: сектор wreck_02, ячейка израсходована")
-	_expect(FileAccess.file_exists(SaveManager.CHECKPOINT_PATH), "переход между секторами пишет чекпойнт")
+	_expect(GameState.current_screen == Screen.GALAXY_MAP and SituationEngine.get_flag("left_persephone") == true
+		and not InventorySystem.has_item("power_cell"),
+		"старт уводит на глобальную карту: ячейка сгорела, корабль за штурвалом")
+	_expect(GalaxySystem.has_ship() and GalaxySystem.current_node_id == "persephone_wreck",
+		"корабль на глобальной карте стоит в узле обломка «Персефона»")
+	var flight := GalaxySystem.plan_travel("vehter_relay")
+	_expect(bool(GalaxySystem.plan_travel("vehter_relay")["ok"]) and int(flight["distance"]) == 2
+		and float(flight["fuel"]) == 8.0,
+		"план перелёта до «Вехтер-9»: две ячейки, 8 топлива")
+	_expect(not bool(GalaxySystem.plan_travel("star_vehter")["ok"])
+		and not bool(GalaxySystem.plan_travel("barren_planet")["ok"]),
+		"к звёздам и планетам без посадки не летят")
+	time_before_flight = (NeedsSystem.day - 1) * 1440 + NeedsSystem.time_minutes
+	_expect(GalaxySystem.travel_to("vehter_relay")
+		and MapSystem.current_sector_id == "wreck_02" and GameState.current_screen == Screen.SECTOR_MAP
+		and is_equal_approx(GalaxySystem.fuel, fuel_before_flight - 8.0)
+		and (NeedsSystem.day - 1) * 1440 + NeedsSystem.time_minutes - time_before_flight == 6 * 60
+		and GalaxySystem.current_node_id == "vehter_relay",
+		"перелёт: сектор wreck_02, топливо −8, время +6 ч")
+	_expect(_journal_has("Перелёт: Осколок у «Вехтер-9»"), "перелёт записан в журнал забега")
+	_expect(not bool(GalaxySystem.plan_travel("persephone_wreck")["ok"]),
+		"на обратный путь топлива не хватает — так и задумано")
+	_expect(FileAccess.file_exists(SaveManager.CHECKPOINT_PATH), "перелёт пишет чекпойнт")
 	_expect(QuestSystem.is_completed("escape_persephone") and not QuestSystem.is_completed("call_for_help")
 		and QuestSystem.get_quests().any(func(q: Dictionary) -> bool: return q["id"] == "call_for_help")
 		and QuestSystem.get_thoughts().contains("неизведанные сектора"),
@@ -558,6 +582,15 @@ func _ready() -> void:
 		and ArchiveSystem.is_unlocked("log_04")
 		and SituationEngine.get_flag("docked_wechter") == true,
 		"рейдер побеждён, затем отработало прибытие (раундов: %d)" % rounds)
+	var fuel_before_drain := GalaxySystem.fuel
+	_expect(_has_manual("drain_fuel") and not bool(GalaxySystem.plan_travel("persephone_wreck")["ok"]),
+		"на баке станции есть топливо, а обратный путь пока не по силам")
+	GameState.start_location_event("drain_fuel")
+	fuel_after_drain = GalaxySystem.fuel
+	_expect(is_equal_approx(fuel_after_drain, fuel_before_drain + 40.0)
+		and bool(GalaxySystem.plan_travel("persephone_wreck")["ok"])
+		and not _has_manual("drain_fuel"),
+		"топливо со станции (+40) открывает возврат к «Персефоне»")
 	GameState.leave_location()
 	MapSystem.travel_to("crew_quarters")
 	while InventorySystem.has_item("ration_bar"):
@@ -597,6 +630,39 @@ func _ready() -> void:
 	var o2_before := ResourceSystem.o2
 	GameState.start_location_event("tap_medical_o2")
 	_expect(ResourceSystem.o2 > o2_before, "кислород из медицинской линии получен")
+
+	# --- Шейла: вскрытая капсула, знакомство и темы разговора ---
+	_expect(_has_manual("wake_sheila"), "вскрытая капсула в медблоке доступна: кто-то был внутри")
+	GameState.start_location_event("wake_sheila")
+	_expect(SituationEngine.get_flag("sheila_found") == true and ArchiveSystem.is_unlocked("log_sheila")
+		and GameState.current_screen == Screen.LOCATION,
+		"Шейла найдена в капсуле медблока, её история ушла в архив")
+	GameState.leave_location()
+	MapSystem.travel_to("crew_quarters")
+	_expect(_has_manual("meet_sheila") and not _has_manual("talk_sheila"),
+		"пока незнакомая Шейла ждёт в каютах, тем для разговора нет")
+	GameState.start_location_event("meet_sheila")
+	_expect(GameState.current_screen == Screen.DIALOGUE and DialogueSystem.is_active()
+		and DialogueSystem.current_npc_id() == "sheila" and DialogueSystem.get_state()["text"] != "",
+		"разговор с Шейлой открывает отдельный экран с её репликой")
+	_walk_dialogue()
+	_expect(DialogueSystem.is_done("sheila_first") and SituationEngine.get_flag("sheila_met") == true
+		and GameState.current_screen == Screen.LOCATION and _journal_has("Разговор: Шейла")
+		and _has_manual("talk_sheila"),
+		"знакомство закончено: флаг, запись в журнале, возврат в модуль и новые темы")
+	var points_before_talk := CharacterSystem.skill_points
+	var lore_before_talk := ArchiveSystem.is_unlocked("log_sheila")
+	GameState.start_location_event("talk_sheila")
+	_walk_dialogue()
+	_expect(DialogueSystem.is_done("sheila_talk") and SituationEngine.get_flag("sheila_truth") == true
+		and CharacterSystem.skill_points > points_before_talk and lore_before_talk,
+		"разговор по темам: правда о её капсуле и очко навыков за рассказ о пиратах")
+	_expect(not DialogueSystem.is_active() and GameState.current_screen == Screen.LOCATION,
+		"конец разговора возвращает на экран модуля")
+	GameState.start_location_event("talk_sheila")
+	_walk_dialogue()
+	_expect(DialogueSystem.is_done("sheila_talk") and not DialogueSystem.is_active(),
+		"разговор можно повторить: диалог закрывается и в журнале не дублируется")
 
 	# --- «Вехтер-9»: турель и маяк ---
 	GameState.leave_location()
@@ -644,6 +710,12 @@ func _ready() -> void:
 	_expect(MapSystem.current_sector_id == "wreck_02" and MapSystem.current_floor_id == "ring_b"
 		and _node_state("med_bay") == "available" and SituationEngine.get_flag("beacon_online") == true,
 		"второй сектор и его прогресс переживают сохранение")
+	_expect(GalaxySystem.current_node_id == "vehter_relay"
+		and is_equal_approx(GalaxySystem.fuel, fuel_after_drain)
+		and GalaxySystem.is_visited("persephone_wreck"),
+		"положение корабля, топливо и посещённые точки переживают сохранение")
+	_expect(DialogueSystem.is_done("sheila_first") and DialogueSystem.is_done("sheila_talk"),
+		"завершённые разговоры переживают сохранение")
 
 	# --- Финал забега ---
 	var victories_before := ChronicleSystem.victories
@@ -969,6 +1041,29 @@ func _choose(option_id: String) -> void:
 	SituationEngine.select_option(option_id)
 	if SituationEngine.awaiting_continue:
 		GameState.finish_situation()
+
+
+## Обход диалога как игрок: каждый раз берём первый ещё не выбранный вариант,
+## так ветки тем проходятся по одной без зацикливания на меню; когда вариантов
+## не остаётся — выходим из разговора.
+func _walk_dialogue(limit: int = 80) -> void:
+	var steps := 0
+	while DialogueSystem.is_active() and steps < limit:
+		steps += 1
+		var options: Array = DialogueSystem.get_state().get("options", [])
+		var chosen := ""
+		for option in options:
+			var option_id := str(option.get("id", ""))
+			if not DialogueSystem.is_option_used(DialogueSystem.current_dialogue_id(), option_id):
+				chosen = option_id
+				break
+		if chosen == "":
+			DialogueSystem.end()
+			return
+		DialogueSystem.choose(chosen)
+	if DialogueSystem.is_active():
+		_failures.append("диалог не сошёлся за %d шагов" % limit)
+		DialogueSystem.end()
 
 
 func _notice_contains(fragment: String) -> bool:

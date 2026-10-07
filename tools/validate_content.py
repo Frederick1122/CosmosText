@@ -30,9 +30,18 @@ NEEDS_CONFIG_KEYS = ("max_energy", "max_hunger", "start_time_minutes", "time_cos
                      "pass_out_hours", "pass_out_o2", "pass_out_hunger")
 # Должны совпадать с CombatSystem: типы ИИ и предел дистанции.
 ENEMY_AI_TYPES = ("brawler", "shooter", "turret")
+# Глобальная карта системы (data/galaxy.json): ключи ship и типы узлов.
+# Типы узлов = имена иконок в assets/art/galaxy.
+GALAXY_SHIP_KEYS = ("unlock_flag", "start_node", "start_fuel", "max_fuel", "fuel_per_hex",
+                    "hours_per_hex", "hunger_per_hour")
+GALAXY_NODE_TYPES = ("star", "planet", "gas_giant", "moon", "asteroids", "station", "wreck",
+                     "shuttle", "comet")
+GALAXY_NODE_KEYS = ("q", "r", "type", "title", "note", "description", "sector_id",
+                    "fuel_cost", "hours", "requires")
 MAX_COMBAT_RANGE = 5
 # Пиксельные иллюстрации сцен (поле "image" у локаций, событий и ситуаций).
 SCENE_ART_DIR = os.path.join(ROOT, "assets", "art", "scenes")
+GALAXY_ART_DIR = os.path.join(ROOT, "assets", "art", "galaxy")
 SOUND_DIR = os.path.join(ROOT, "assets", "sounds")
 
 errors = []
@@ -180,6 +189,19 @@ def main():
     tree_sectors = skill_tree.get("sectors", {}) if isinstance(skill_tree.get("sectors", {}), dict) else {}
     tree_nodes = skill_tree.get("nodes", {}) if isinstance(skill_tree.get("nodes", {}), dict) else {}
     tree_practice = skill_tree.get("practice", {}) if isinstance(skill_tree.get("practice", {}), dict) else {}
+    # Глобальная карта системы (GalaxySystem) и диалоги (DialogueSystem):
+    # нужны эффектам start_dialogue/fuel_delta и условиям dialogue_done.
+    galaxy = load_optional("galaxy.json")
+    galaxy_nodes = galaxy.get("nodes", {}) if isinstance(galaxy.get("nodes", {}), dict) else {}
+    dialogues = {}
+    for fname, data in load_dir(os.path.join(DATA, "dialogues")).items():
+        did = str(data.get("id", ""))
+        if not did:
+            errors.append(f"dialogues/{fname}: нет поля 'id'")
+            continue
+        if did in dialogues:
+            errors.append(f"dialogues/{fname}: дублирующийся id диалога '{did}'")
+        dialogues[did] = data
 
     situations_raw = load_dir(os.path.join(DATA, "situations"))
     sectors_raw = load_dir(os.path.join(DATA, "sectors"))
@@ -541,6 +563,12 @@ def main():
                 oid = req.get("origin", "")
                 if oid not in origins:
                     errors.append(f"{ctx}: requires.origin ссылается на неизвестное происхождение '{oid}'")
+            elif t == "dialogue_done":
+                did = str(req.get("dialogue", ""))
+                if did not in dialogues:
+                    errors.append(f"{ctx}: requires.dialogue_done ссылается на неизвестный диалог '{did}'")
+            elif t == "has_ship":
+                pass  # состояние забега, в справочнике нет
             elif t is None:
                 errors.append(f"{ctx}: requires-запись без 'type'")
             else:
@@ -610,6 +638,13 @@ def main():
                     errors.append(f"{ctx}: effect 'end_run' ссылается на неизвестный финал '{ending}'")
             elif t in ("hp_delta", "o2_delta", "ammo_delta", "hunger_delta", "flag_set", "reveal_map"):
                 pass
+            elif t == "start_dialogue":
+                did = str(eff.get("dialogue", ""))
+                if did not in dialogues:
+                    errors.append(f"{ctx}: effect 'start_dialogue' ссылается на неизвестный диалог '{did}'")
+            elif t == "fuel_delta":
+                if not is_number(eff.get("value")):
+                    errors.append(f"{ctx}: effect 'fuel_delta'.value должен быть числом")
             elif t is None:
                 errors.append(f"{ctx}: effect-запись без 'type'")
             else:
@@ -632,9 +667,11 @@ def main():
             if "completes_event" in opt and not isinstance(opt["completes_event"], bool):
                 errors.append(f"{opt_ctx}: completes_event должен быть bool")
             nxt = opt.get("next", "")
-            if nxt and not nxt.startswith("map:"):
+            # "galaxy" — выход на глобальную карту системы (GameState), не ситуация
+            # и не сектор: см. docs/CONTENT.md, «Ситуации».
+            if nxt and not nxt.startswith("map:") and nxt != "galaxy":
                 referenced_situations.add(nxt)
-            if nxt and not nxt.startswith("map:") and nxt not in situations:
+            if nxt and not nxt.startswith("map:") and nxt != "galaxy" and nxt not in situations:
                 errors.append(f"{opt_ctx}: next ссылается на неизвестную ситуацию '{nxt}'")
             if nxt.startswith("map:"):
                 sector_id = nxt[len("map:"):]
@@ -1164,12 +1201,140 @@ def main():
         if sid not in referenced_situations:
             warnings.append(f"situations/{sid}: ситуация не достижима из стартового конфига, событий или next-ссылок")
 
+    # Глобальная карта системы — galaxy.json (GalaxySystem).
+    if galaxy:
+        gid = str(galaxy.get("id", ""))
+        if not gid.strip():
+            errors.append("galaxy.json: нет непустого id системы")
+        if not str(galaxy.get("title", "")).strip():
+            errors.append("galaxy.json: нет title системы")
+        hex_size = galaxy.get("hex_size", 96.0)
+        if not is_number(hex_size) or hex_size <= 0:
+            errors.append("galaxy.json: hex_size должен быть положительным числом")
+        ship = galaxy.get("ship", {})
+        if not isinstance(ship, dict):
+            errors.append("galaxy.json: ship должен быть объектом")
+        else:
+            for key, value in ship.items():
+                if key not in GALAXY_SHIP_KEYS:
+                    errors.append(f"galaxy.json: ship — неизвестный ключ '{key}' (допустимы: {', '.join(GALAXY_SHIP_KEYS)})")
+                elif key == "unlock_flag" or key == "start_node":
+                    if not isinstance(value, str):
+                        errors.append(f"galaxy.json: ship.{key} должен быть строкой")
+                elif not is_number(value) or value < 0:
+                    errors.append(f"galaxy.json: ship.{key} — неотрицательное число")
+            if is_number(ship.get("max_fuel", 0)) and ship.get("max_fuel", 0) <= 0:
+                errors.append("galaxy.json: ship.max_fuel должен быть больше нуля")
+            if is_number(ship.get("start_fuel", 0)) and is_number(ship.get("max_fuel", 0)) \
+                    and ship["start_fuel"] > ship["max_fuel"]:
+                errors.append("galaxy.json: ship.start_fuel больше ship.max_fuel — старт обрежется")
+            start_node = str(ship.get("start_node", ""))
+            if start_node and start_node not in galaxy_nodes:
+                errors.append(f"galaxy.json: ship.start_node ссылается на неизвестный узел '{start_node}'")
+        seen_cells = {}
+        for node_id, node in galaxy_nodes.items():
+            ctx = f"galaxy/nodes/{node_id}"
+            if not isinstance(node, dict):
+                errors.append(f"{ctx}: ожидается объект")
+                continue
+            for key in ("q", "r"):
+                value = node.get(key)
+                if not isinstance(value, int) or isinstance(value, bool):
+                    errors.append(f"{ctx}.{key}: должно быть целым числом")
+            if isinstance(node.get("q"), int) and isinstance(node.get("r"), int) \
+                    and not isinstance(node.get("q"), bool) and not isinstance(node.get("r"), bool):
+                cell = (node["q"], node["r"])
+                if cell in seen_cells:
+                    errors.append(f"{ctx}: гекс {cell} уже занят узлом '{seen_cells[cell]}'")
+                seen_cells[cell] = node_id
+            node_type = str(node.get("type", ""))
+            if node_type not in GALAXY_NODE_TYPES:
+                errors.append(f"{ctx}.type: '{node_type}' — допустимы {', '.join(GALAXY_NODE_TYPES)}")
+            elif not os.path.exists(os.path.join(GALAXY_ART_DIR, node_type + ".png")):
+                errors.append(f"{ctx}.type: нет иконки assets/art/galaxy/{node_type}.png "
+                              f"(тип узла = имя файла иконки)")
+            if not str(node.get("title", "")).strip():
+                errors.append(f"{ctx}: нет непустого title")
+            if not str(node.get("description", "")).strip():
+                errors.append(f"{ctx}: нет непустого description — панель показывает, что это за точка")
+            sector_id = str(node.get("sector_id", ""))
+            if sector_id and sector_id not in sectors:
+                errors.append(f"{ctx}.sector_id: неизвестный сектор '{sector_id}'")
+            for key in ("fuel_cost", "hours"):
+                if key in node and (not is_number(node[key]) or node[key] < 0):
+                    errors.append(f"{ctx}.{key}: неотрицательное число")
+            if "requires" in node:
+                check_requires(node["requires"], f"{ctx}.requires")
+            for key in node:
+                if key not in GALAXY_NODE_KEYS:
+                    warnings.append(f"{ctx}: неизвестный ключ '{key}'")
+        for sector_id in sorted(sectors):
+            if not any(isinstance(n, dict) and str(n.get("sector_id", "")) == sector_id
+                       for n in galaxy_nodes.values()):
+                warnings.append(f"galaxy/{sector_id}: сектор не отмечен ни одним узлом глобальной карты")
+
+    # Диалоги — data/dialogues/*.json (DialogueSystem).
+    for did, data in dialogues.items():
+        ctx = f"dialogues/{did}"
+        if not str(data.get("npc", "")).strip():
+            errors.append(f"{ctx}: нет npc — некому отвечать в разговоре")
+        nodes = data.get("nodes", {})
+        if not isinstance(nodes, dict) or not nodes:
+            errors.append(f"{ctx}.nodes: нужен непустой объект узлов")
+            continue
+        entry = str(data.get("entry", ""))
+        if entry and entry not in nodes:
+            errors.append(f"{ctx}.entry: неизвестный узел '{entry}'")
+        for candidate in data.get("entries", []) if isinstance(data.get("entries", []), list) else []:
+            if not isinstance(candidate, dict):
+                errors.append(f"{ctx}.entries: запись должна быть объектом")
+                continue
+            if str(candidate.get("node", "")) not in nodes:
+                errors.append(f"{ctx}.entries: неизвестный узел '{candidate.get('node', '')}'")
+            if "requires" in candidate:
+                check_requires(candidate["requires"], f"{ctx}.entries.requires")
+        for node_id, node in nodes.items():
+            node_ctx = f"{ctx}/nodes/{node_id}"
+            if not isinstance(node, dict):
+                errors.append(f"{node_ctx}: ожидается объект")
+                continue
+            if not str(node.get("text", "")).strip():
+                errors.append(f"{node_ctx}: нет непустого text")
+            if "effects" in node:
+                check_effects(node["effects"], node_ctx)
+            options = node.get("options", [])
+            if not isinstance(options, list) or not options:
+                errors.append(f"{node_ctx}: нужен непустой массив options")
+                continue
+            seen_options = set()
+            for option in options:
+                if not isinstance(option, dict):
+                    errors.append(f"{node_ctx}: вариант должен быть объектом")
+                    continue
+                option_id = str(option.get("id", ""))
+                if not option_id:
+                    errors.append(f"{node_ctx}: у варианта нет id")
+                elif option_id in seen_options:
+                    errors.append(f"{node_ctx}: дублирующийся id варианта '{option_id}'")
+                seen_options.add(option_id)
+                if not str(option.get("label", "")).strip():
+                    errors.append(f"{node_ctx}/{option_id}: нет непустого label")
+                next_node = str(option.get("next", ""))
+                if next_node and next_node not in nodes:
+                    errors.append(f"{node_ctx}/{option_id}.next: неизвестный узел '{next_node}'")
+                if "requires" in option:
+                    check_requires(option["requires"], f"{node_ctx}/{option_id}.requires")
+                if "effects" in option:
+                    check_effects(option["effects"], f"{node_ctx}/{option_id}")
+
     print(f"Локаций: {len(locations)} (событий: {events_total}) | Ситуаций: {len(situations)} | "
           f"Секторов: {len(sectors)} | Предметов: {len(items)} | Навыков: {len(skills)} | "
           f"Рецептов: {len(recipes)} | Врагов: {len(enemies)} | Лор-фрагментов: {len(lore)} | "
           f"Записей справочника: {len(codex)} | Финалов: {len(endings)}")
     print(f"Дерево навыков: узлов {len(tree_nodes)} в {len(tree_sectors)} секторах | "
           f"Знаний: {len(knowledge)} | Происхождений: {len(origins)}")
+    print(f"Глобальная карта: узлов {len(galaxy_nodes)} ({galaxy.get('title', '—')}) | "
+          f"Диалогов: {len(dialogues)}")
 
     if warnings:
         print(f"\nПредупреждения ({len(warnings)}):")

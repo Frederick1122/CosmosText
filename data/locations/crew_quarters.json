@@ -58,6 +58,27 @@
         { "type": "flag_set", "flag": "med_bay_open" },
         { "type": "open_map_node", "node": "med_bay" }
       ]
+    },
+    {
+      "id": "meet_sheila",
+      "start": "manual",
+      "label": "Подойти к Шейле",
+      "repeatable": false,
+      "triggers": [
+        { "type": "flag", "flag": "sheila_found" },
+        { "type": "flag", "flag": "sheila_met", "value": false }
+      ],
+      "text": "Шейлу пришлось перенести из медблока: под мигающей карантинной лампой ей не давали прийти в себя. Теперь она сидит на дальней койке, поджав ноги, и держит на коленях чужой термос. Увидев тебя, отставляет его и выпрямляется.",
+      "effects": [ { "type": "start_dialogue", "dialogue": "sheila_first" } ]
+    },
+    {
+      "id": "talk_sheila",
+      "start": "manual",
+      "label": "Поговорить с Шейлой",
+      "repeatable": true,
+      "triggers": [ { "type": "flag", "flag": "sheila_met" } ],
+      "text": "Шейла кивает тебе, освобождая место на койке.",
+      "effects": [ { "type": "start_dialogue", "dialogue": "sheila_talk" } ]
     }
   ]
 }

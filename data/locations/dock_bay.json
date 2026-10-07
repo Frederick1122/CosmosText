@@ -58,6 +58,17 @@
         { "type": "item_add", "item": "scrap_metal", "count": 2 },
         { "type": "item_add", "item": "duct_tape" }
       ]
+    },
+    {
+      "id": "drain_fuel",
+      "start": "manual",
+      "label": "Слить топливо из рейдерских баков",
+      "repeatable": false,
+      "triggers": [ { "type": "flag", "flag": "docked_wechter" } ],
+      "text": "У воротника стоят баки рейдерской заправки. Насос ещё качает: в шланге щёлкает, бак шаттла принимает дизельный на вкус суррогат. На обратный путь и пару прыжков хватит.",
+      "effects": [
+        { "type": "fuel_delta", "value": 40 }
+      ]
     }
   ]
 }

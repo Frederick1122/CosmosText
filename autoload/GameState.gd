@@ -9,7 +9,7 @@ signal exploration_progressed(step: int, total: int, o2_spent: float)
 ## Поиск закончен (или прерван): плашку прогресса можно убирать.
 signal exploration_finished
 
-enum Screen { MAIN_MENU, SECTOR_MAP, SITUATION, COMBAT, DEATH, LOCATION, VICTORY }
+enum Screen { MAIN_MENU, SECTOR_MAP, SITUATION, COMBAT, DEATH, LOCATION, VICTORY, GALAXY_MAP, DIALOGUE }
 
 ## Предохранитель от цепочек автособытий, зацикленных контентом.
 const MAX_AUTO_EVENTS_PER_STEP := 32
@@ -33,6 +33,9 @@ func _ready() -> void:
 	CombatSystem.combat_started.connect(_on_combat_started)
 	CombatSystem.combat_ended.connect(_on_combat_ended)
 	SituationEngine.situation_ended.connect(_on_situation_ended)
+	DialogueSystem.dialogue_started.connect(_on_dialogue_started)
+	DialogueSystem.dialogue_ended.connect(_on_dialogue_ended)
+	GalaxySystem.arrived.connect(_on_galaxy_arrived)
 
 
 func start_new_game(sector_id: String = "", opening_situation_id: String = "", origin_id: String = "") -> void:
@@ -274,7 +277,7 @@ func _push_location_backdrop(ev: Dictionary = {}) -> void:
 
 
 ## Возвращает true, если событие увело игрока с экрана локации
-## (ситуация, бой или смерть).
+## (ситуация, бой, разговор или смерть).
 func _run_event(ev: Dictionary, clear_narrative: bool = true) -> bool:
 	LocationSystem.mark_started(ev)
 	_active_location_event_id = str(ev.get("id", ""))
@@ -286,7 +289,7 @@ func _run_event(ev: Dictionary, clear_narrative: bool = true) -> bool:
 	# Сначала текст события, потом его последствия: лента должна читаться сверху вниз.
 	NarrativeSystem.push("text", str(ev.get("text", "")), str(ev.get("image", "")), str(ev.get("sound", "")))
 	EffectResolver.apply_effects(ev.get("effects", []))
-	if ResourceSystem.is_dead() or CombatSystem.state == CombatSystem.State.PLAYER_TURN:
+	if ResourceSystem.is_dead() or CombatSystem.state == CombatSystem.State.PLAYER_TURN or DialogueSystem.is_active():
 		return true
 	var situation_id := str(ev.get("situation", ""))
 	if situation_id != "":
@@ -310,13 +313,13 @@ func _on_situation_ended(_id: String, next: String, completes_event: bool) -> vo
 		return  # забег уже завершён эффектом end_run или смертью
 	if CombatSystem.state == CombatSystem.State.PLAYER_TURN:
 		return  # эффект start_combat уже переключил экран на бой
-	var continues_situation := next != "" and not next.begins_with("map:")
+	var continues_situation := next != "" and not next.begins_with("map:") and next != "galaxy"
 	NarrativeSystem.clear()
 	# Фон следующей ситуации выбирается до завершения события: clear_image
 	# относится ко всей связанной цепочке, а не только к первому экрану.
 	if continues_situation:
 		_push_location_backdrop()
-	if next == "" or next.begins_with("map:"):
+	if next == "" or next.begins_with("map:") or next == "galaxy":
 		if completes_event:
 			_complete_active_location_event()
 		else:
@@ -328,6 +331,13 @@ func _on_situation_ended(_id: String, next: String, completes_event: bool) -> vo
 			_resume_location()
 		else:
 			_set_screen(Screen.SECTOR_MAP)
+		return
+	if next == "galaxy":
+		# Событие уводит на глобальную карту: корабль за штурвалом, курс выбирает игрок.
+		if LocationSystem.is_active():
+			LocationSystem.leave()
+		_set_screen(Screen.GALAXY_MAP)
+		EventBus.returned_to_hub.emit()
 		return
 	if next.begins_with("map:"):
 		if LocationSystem.is_active():
@@ -343,6 +353,56 @@ func _on_situation_ended(_id: String, next: String, completes_event: bool) -> vo
 			EventBus.returned_to_hub.emit()
 	else:
 		enter_situation(next)
+
+
+## Глобальная карта открыта (кнопка HUD «Космос»).
+func open_galaxy() -> void:
+	if not GalaxySystem.has_ship():
+		return
+	_set_screen(Screen.GALAXY_MAP)
+
+
+## Возврат с глобальной карты без перелёта: в модуль, где стоял игрок, иначе на карту.
+func close_galaxy() -> void:
+	if LocationSystem.is_active():
+		_resume_location()
+	else:
+		_set_screen(Screen.SECTOR_MAP)
+
+
+## Перелёт закончен: грузим сектор узла, корабль уже стоит в нём (GalaxySystem).
+func _on_galaxy_arrived(node_id: String) -> void:
+	var node := GalaxySystem.get_node_data(node_id)
+	var sector_id := str(node.get("sector_id", ""))
+	if sector_id == "":
+		return
+	if LocationSystem.is_active():
+		LocationSystem.leave()
+	NarrativeSystem.clear()
+	if not MapSystem.load_sector(sector_id):
+		_set_screen(Screen.GALAXY_MAP)
+		return
+	_set_screen(Screen.SECTOR_MAP)
+	EventBus.returned_to_hub.emit()
+
+
+## Разговор начался (эффект start_dialogue или кнопка в модуле).
+func _on_dialogue_started(_npc_id: String, _npc_name: String) -> void:
+	_set_screen(Screen.DIALOGUE)
+
+
+## Разговор закончен: возвращаемся в модуль или на карту.
+func _on_dialogue_ended(_npc_id: String, _dialogue_id: String) -> void:
+	if current_screen != Screen.DIALOGUE:
+		return
+	if SituationEngine.awaiting_continue:
+		_set_screen(Screen.SITUATION)
+		return
+	if LocationSystem.is_active():
+		LocationSystem.show_current_narrative()
+		_resume_location()
+	else:
+		_set_screen(Screen.SECTOR_MAP)
 
 
 func _on_combat_started(_enemy_id: String) -> void:

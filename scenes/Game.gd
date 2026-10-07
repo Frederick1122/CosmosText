@@ -4,6 +4,8 @@ const UiKit = preload("res://scenes/ui/UiKit.gd")
 const SECTOR_MAP_VIEW_SCRIPT := preload("res://scenes/ui/SectorMapView.gd")
 const CHARACTER_PANEL_SCRIPT := preload("res://scenes/ui/CharacterPanel.gd")
 const SKILL_TREE_PANEL_SCRIPT := preload("res://scenes/ui/SkillTreePanel.gd")
+const GALAXY_MAP_VIEW_SCRIPT := preload("res://scenes/ui/GalaxyMapView.gd")
+const DIALOGUE_VIEW_SCRIPT := preload("res://scenes/ui/DialogueView.gd")
 const WORKBENCH_PANEL_SCRIPT := preload("res://scenes/ui/WorkbenchPanel.gd")
 const COMBAT_VIEW_SCRIPT := preload("res://scenes/ui/CombatView.gd")
 const XP_BAR_SCRIPT := preload("res://scenes/ui/XpBar.gd")
@@ -54,6 +56,7 @@ var day_label: Label
 ## Уровень и опыт — тонкая полоса над показателями HUD.
 var xp_bar: HBoxContainer
 var map_button: Button
+var galaxy_button: Button
 var character_button: Button
 var skill_button: Button
 var journal_button: Button
@@ -100,6 +103,12 @@ var _combat_fx_turn: int = 0
 ## Экран карты: сама карта, панель маршрута под ней и проложенный, но ещё
 ## не начатый маршрут (MapSystem.plan_route). Второй тап по цели — в путь.
 var _map_view: Control
+## Глобальная карта системы: карта, панель выбранной точки и выбор игрока.
+var _galaxy_view: Control
+var _galaxy_panel: VBoxContainer
+var _galaxy_selected: String = ""
+## Оверлей разговора: живёт, пока идёт диалог, и убирается по сигналу closed.
+var _dialogue_view: Control
 var _route_panel: VBoxContainer
 var _route_panel_read_only: bool = false
 var _route_plan: Dictionary = {}
@@ -211,11 +220,12 @@ func _build_static_layout() -> void:
 	nav_row.add_theme_constant_override("separation", 10)
 	hud.add_child(nav_row)
 	map_button = _make_nav_button("Карта", "MapButton", _toggle_map)
+	galaxy_button = _make_nav_button("Космос", "GalaxyButton", _toggle_galaxy)
 	character_button = _make_nav_button("Персонаж", "CharacterButton", _toggle_character)
 	skill_button = _make_nav_button("Развитие", "SkillButton", _toggle_skills)
 	journal_button = _make_nav_button("Журнал", "JournalButton", _toggle_journal)
 	settings_button = _make_nav_button("Настройки", "SettingsButton", _toggle_settings)
-	for btn in [map_button, character_button, skill_button, journal_button, settings_button]:
+	for btn in [map_button, galaxy_button, character_button, skill_button, journal_button, settings_button]:
 		nav_row.add_child(btn)
 
 	section_separator = HSeparator.new()
@@ -500,7 +510,8 @@ func _is_story_screen() -> bool:
 
 
 func _any_overlay_open() -> bool:
-	return map_open or journal_open or character_open or skill_open or settings_open or workbench_open
+	return map_open or journal_open or character_open or skill_open or settings_open or workbench_open \
+		or _dialogue_view != null
 
 
 ## Плавное появление экрана целиком (карта, журнал, бой, смена сцены).
@@ -976,7 +987,9 @@ func _on_screen_changed(screen: int) -> void:
 	workbench_open = false
 	if screen != GameState.Screen.DEATH:
 		_death_message = ""
-	_map_message = ""
+		_map_message = ""
+	if screen != GameState.Screen.DIALOGUE:
+		_drop_dialogue_view()
 	_route_plan = {}
 	_combat_fx_turn = 0
 	_render_current_screen()
@@ -1139,6 +1152,26 @@ func _toggle_map() -> void:
 	_render_current_screen()
 
 
+## Кнопка «Космос»: глобальная карта системы. Пока корабля нет, кнопки не видно.
+## Открывается из модуля и с карты сектора; разговор и бой её не пускают.
+func _toggle_galaxy() -> void:
+	if galaxy_button.disabled:
+		return
+	if GameState.current_screen == GameState.Screen.GALAXY_MAP:
+		GameState.close_galaxy()
+		return
+	_galaxy_selected = ""
+	GameState.open_galaxy()
+
+
+## Курс прокладывают из модуля и с карты сектора: из ситуации, боя и финала — нет.
+func _galaxy_available() -> bool:
+	match GameState.current_screen:
+		GameState.Screen.LOCATION, GameState.Screen.SECTOR_MAP, GameState.Screen.GALAXY_MAP:
+			return true
+	return false
+
+
 func _toggle_character() -> void:
 	if character_button.disabled:
 		return
@@ -1260,6 +1293,10 @@ func _render_current_screen() -> void:
 			_render_death()
 		GameState.Screen.VICTORY:
 			_render_victory()
+		GameState.Screen.GALAXY_MAP:
+			_render_galaxy()
+		GameState.Screen.DIALOGUE:
+			_render_dialogue()
 		_:
 			_add_text("Неизвестный экран: %d" % GameState.current_screen)
 
@@ -1281,13 +1318,17 @@ func _update_nav_buttons() -> void:
 		or GameState.current_screen == GameState.Screen.COMBAT
 		or GameState.current_screen == GameState.Screen.VICTORY
 		or GameState.current_screen == GameState.Screen.DEATH
+		or GameState.current_screen == GameState.Screen.DIALOGUE
 	)
 	map_button.disabled = blocked
+	galaxy_button.disabled = blocked or not _galaxy_available()
+	galaxy_button.visible = GalaxySystem.has_ship()
 	character_button.disabled = blocked
 	skill_button.disabled = blocked
 	journal_button.disabled = blocked
 	settings_button.disabled = GameState.current_screen == GameState.Screen.COMBAT or MapSystem.is_travelling() or GameState.is_exploring()
 	_set_nav_label(map_button, "🗺️", "Карта", false)
+	_set_nav_label(galaxy_button, "🌌", "Космос", false)
 	_set_nav_label(character_button, "🧑‍🚀", "Персонаж", NotificationSystem.has_character_alert())
 	_set_nav_label(skill_button, "🌐", "Развитие", NotificationSystem.has_development_alert())
 	_set_nav_label(journal_button, "📓", "Журнал", NotificationSystem.has_journal_alert())
@@ -1296,6 +1337,7 @@ func _update_nav_buttons() -> void:
 		map_open or GameState.current_screen == GameState.Screen.SECTOR_MAP
 	)
 	_style_nav_button(map_button, map_active)
+	_style_nav_button(galaxy_button, GameState.current_screen == GameState.Screen.GALAXY_MAP)
 	_style_nav_button(character_button, character_open)
 	_style_nav_button(skill_button, skill_open)
 	_style_nav_button(journal_button, journal_open)
@@ -1850,6 +1892,112 @@ func _route_warnings(path: Array, cost: float) -> Array:
 	if unknown:
 		warnings.append("❔ По пути неизвестные отсеки — там могут остановить.")
 	return warnings
+
+
+## Разговор: оверлей поверх экрана модуля. Состояние читает сам DialogueView,
+## Game только ставит его и убирает, когда система сообщает о конце разговора.
+func _render_dialogue() -> void:
+	_set_body_stretch(false)
+	if _dialogue_view != null:
+		return
+	_dialogue_view = DIALOGUE_VIEW_SCRIPT.new()
+	_dialogue_view.closed.connect(_on_dialogue_closed)
+	add_child(_dialogue_view)
+	_fill_parent(_dialogue_view)
+
+
+func _on_dialogue_closed() -> void:
+	_drop_dialogue_view()
+
+
+func _drop_dialogue_view() -> void:
+	var view := _dialogue_view
+	_dialogue_view = null
+	if view != null and is_instance_valid(view):
+		view.queue_free()
+
+
+## Глобальная карта системы: нарисованная карта на всю высоту и панель под ней.
+## Выбор точки показывает, что это, сколько часов и топлива займёт перелёт.
+func _render_galaxy() -> void:
+	_set_body_stretch(true)
+	_add_title("🌌 " + GalaxySystem.get_title())
+	_galaxy_view = GALAXY_MAP_VIEW_SCRIPT.new()
+	_galaxy_view.name = "GalaxyMapView"
+	body.add_child(_galaxy_view)
+	_galaxy_view.node_selected.connect(_on_galaxy_node_selected)
+	_galaxy_panel = VBoxContainer.new()
+	_galaxy_panel.name = "GalaxyPanel"
+	_galaxy_panel.add_theme_constant_override("separation", 8)
+	body.add_child(_galaxy_panel)
+	_galaxy_view.setup({
+		"nodes": GalaxySystem.get_nodes(),
+		"current_id": GalaxySystem.current_node_id,
+		"hex_size": GalaxySystem.hex_size,
+		"selected_id": _galaxy_selected,
+	})
+	_refresh_galaxy_panel()
+
+
+func _on_galaxy_node_selected(node_id: String) -> void:
+	_galaxy_selected = node_id
+	_refresh_galaxy_panel()
+
+
+## Запас топлива виден всегда: панель — единственное место, где он есть.
+func _refresh_galaxy_panel() -> void:
+	if _galaxy_panel == null or not is_instance_valid(_galaxy_panel):
+		return
+	for child in _galaxy_panel.get_children():
+		_galaxy_panel.remove_child(child)
+		child.queue_free()
+	var here := GalaxySystem.get_node_data(GalaxySystem.current_node_id)
+	_galaxy_panel.add_child(UiKit.text("⛽ Топливо: %d/%d · корабль у «%s»" % [
+		roundi(GalaxySystem.fuel), roundi(GalaxySystem.max_fuel), str(here.get("title", "—"))],
+		21, UiKit.ACCENT_COLOR))
+	if _galaxy_selected == "":
+		return
+	var node := GalaxySystem.get_node_data(_galaxy_selected)
+	if node.is_empty():
+		return
+	var card := UiKit.card(_galaxy_panel)
+	card.add_child(UiKit.text(str(node.get("title", _galaxy_selected)), 26, UiKit.TITLE_COLOR))
+	var note := str(node.get("note", ""))
+	if note != "":
+		card.add_child(UiKit.text(note, 20, UiKit.MUTED_COLOR))
+	var description := str(node.get("description", ""))
+	if description != "":
+		card.add_child(UiKit.text(description, 21))
+	var cost := float(node.get("fuel", 0.0))
+	# Цену перелёта показываем только там, где есть посадка: у ориентира
+	# («нет посадки») считать нечего, панель ограничивается причиной.
+	if not bool(node.get("here", false)) and str(node.get("sector_id", "")) != "":
+		card.add_child(UiKit.text("Перелёт: ≈ %d ч · %d топлива · в баке останется %d" % [
+			int(node.get("hours", 0)), roundi(cost), maxi(0, roundi(GalaxySystem.fuel - cost))],
+			21, UiKit.ACCENT_COLOR))
+	var plan := GalaxySystem.plan_travel(_galaxy_selected)
+	if not bool(plan["ok"]):
+		var message := str(plan["message"])
+		if message != "":
+			card.add_child(UiKit.text(message, 20, UiKit.BAD_COLOR))
+		var blocked := UiKit.button("🚀 Лететь", "quiet", BUTTON_HEIGHT)
+		blocked.disabled = true
+		blocked.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		card.add_child(blocked)
+		return
+	var go := UiKit.button("🚀 Лететь", "default", BUTTON_HEIGHT)
+	go.name = "GalaxyGo"
+	go.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	go.pressed.connect(_start_galaxy_travel.bind(_galaxy_selected))
+	card.add_child(go)
+
+
+## Перелёт: топливо и часы списывает GalaxySystem, сектор грузит GameState.
+func _start_galaxy_travel(node_id: String) -> void:
+	if not GalaxySystem.travel_to(node_id):
+		_refresh_galaxy_panel()
+		return
+	_galaxy_selected = ""
 
 
 ## Подпись узла как на карте: явно открытый сюжетным действием отсек уже
@@ -2432,6 +2580,7 @@ const JOURNAL_COLORS := {
 	"loot": UiKit.MUTED_COLOR,
 	"rest": UiKit.GOOD_COLOR,
 	"goal": UiKit.GOAL_COLOR,
+	"talk": UiKit.CODEX_COLOR,
 }
 
 
